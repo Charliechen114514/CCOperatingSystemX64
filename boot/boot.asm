@@ -76,7 +76,7 @@ load_second_stage:
 
     mov byte [edi + 0], 0x10    ; packet size = 16
     mov byte [edi + 1], 0x00    ; reserved
-    mov word [edi + 2], 0x01    ; read 1 sector (boot2 is only 500 bytes)
+    mov word [edi + 2], 0x02    ; read 2 sectors (boot2 is ~824 bytes)
     mov word [edi + 4], 0x0000  ; buffer offset = 0x0000
     mov word [edi + 6], 0x7E0   ; buffer segment = 0x7E0 (address = 0x7E00)
     mov dword [edi + 8], 0x00000001  ; LBA = 1 (sector 2, 0-based)
@@ -89,7 +89,7 @@ load_second_stage:
     popa                    ; Restore registers
     jc .try_chs             ; if failed, try CHS
 
-    cmp al, 0x01            ; check if sector was read
+    cmp al, 0x02            ; check if 2 sectors were read
     jne .try_chs            ; if not, try CHS
 
     popa
@@ -103,7 +103,7 @@ load_second_stage:
     xor bx, bx
 
     mov ah, 0x02            ; read function
-    mov al, 0x01            ; read 1 sector (boot2 is only 500 bytes)
+    mov al, 0x02            ; read 2 sectors (boot2 is ~824 bytes)
     mov ch, 0x00            ; cylinder 0
     mov cl, 0x02            ; sector 2 (sector 1 is MBR)
     mov dh, 0x00            ; head 0
@@ -113,7 +113,7 @@ load_second_stage:
 
     jc disk_error
 
-    cmp al, 0x01            ; verify sector was read
+    cmp al, 0x02            ; verify 2 sectors were read
     jne disk_error
 
     popa

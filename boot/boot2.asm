@@ -11,41 +11,21 @@ start:
 
 ; GDT - Put immediately after entry point to minimize displacement
 gdt_start:
-    dq 0                    ; null descriptor
+    dq 0x0000000000000000                    ; null descriptor
 gdt_code:
-    dw 0xFFFF
-    dw 0x0000
-    db 0x00
-    db 0x9A
-    db 0xCF
-    db 0x00
+    dq 0x00CF9A000000FFFF                   ; 32-bit code segment
 gdt_data:
-    dw 0xFFFF
-    dw 0x0000
-    db 0x00
-    db 0x92
-    db 0xCF
-    db 0x00
+    dq 0x00CF92000000FFFF                   ; 32-bit data segment
 gdt_code64:
-    dw 0xFFFF
-    dw 0x0000
-    db 0x00
-    db 0x9A
-    db 0xAF
-    db 0x00
+    dq 0x00AF9A000000FFFF                   ; 64-bit code segment
 gdt_data64:
-    dw 0xFFFF
-    dw 0x0000
-    db 0x00
-    db 0x92
-    db 0xCF
-    db 0x00
+    dq 0x00CF92000000FFFF                   ; 64-bit data segment
 gdt_end:
 
-; GDT pointer - immediate after GDT
+; GDT pointer
 gdt_ptr:
-    dw 5 * 8 - 1  ; 5 descriptors, 8 bytes each, limit = size - 1
-    dd 0x00007E03  ; GDT base address (fixed, gdt_start = 0x03)
+    dw 5 * 8 - 1              ; limit = 5 * 8 - 1 = 39 (0x27)
+    dd 0x00007E03             ; base = 0x7E03
 
 main:
     cli
@@ -58,6 +38,9 @@ main:
     ; Print message using BIOS
     mov si, msg_stage2
     call print_bios
+
+    ; Load kernel NOW while still in real mode
+    call load_kernel
 
     ; Load GDT
     lgdt [gdt_ptr]
@@ -77,6 +60,64 @@ main:
     db 0xEA             ; jmp far opcode
     dd pm_entry         ; 32-bit offset (little-endian)
     dw 0x08             ; 16-bit segment selector
+
+; ============================================================================
+; load_kernel - Load kernel.bin from disk to memory
+; IMPORTANT: Must be called in REAL MODE (BIOS disk functions only work here)
+; Uses simple CHS read for maximum compatibility
+; ============================================================================
+load_kernel:
+    pusha
+
+    ; Print debug message
+    mov si, msg_loading_kernel
+    call print_bios
+
+    ; Load kernel using CHS (simple, works everywhere)
+    ; Kernel is at sector 4 (1-based: boot1=1 boot2=2,3 kernel=4)
+    mov ax, 0x1000
+    mov es, ax              ; ES:BX = 0x1000:0x0000 = 0x10000
+    xor bx, bx
+
+    mov ah, 0x02            ; read function
+    mov al, 0x01            ; read 1 sector
+    mov ch, 0x00            ; cylinder 0
+    mov cl, 0x04            ; sector 4
+    mov dh, 0x00            ; head 0
+    mov dl, 0x80            ; first hard drive
+    int 0x13
+
+    jc .read_error
+
+    ; Print success
+    mov si, msg_kernel_loaded
+    call print_bios
+
+    popa
+    ret
+
+.read_error:
+    ; Print error code
+    mov si, msg_load_error
+    call print_bios
+
+    ; Show error code in AH
+    mov al, ah
+    shr al, 4
+    add al, '0'
+    cmp al, '9'
+    jbe .d1
+    add al, 7
+.d1:
+    mov ah, 0x0e
+    int 0x10
+
+    ; Hang on error
+    mov si, msg_halt
+    call print_bios
+.hang:
+    hlt
+    jmp .hang
 
 ; Print string using BIOS
 print_bios:
@@ -98,8 +139,6 @@ print_bios:
 bits 32
 
 pm_entry:
-    ; This label is used for the far jump from real mode
-    ; fall through to protected_mode
 protected_mode:
     ; Setup data segments
     mov ax, 0x10
@@ -114,8 +153,16 @@ protected_mode:
     mov esi, msg_protected
     call print_pm
 
+    ; Print "Starting page tables..."
+    mov esi, msg_pm_page
+    call print_pm
+
     ; Setup page tables for long mode
     call setup_page_tables
+
+    ; Print "Page tables done..."
+    mov esi, msg_pm_done
+    call print_pm
 
     ; Enable PAE (Physical Address Extension)
     mov eax, cr4
@@ -155,9 +202,15 @@ print_pm:
     popa
     ret
 
-; Message for protected mode (defined in 32-bit section)
+; Messages for protected mode (defined in 32-bit section)
 msg_protected:
     db "Protected Mode OK", 0
+
+msg_pm_page:
+    db "Setting up page tables...", 0
+
+msg_pm_done:
+    db "Page tables OK, enabling long mode...", 0
 
 ; Setup page tables for long mode
 setup_page_tables:
@@ -199,9 +252,6 @@ setup_page_tables:
     popa
     ret
 
-; Temporarily disabled long mode setup
-; We need to verify 32-bit protected mode works first
-
 ; ============================================================================
 ; 64-bit Long Mode
 ; ============================================================================
@@ -220,15 +270,25 @@ long_mode:
     mov rsi, msg_longmode
     call print_lm
 
-hang:
+    ; Jump to kernel!
+    ; Print jumping message on line 4
+    mov rsi, msg_jumping_kernel
+    call print_lm_line4
+
+    ; Jump to kernel entry point at 0x10000
+    mov rdi, 0x10000
+    call rdi
+
+    ; If kernel returns, halt
+kernel_halt:
     hlt
-    jmp hang
+    jmp kernel_halt
 
 ; Print string (long mode) - prints to VGA line 2
 print_lm:
     push rax
     push rdi
-    mov rdi, 0xB8000 + 160  ; Line 2 (80 chars * 2 bytes = 160 offset)
+    mov rdi, 0xB8000 + 160  ; Line 2
     mov ah, 0x1F
 .loop:
     lodsb
@@ -237,6 +297,23 @@ print_lm:
     stosw
     jmp .loop
 .done:
+    pop rdi
+    pop rax
+    ret
+
+; Print to VGA line 4
+print_lm_line4:
+    push rax
+    push rdi
+    mov rdi, 0xB8000 + 160 * 4  ; Line 4
+    mov ah, 0x1E  ; Yellow
+.loop4:
+    lodsb
+    test al, al
+    jz .done4
+    stosw
+    jmp .loop4
+.done4:
     pop rdi
     pop rax
     ret
@@ -250,5 +327,20 @@ msg_stage2:
 debug_msg1:
     db "[1] GDT loaded, PM enabled...", 0x0d, 0x0a, 0
 
+msg_loading_kernel:
+    db "[LOAD] Loading kernel...", 0x0d, 0x0a, 0
+
+msg_kernel_loaded:
+    db "[OK] Kernel loaded to 0x10000!", 0x0d, 0x0a, 0
+
+msg_load_error:
+    db "[ERROR] Disk read failed: ", 0
+
+msg_halt:
+    db 0x0d, 0x0a, "System halted.", 0x0d, 0x0a, 0
+
 msg_longmode:
     db "=== LONG MODE ACTIVE ===", 0
+
+msg_jumping_kernel:
+    db "[LM] Jumping to kernel at 0x10000...", 0
