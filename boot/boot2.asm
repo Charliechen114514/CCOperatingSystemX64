@@ -149,20 +149,61 @@ protected_mode:
     mov ss, ax
     mov esp, 0x7E00
 
-    ; Print protected mode message using VGA
-    mov esi, msg_protected
-    call print_pm
+    ; Test 1: Write 'A' to VGA (we know this works)
+    mov edi, 0xB8000
+    mov word [edi], 0x1F41  ; 'A' in white on blue
 
-    ; Print "Starting page tables..."
-    mov esi, msg_pm_page
-    call print_pm
-
-    ; Setup page tables for long mode
+    ; Test 2: Setup page tables
     call setup_page_tables
 
-    ; Print "Page tables done..."
-    mov esi, msg_pm_done
-    call print_pm
+    ; Test 3: Write 'B' to VGA after page tables
+    mov edi, 0xB8000 + 2
+    mov word [edi], 0x1F42  ; 'B'
+
+    ; Test 4: Enable PAE
+    mov eax, cr4
+    or eax, 1 << 5
+    mov cr4, eax
+
+    ; Test 5: Write 'C' to VGA after PAE
+    mov edi, 0xB8000 + 4
+    mov word [edi], 0x1F43  ; 'C'
+
+    ; Test 6: Load PML4 into CR3
+    mov eax, 0x9000
+    mov cr3, eax
+
+    ; Test 7: Write 'D' to VGA after CR3
+    mov edi, 0xB8000 + 6
+    mov word [edi], 0x1F44  ; 'D'
+
+    ; Test 8: Set LME bit in EFER MSR
+    mov ecx, 0xC0000080
+    rdmsr
+    or eax, 1 << 8
+    wrmsr
+
+    ; Test 9: Write 'E' to VGA after LME
+    mov edi, 0xB8000 + 8
+    mov word [edi], 0x1F45  ; 'E'
+
+    ; Test 10: Enable paging (this switches to long mode!)
+    mov eax, cr0
+    or eax, 1 << 31
+    mov cr0, eax
+
+    ; We're now in long mode! But still using 32-bit code
+    ; Write 'F' to VGA
+    mov edi, 0xB8000 + 10
+    mov word [edi], 0x1F46  ; 'F'
+
+    ; Far jump to 64-bit code
+    jmp 0x18:long_mode
+
+    ; Should never reach here
+.hang:
+    hlt
+    jmp .hang
 
     ; Enable PAE (Physical Address Extension)
     mov eax, cr4
@@ -258,6 +299,11 @@ setup_page_tables:
 bits 64
 
 long_mode:
+    ; First test: write 'G' to VGA (line 0, pos 12)
+    mov rdi, 0xB8000 + 12 * 2
+    mov word [rdi], 0x1F47  ; 'G'
+
+    ; Setup data segments
     mov ax, 0x20
     mov ds, ax
     mov es, ax
@@ -266,20 +312,30 @@ long_mode:
     mov ss, ax
     mov rsp, 0x7E00
 
-    ; Print long mode message on line 2
-    mov rsi, msg_longmode
-    call print_lm
+    ; Second test: write 'H' to VGA (line 0, pos 13)
+    mov rdi, 0xB8000 + 13 * 2
+    mov word [rdi], 0x1F48  ; 'H'
+
+    ; Third test: write 'I' to VGA directly
+    mov rdi, 0xB8000 + 14 * 2
+    mov word [rdi], 0x1F49  ; 'I'
+
+    ; Fourth test: write 'J' to VGA directly
+    mov rdi, 0xB8000 + 15 * 2
+    mov word [rdi], 0x1F4A  ; 'J'
 
     ; Jump to kernel!
-    ; Print jumping message on line 4
-    mov rsi, msg_jumping_kernel
-    call print_lm_line4
+    ; Write 'K' before jumping
+    mov rdi, 0xB8000 + 16 * 2
+    mov word [rdi], 0x1F4B  ; 'K'
 
     ; Jump to kernel entry point at 0x10000
     mov rdi, 0x10000
     call rdi
 
-    ; If kernel returns, halt
+    ; If kernel returns, halt and write 'Z'
+    mov rdi, 0xB8000 + 17 * 2
+    mov word [rdi], 0x1F5A  ; 'Z'
 kernel_halt:
     hlt
     jmp kernel_halt
