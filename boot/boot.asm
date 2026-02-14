@@ -18,6 +18,13 @@ start:
     ; enable interrupts
     sti
 
+    ; clear screen first
+    call clear_screen
+
+    ; print header
+    mov si, header_msg
+    call print_string
+
     ; print welcome message (real mode)
     mov si, welcome_msg
     call print_string
@@ -25,15 +32,18 @@ start:
     ; load second stage bootloader
     call load_second_stage
 
-    ; print loading message
-    mov si, loading_msg
-    call print_string
-
     ; jump to second stage
     jmp 0x7E00
 
 ; 16-bit real mode code
 bits 16
+
+; clear screen using BIOS
+clear_screen:
+    mov ah, 0x00        ; set video mode
+    mov al, 0x03        ; text mode 80x25, 16 colors
+    int 0x10
+    ret
 
 ; print string function (BIOS)
 ; input: si = pointer to null-terminated string
@@ -158,14 +168,14 @@ disk_error:
     jmp .hang
 
 ; data section
-welcome_msg:
-    db "CCOS Bootloader Stage 1...", 0x0d, 0x0a, 0
+header_msg:
+    db "READY TO BOOT CCOS", 0x0d, 0x0a, 0
 
-loading_msg:
-    db "Loading Stage 2...", 0x0d, 0x0a, 0
+welcome_msg:
+    db "[1] Stage 1: Loading second stage...", 0x0d, 0x0a, 0
 
 disk_error_msg:
-    db "DISK ERROR! Cannot read Stage 2", 0x0d, 0x0a, 0
+    db "[E1] Failed to load Stage 2", 0x0d, 0x0a, 0
 
 ; pad to 510 bytes
 times 510-($-$$) db 0

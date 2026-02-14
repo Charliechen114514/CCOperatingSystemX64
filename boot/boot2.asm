@@ -45,10 +45,6 @@ main:
     ; Load GDT
     lgdt [gdt_ptr]
 
-    ; Print debug message
-    mov si, debug_msg1
-    call print_bios
-
     ; Enable protected mode
     mov eax, cr0         ; Read CR0 to EAX
     or eax, 1           ; Set PE bit
@@ -69,10 +65,6 @@ main:
 load_kernel:
     pusha
 
-    ; Print debug message
-    mov si, msg_loading_kernel
-    call print_bios
-
     ; Load kernel using CHS (simple, works everywhere)
     ; Kernel is at sector 4 (1-based: boot1=1 boot2=2,3 kernel=4)
     mov ax, 0x1000
@@ -88,11 +80,6 @@ load_kernel:
     int 0x13
 
     jc .read_error
-
-    ; Print success
-    mov si, msg_kernel_loaded
-    call print_bios
-
     popa
     ret
 
@@ -149,63 +136,10 @@ protected_mode:
     mov ss, ax
     mov esp, 0x7E00
 
-    ; Test 1: Write 'A' to VGA (we know this works)
-    mov edi, 0xB8000
-    mov word [edi], 0x1F41  ; 'A' in white on blue
-
-    ; Test 2: Setup page tables
+    ; Setup page tables
     call setup_page_tables
 
-    ; Test 3: Write 'B' to VGA after page tables
-    mov edi, 0xB8000 + 2
-    mov word [edi], 0x1F42  ; 'B'
-
-    ; Test 4: Enable PAE
-    mov eax, cr4
-    or eax, 1 << 5
-    mov cr4, eax
-
-    ; Test 5: Write 'C' to VGA after PAE
-    mov edi, 0xB8000 + 4
-    mov word [edi], 0x1F43  ; 'C'
-
-    ; Test 6: Load PML4 into CR3
-    mov eax, 0x9000
-    mov cr3, eax
-
-    ; Test 7: Write 'D' to VGA after CR3
-    mov edi, 0xB8000 + 6
-    mov word [edi], 0x1F44  ; 'D'
-
-    ; Test 8: Set LME bit in EFER MSR
-    mov ecx, 0xC0000080
-    rdmsr
-    or eax, 1 << 8
-    wrmsr
-
-    ; Test 9: Write 'E' to VGA after LME
-    mov edi, 0xB8000 + 8
-    mov word [edi], 0x1F45  ; 'E'
-
-    ; Test 10: Enable paging (this switches to long mode!)
-    mov eax, cr0
-    or eax, 1 << 31
-    mov cr0, eax
-
-    ; We're now in long mode! But still using 32-bit code
-    ; Write 'F' to VGA
-    mov edi, 0xB8000 + 10
-    mov word [edi], 0x1F46  ; 'F'
-
-    ; Far jump to 64-bit code
-    jmp 0x18:long_mode
-
-    ; Should never reach here
-.hang:
-    hlt
-    jmp .hang
-
-    ; Enable PAE (Physical Address Extension)
+    ; Enable PAE
     mov eax, cr4
     or eax, 1 << 5
     mov cr4, eax
@@ -214,44 +148,24 @@ protected_mode:
     mov eax, 0x9000
     mov cr3, eax
 
-    ; Set LME bit in EFER MSR (Long Mode Enable)
+    ; Set LME bit in EFER MSR
     mov ecx, 0xC0000080
     rdmsr
     or eax, 1 << 8
     wrmsr
 
-    ; Enable paging
+    ; Enable paging (this switches to long mode!)
     mov eax, cr0
     or eax, 1 << 31
     mov cr0, eax
 
-    ; Far jump to long mode
+    ; Far jump to 64-bit code
     jmp 0x18:long_mode
 
-; Print string (protected mode) - VGA direct print
-print_pm:
-    pusha
-    mov edi, 0xB8000
-    mov ah, 0x1F
-.loop:
-    lodsb
-    test al, al
-    jz .done
-    stosw
-    jmp .loop
-.done:
-    popa
-    ret
-
-; Messages for protected mode (defined in 32-bit section)
-msg_protected:
-    db "Protected Mode OK", 0
-
-msg_pm_page:
-    db "Setting up page tables...", 0
-
-msg_pm_done:
-    db "Page tables OK, enabling long mode...", 0
+    ; Should never reach here
+.hang:
+    hlt
+    jmp .hang
 
 ; Setup page tables for long mode
 setup_page_tables:
@@ -299,10 +213,6 @@ setup_page_tables:
 bits 64
 
 long_mode:
-    ; First test: write 'G' to VGA (line 0, pos 12)
-    mov rdi, 0xB8000 + 12 * 2
-    mov word [rdi], 0x1F47  ; 'G'
-
     ; Setup data segments
     mov ax, 0x20
     mov ds, ax
@@ -312,40 +222,43 @@ long_mode:
     mov ss, ax
     mov rsp, 0x7E00
 
-    ; Second test: write 'H' to VGA (line 0, pos 13)
-    mov rdi, 0xB8000 + 13 * 2
-    mov word [rdi], 0x1F48  ; 'H'
-
-    ; Third test: write 'I' to VGA directly
-    mov rdi, 0xB8000 + 14 * 2
-    mov word [rdi], 0x1F49  ; 'I'
-
-    ; Fourth test: write 'J' to VGA directly
-    mov rdi, 0xB8000 + 15 * 2
-    mov word [rdi], 0x1F4A  ; 'J'
-
-    ; Jump to kernel!
-    ; Write 'K' before jumping
-    mov rdi, 0xB8000 + 16 * 2
-    mov word [rdi], 0x1F4B  ; 'K'
+    ; Clear screen and print ready message
+    call clear_screen
+    mov rsi, msg_ready
+    call print_string
 
     ; Jump to kernel entry point at 0x10000
     mov rdi, 0x10000
     call rdi
 
-    ; If kernel returns, halt and write 'Z'
-    mov rdi, 0xB8000 + 17 * 2
-    mov word [rdi], 0x1F5A  ; 'Z'
+    ; If kernel returns, halt
 kernel_halt:
     hlt
     jmp kernel_halt
 
-; Print string (long mode) - prints to VGA line 2
-print_lm:
+; Clear screen (VGA text mode 80x25)
+clear_screen:
     push rax
     push rdi
-    mov rdi, 0xB8000 + 160  ; Line 2
-    mov ah, 0x1F
+    push rcx
+    mov rdi, 0xB8000
+    mov rcx, 80 * 25
+    mov rax, 0x0720      ; space with white on black
+.rep:
+    mov [rdi], ax
+    add rdi, 2
+    loop .rep
+    pop rcx
+    pop rdi
+    pop rax
+    ret
+
+; Print string to VGA (64-bit)
+print_string:
+    push rax
+    push rdi
+    mov rdi, 0xB8000
+    mov ah, 0x0F         ; white on black
 .loop:
     lodsb
     test al, al
@@ -357,46 +270,17 @@ print_lm:
     pop rax
     ret
 
-; Print to VGA line 4
-print_lm_line4:
-    push rax
-    push rdi
-    mov rdi, 0xB8000 + 160 * 4  ; Line 4
-    mov ah, 0x1E  ; Yellow
-.loop4:
-    lodsb
-    test al, al
-    jz .done4
-    stosw
-    jmp .loop4
-.done4:
-    pop rdi
-    pop rax
-    ret
-
 ; ============================================================================
 ; Data Section (16-bit real mode)
 ; ============================================================================
 msg_stage2:
-    db "Stage 2 running...", 0x0d, 0x0a, 0
-
-debug_msg1:
-    db "[1] GDT loaded, PM enabled...", 0x0d, 0x0a, 0
-
-msg_loading_kernel:
-    db "[LOAD] Loading kernel...", 0x0d, 0x0a, 0
-
-msg_kernel_loaded:
-    db "[OK] Kernel loaded to 0x10000!", 0x0d, 0x0a, 0
+    db "[2] Stage 2: Loading kernel...", 0x0d, 0x0a, 0
 
 msg_load_error:
-    db "[ERROR] Disk read failed: ", 0
+    db "[E2] Failed to load kernel", 0x0d, 0x0a, 0
 
 msg_halt:
-    db 0x0d, 0x0a, "System halted.", 0x0d, 0x0a, 0
+    db "[ERR] System halted", 0x0d, 0x0a, 0
 
-msg_longmode:
-    db "=== LONG MODE ACTIVE ===", 0
-
-msg_jumping_kernel:
-    db "[LM] Jumping to kernel at 0x10000...", 0
+msg_ready:
+    db "READY TO BOOT KERNEL", 0
