@@ -38,144 +38,21 @@ start:
 ; 16-bit real mode code
 bits 16
 
-; clear screen using BIOS
-clear_screen:
-    mov ah, 0x00        ; set video mode
-    mov al, 0x03        ; text mode 80x25, 16 colors
-    int 0x10
-    ret
+; ============================================================================
+; Include library functions
+; ============================================================================
+%include "boot/lib/bios_screen.asm"
+%include "boot/lib/bios_string.asm"
+%include "boot/lib/disk_io.asm"
 
-; print string function (BIOS)
-; input: si = pointer to null-terminated string
-print_string:
-    pusha
-.loop:
-    lodsb
-    test al, al
-    jz .done
-
-    mov ah, 0x0e
-    mov bh, 0
-    mov bl, 0x07
-    int 0x10
-
-    jmp .loop
-.done:
-    popa
-    ret
-
-; load second stage bootloader from disk
-load_second_stage:
-    pusha
-
-    ; Use the boot drive (DL is preserved by BIOS)
-    ; Instead of hardcoding dl=0x00, we'll try multiple methods
-
-    ; Method 1: Try LBA extended read first
-    mov ax, 0x4100
-    mov bx, 0x55AA
-    int 0x13
-
-    jc .try_chs             ; no extended support
-    cmp bx, 0xAA55         ; check signature
-    jne .try_chs
-
-    ; Extended read supported, use LBA
-    pusha                   ; Save all registers
-    mov edi, 0x5000        ; use a safer address for DAP
-
-    mov byte [edi + 0], 0x10    ; packet size = 16
-    mov byte [edi + 1], 0x00    ; reserved
-    mov word [edi + 2], 0x02    ; read 2 sectors (boot2 is ~824 bytes)
-    mov word [edi + 4], 0x0000  ; buffer offset = 0x0000
-    mov word [edi + 6], 0x7E0   ; buffer segment = 0x7E0 (address = 0x7E00)
-    mov dword [edi + 8], 0x00000001  ; LBA = 1 (sector 2, 0-based)
-    mov dword [edi + 12], 0x00000000
-
-    mov si, di
-    mov ah, 0x42            ; extended read
-    int 0x13
-
-    popa                    ; Restore registers
-    jc .try_chs             ; if failed, try CHS
-
-    cmp al, 0x02            ; check if 2 sectors were read
-    jne .try_chs            ; if not, try CHS
-
-    popa
-    ret
-
-.try_chs:
-    ; Method 2: Legacy CHS read
-    ; Read from sector 2 (head 0, cylinder 0, sector 2)
-    mov ax, 0x7E0
-    mov es, ax
-    xor bx, bx
-
-    mov ah, 0x02            ; read function
-    mov al, 0x02            ; read 2 sectors (boot2 is ~824 bytes)
-    mov ch, 0x00            ; cylinder 0
-    mov cl, 0x02            ; sector 2 (sector 1 is MBR)
-    mov dh, 0x00            ; head 0
-    ; dl already contains boot drive number from BIOS
-
-    int 0x13
-
-    jc disk_error
-
-    cmp al, 0x02            ; verify 2 sectors were read
-    jne disk_error
-
-    popa
-    ret
-
-disk_error:
-    ; print error message and hang
-    mov si, disk_error_msg
-    call print_string
-
-    ; Print error code in AH (convert to hex)
-    ; IMPORTANT: Save AH before using it for BIOS calls!
-    mov bl, ah          ; Save error code in BL
-    mov al, bl          ; Copy to AL
-    shr al, 4           ; Get high 4 bits
-    add al, '0'
-    cmp al, '9'
-    jbe .digit1
-    add al, 7
-.digit1:
-    pusha               ; Save all registers
-    mov ah, 0x0e
-    mov bh, 0
-    mov bl, 0x07        ; Restore BL from stack later
-    int 0x10
-    popa
-
-    mov al, bl          ; Get saved error code
-    and al, 0x0F        ; Get low 4 bits
-    add al, '0'
-    cmp al, '9'
-    jbe .digit2
-    add al, 7
-.digit2:
-    mov ah, 0x0e
-    mov bh, 0
-    mov bl, 0x07
-    int 0x10
-
-.hang:
-    hlt
-    jmp .hang
-
-; data section
+; ============================================================================
+; Data Section
+; ============================================================================
 header_msg:
     db "READY TO BOOT CCOS", 0x0d, 0x0a, 0
 
 welcome_msg:
     db "[1] Stage 1: Loading second stage...", 0x0d, 0x0a, 0
-
-disk_error_msg:
-    db "[E1] Failed to load Stage 2", 0x0d, 0x0a, 0
 
 ; pad to 510 bytes
 times 510-($-$$) db 0
