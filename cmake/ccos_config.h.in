@@ -1,0 +1,12 @@
+#ifndef CCOS_CONFIG_H
+#define CCOS_CONFIG_H
+
+/* CMake 生成的配置文件 */
+#cmakedefine CCOS_ENABLE_SERIAL 1
+#cmakedefine CCOS_ENABLE_QEMU_DEBUG 1
+
+/* 构建信息 */
+#define CCOS_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
+#define CCOS_VERSION "0.1.0"
+
+#endif /* CCOS_CONFIG_H */
