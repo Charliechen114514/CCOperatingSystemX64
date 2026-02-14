@@ -157,7 +157,7 @@ print_pm:
 
 ; Message for protected mode (defined in 32-bit section)
 msg_protected:
-    db "Protected Mode OK", 0x0d, 0x0a, 0
+    db "Protected Mode OK", 0
 
 ; Setup page tables for long mode
 setup_page_tables:
@@ -216,11 +216,7 @@ long_mode:
     mov ss, ax
     mov rsp, 0x7E00
 
-    ; Direct VGA write - print 'L' at position 4 to verify long mode
-    mov rax, 0x1F004C1F004C1F  ; 'LL' in white on blue
-    mov qword [0xB8000 + 8], rax
-
-    ; Print long mode message
+    ; Print long mode message on line 2
     mov rsi, msg_longmode
     call print_lm
 
@@ -228,11 +224,11 @@ hang:
     hlt
     jmp hang
 
-; Print string (long mode)
+; Print string (long mode) - prints to VGA line 2
 print_lm:
     push rax
     push rdi
-    mov rdi, 0xB8000
+    mov rdi, 0xB8000 + 160  ; Line 2 (80 chars * 2 bytes = 160 offset)
     mov ah, 0x1F
 .loop:
     lodsb
@@ -255,5 +251,4 @@ debug_msg1:
     db "[1] GDT loaded, PM enabled...", 0x0d, 0x0a, 0
 
 msg_longmode:
-    db "=== LONG MODE ACTIVE ===", 0x0d, 0x0a, 0
-    db 0
+    db "=== LONG MODE ACTIVE ===", 0
