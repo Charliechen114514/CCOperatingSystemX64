@@ -6,7 +6,7 @@ x86_64 操作系统开发 - 从 bootloader 到内核
 
 ## ✅ 已完成功能
 
-### 1. Bootloader (两阶段)
+### 1. Bootloader (统一架构)
 
 | 组件 | 地址 | 状态 |
 |------|------|------|
@@ -19,6 +19,7 @@ x86_64 操作系统开发 - 从 bootloader 到内核
 - GDT 加载
 - 保护模式切换
 - 长模式切换 (64-bit)
+- 模块化工具库 (`boot/lib/`)
 
 ### 2. 内核加载
 
@@ -37,14 +38,15 @@ x86_64 操作系统开发 - 从 bootloader 到内核
 ### 3. 磁盘布局
 
 ```
-┌─────────┬──────────┬──────────────┐
-│  扇区   │  大小    │    内容      │
-├─────────┼──────────┼──────────────┤
-│   0     │   512B   │ boot1.bin   │
-│   1-2   │  1024B   │ boot2.bin   │
-│   3     │   512B   │ kernel.bin  │
-└─────────┴──────────┴──────────────┘
+┌─────────┬──────────┬──────────────────┐
+│  扇区   │  大小    │      内容        │
+├─────────┼──────────┼──────────────────┤
+│   0-2   │  1536B   │ bootloader.bin   │
+│   3+    │   512B   │ kernel.bin       │
+└─────────┴──────────┴──────────────────┘
 ```
+
+> 注：bootloader.asm 合并了 Stage 1 + Stage 2，共占用 3 个扇区
 
 ### 4. 模式切换
 
@@ -103,13 +105,17 @@ b *0x10000     # 内核入口
 ```
 CCOperatingSystemX64/
 ├── boot/                  # Bootloader 源码
-│   ├── boot.asm          # Stage 1
-│   └── boot2.asm         # Stage 2 + 内核加载
+│   ├── bootloader.asm    # 统一 Bootloader (Stage 1 + Stage 2)
+│   └── lib/              # Bootloader 工具库
+│       ├── bios_screen.asm   # VGA 屏幕操作
+│       ├── bios_string.asm   # 字符串打印
+│       ├── disk_io.asm       # 磁盘 I/O
+│       ├── lmode.asm         # 长模式切换
+│       └── pmode.asm         # 保护模式切换
 ├── kernel/                # 内核源码
-│   └── kernel.asm       # 64 位内核入口
+│   └── kernel.asm       # 64 位内核入口（待替换为 C）
 ├── build/                 # 构建产物
-│   ├── boot.bin         # Stage 1 (512B)
-│   ├── boot2.bin        # Stage 2 (~1KB)
+│   ├── bootloader.bin   # Bootloader (1007B)
 │   ├── kernel.bin       # 内核 (18B)
 │   └── boot.img         # 完整启动镜像
 ├── document/              # 文档
@@ -159,24 +165,18 @@ make clean
 
 ## 📋 下一步计划
 
-- [ ] 中断描述符表 (IDT)
-- [ ] 键盘驱动 (PS/2)
-- [ ] 定时器 (PIT/APIC)
-- [ ] 内存管理 (堆分配)
-- [ ] 系统调用接口
+- [ ] 内核切换到 C 语言（GCC 编译，配置链接脚本）
+- [ ] ACPI 内存检测（探测可用内存）
+- [ ] 串口驱动（UART 调试输出）
 
 ---
 
 ## 📅 更新日志
 
-### 2026-02-14 - 内核加载完成
-- ✅ Boot2 在实模式加载内核
-- ✅ 内核加载到 0x10000
+### 2026-02-14 - Bootloader 重构与内核加载完成
+- ✅ Bootloader 合并为单一文件 `bootloader.asm`
+- ✅ 工具库分离到 `boot/lib/`
+- ✅ 实模式加载内核到 0x10000
 - ✅ 长模式跳转到内核
 - ✅ 内核成功执行并输出 'X'
-
-### 2026-02-14 - Bootloader 完成
-- ✅ 两阶段 Bootloader
-- ✅ 实模式 → 保护模式 → 长模式
-- ✅ VGA 调试输出
 - ✅ 完整文档体系
