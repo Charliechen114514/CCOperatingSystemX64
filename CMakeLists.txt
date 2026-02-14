@@ -102,19 +102,11 @@ add_custom_target(run
     VERBATIM
 )
 
-# VGA运行目标（图形界面 - GTK backend）
+# VGA运行目标（图形界面 - VNC backend）
 add_custom_target(vga-run
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -display gtk
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -vga std -display vnc=:0
     DEPENDS boot_img
-    COMMENT "Running CCOS in QEMU with VGA graphics (GTK backend)"
-    VERBATIM
-)
-
-# VGA运行目标备用（SDL backend）
-add_custom_target(vga-run-sdl
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -vga std
-    DEPENDS boot_img
-    COMMENT "Running CCOS in QEMU with VGA graphics (SDL backend)"
+    COMMENT "Running CCOS in QEMU with VGA graphics (VNC backend, connect with: vncviewer localhost:5900)"
     VERBATIM
 )
 
@@ -136,10 +128,11 @@ add_custom_target(build-and-vga-run
     COMMAND ${CMAKE_COMMAND} --build . --target boot_img
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${CMAKE_COMMAND} -E echo "Starting QEMU with VGA graphics..."
+    COMMAND ${CMAKE_COMMAND} -E echo "Starting QEMU with VGA graphics (VNC)..."
+    COMMAND ${CMAKE_COMMAND} -E echo "Connect with: vncviewer localhost:5900"
     COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -vga std
-    COMMENT "Build and run CCOS in QEMU with VGA graphics (SDL backend)"
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -vga std -display vnc=:0
+    COMMENT "Build and run CCOS in QEMU with VGA graphics (VNC backend)"
     VERBATIM
 )
 
