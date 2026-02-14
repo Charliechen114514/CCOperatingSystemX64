@@ -1,0 +1,25 @@
+# Claude Helpers
+.claude
+
+# 构建目录
+build/
+iso/
+
+# QEMU 日志
+serial.log
+
+# 编译器生成的文件
+*.o
+*.bin
+*.img
+*.iso
+
+# 编辑器临时文件
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# 调试文件
+*.debug
