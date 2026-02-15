@@ -1,218 +1,102 @@
-# CCOS 开发进度
+# CCOperatingSystemX64 项目进展
 
-x86_64 操作系统开发 - 从 bootloader 到内核
-
----
-
-## 📋 最新更新 (2026-02-15)
-
-### 动态内核加载配置系统 v3 + CHS 多扇区读取
-
-已完成动态内核配置生成流水线和 CHS 动态多扇区读取功能。
-
-#### 构建流程
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Build Pipeline                           │
-├─────────────────────────────────────────────────────────────────┤
-│ 1. bootloader (mock config)  →  bootloader.bin                 │
-│ 2. kernel                     →  kernel.bin                     │
-│ 3. final_config               →  boot_config_final.inc          │
-│    ├─ 读取 bootloader.bin 大小                                   │
-│    ├─ 读取 kernel.bin 大小                                       │
-│    ├─ 计算 CHS 参数                                              │
-│    └─ 打印磁盘布局信息                                           │
-│ 4. boot_img                   →  boot.img (dd组装)              │
-│ 5. verify_disk_layout                                         │
-│ 6. verify_boot_image                                           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-#### 新增/修改组件
-
-| 组件 | 路径 | 说明 |
-|------|------|------|
-| Mock配置 | [boot/boot_config.inc](boot/boot_config.inc) | 首次编译使用 |
-| 配置生成脚本 | [cmake/GenerateKernelSize.cmake](cmake/GenerateKernelSize.cmake) | 动态计算内核大小和CHS参数 |
-| Boot镜像组装 | [cmake/AssembleBootImage.cmake](cmake/AssembleBootImage.cmake) | 动态dd命令 |
-| 布局验证脚本 | [scripts/verify_disk_layout.py](scripts/verify_disk_layout.py) | 磁盘/内存布局验证和魔数检测 |
-| Boot镜像验证 | [scripts/verify_boot_image.py](scripts/verify_boot_image.py) | dd烧录验证 |
-| CHS 加载 | [boot/bootloader.asm](boot/bootloader.asm) | LBA→CHS转换 + 多扇区读取 |
-
-#### 磁盘布局（动态计算）
-
-```
-┌─────────┬──────────┬──────────────────┐
-│  LBA    │  扇区    │      内容        │
-├─────────┼──────────┼──────────────────┤
-│   0-2   │  1-3     │ bootloader.bin   │
-│   3+    │  4+      │ kernel.bin       │
-└─────────┴──────────┴──────────────────┘
-```
-
-#### 内存布局（确保隔离）
-
-```
-Stage 1:     0x7C00 - 0x7E00   (512 bytes)
-Stage 2:     0x7E00 - 0x8400   (1536 bytes)
---- 62 sector gap (31744 bytes) ---
-Kernel:      0x10000 - 0x10200+ (动态大小，最大64MB)
-```
-
-#### VGA 启动输出
-
-```
-READY TO BOOT CCOS
-[1] Stage 1: Loading second stage...
-[2] Stage 2: Loading kernel...
-[LOAD] CHS: loading 1 sectors
-READY TO BOOT KERNEL
-```
+> 详细的项目介绍和架构说明请查看 [README.md](README.md)
 
 ---
 
-## ✅ 已完成功能
+## 📊 整体进度：约 45% 完成
 
-### 1. Bootloader (统一架构)
-
-| 组件 | 地址 | 状态 |
-|------|------|------|
-| Stage 1 | 0x7C00 | ✅ |
-| Stage 2 | 0x7E00 | ✅ |
-
-**功能**:
-- LBA/CHS 磁盘读取
-- 实模式字符串打印
-- GDT 加载
-- 保护模式切换
-- 长模式切换 (64-bit)
-- **LBA→CHS 动态转换**
-- **CHS 多扇区分批读取 (最大127扇区/次)**
-
-### 2. 内核加载
-
-| 阶段 | 状态 |
-|------|------|
-| 实模式加载内核 | ✅ |
-| 长模式跳转 | ✅ |
-| 内核执行 | ✅ |
-
-**功能**:
-- Stage 2 在实模式加载 kernel.bin
-- 内核加载到 `0x10000`
-- 跳转到 64 位内核入口
-- 内核成功输出验证字符
-
-### 3. 模式切换
-
-```
-Real Mode (16-bit)
-    ↓
-Protected Mode (32-bit)
-    ↓
-Long Mode (64-bit)
-    ↓
-Kernel Execution
-```
+| 模块 | 完成度 | 状态 |
+|:----:|:------:|:----:|
+| Bootloader | 95% | ✅ 基本完成 |
+| 内核加载 | 70% | 🟡 进行中 |
+| 内存管理 | 30% | 🟡 部分完成 |
+| 中断处理 | 10% | 🔴 未开始 |
+| 进程管理 | 0% | 🔴 未开始 |
+| 文件系统 | 0% | 🔴 未开始 |
+| 设备驱动 | 5% | 🔴 未开始 |
+| 构建系统 | 100% | ✅ 完成 |
 
 ---
 
-## 📋 下一步工作
+## 🎯 下一步工作计划
 
-- [ ] **实现 LBA 扩展读取 (INT 13h AH=42h)**
-  - 使用 DAP (Disk Address Packet) 数据包
-  - 支持大于 8GB 的磁盘访问
-  - 检测 BIOS 扩展读写支持
+### 优先级 1：内核基础设施 (近期)
 
-- [ ] **实现 LBA 优先 + CHS 回退加载策略**
-  ```
-  尝试 LBA 扩展读取
-      ↓
-  成功？→ 完成
-      ↓ 失败
-  CHS 回退读取
-      ↓
-  成功？→ 完成 / 失败→错误
-  ```
+#### 1.1 基础库函数
+- [ ] 实现字符串操作函数（strlen, strcpy, strcmp, memcpy 等）
+- [ ] 实现数学库函数（整数运算、位操作）
+- [ ] 实现格式化输出（printf、sprintf）
+- [ ] 实现内存操作函数
 
-- [ ] **支持更大内核（>64KB）的分段加载**
-  - 处理 ES:BX 跨段边界
-  - 支持最大 64MB 内核
+#### 1.2 中断描述符表 (IDT)
+- [ ] 创建 IDT 数据结构
+- [ ] 实现 ISR (中断服务程序) 框架
+- [ ] 处理常见异常（除零、页错误等）
+- [ ] 实现中断处理注册机制
 
-- [ ] ACPI 内存检测（探测可用内存）
-- [ ] 串口驱动（UART 调试输出）
+#### 1.3 键盘驱动
+- [ ] 实现 PS/2 键盘初始化
+- [ ] 键盘中断处理
+- [ ] 扫描码到 ASCII 转换
+- [ ] 输入缓冲区管理
 
----
+### 优先级 2：内存管理 (中期)
 
-## 🔬 预期现象
+#### 2.1 物理内存管理
+- [ ] 检测可用内存大小
+- [ ] 实现物理帧分配器
+- [ ] 内存位图或栈式分配
 
-### 启动输出 (VGA)
+#### 2.2 虚拟内存管理
+- [ ] 实现页分配器
+- [ ] 页表管理函数
+- [ ] 内存映射机制
+- [ ] 页错误处理
 
-运行 `make run` 后，屏幕应显示：
+#### 2.3 堆管理器
+- [ ] 实现 malloc/free
+- [ ] 内存碎片整理
+- [ ] 内存泄漏检测
 
-```
-READY TO BOOT CCOS
-[1] Stage 1: Loading second stage...
-[2] Stage 2: Loading kernel...
-[LOAD] CHS: loading 1 sectors
-READY TO BOOT KERNEL
-```
+### 优先级 3：进程管理 (长期)
 
-### QEMU/GDB 调试
+#### 3.1 进程控制块
+- [ ] 定义 PCB 结构
+- [ ] 进程状态管理
+- [ ] 上下文切换
 
-```bash
-# 启动调试
-make debug
+#### 3.2 调度器
+- [ ] 实现简单调度算法（Round-Robin）
+- [ ] 进程创建和销毁
+- [ ] 进程间通信（IPC）
 
-# GDB 连接
-gdb -ex "target remote :1234"
+### 优先级 4：系统调用接口
 
-# 关键断点
-b *0x7E00      # Stage 2 入口
-b *0x10000     # 内核入口
-```
+- [ ] 定义系统调用号
+- [ ] 实现系统调用入口
+- [ ] 用户态/内核态切换
+- [ ] 基础系统调用（write, read, exit 等）
 
----
+### 优先级 5：文件系统
 
-## 📁 项目结构
-
-```
-CCOperatingSystemX64/
-├── boot/                  # Bootloader 源码
-│   ├── bootloader.asm    # 统一 Bootloader (Stage 1 + Stage 2)
-│   └── boot_config.inc   # 自动生成的配置
-├── kernel/                # 内核源码
-│   └── kernel_main.c     # 64 位内核入口 (C)
-├── build/                 # 构建产物
-│   ├── bootloader.bin   # Bootloader
-│   ├── kernel.bin       # 内核
-│   └── boot.img         # 完整启动镜像
-├── cmake/                 # CMake 构建脚本
-│   ├── GenerateKernelSize.cmake
-│   └── AssembleBootImage.cmake
-├── scripts/               # 验证脚本
-│   ├── verify_disk_layout.py
-│   └── verify_boot_image.py
-└── PROGRESS.md           # 本文件
-```
+- [ ] 选择文件系统类型（FAT32/ext2）
+- [ ] 实现磁盘缓存
+- [ ] 文件操作接口
+- [ ] 目录操作
 
 ---
 
-## 🚀 快速开始
+## 📝 技术债务与改进
 
-```bash
-# 构建
-cmake --build build
+### 需要修复/改进的问题
+1. Bootloader 错误恢复机制需要完善
+2. 缺少启动参数传递机制
+3. 需要更详细的调试日志
+4. 内存布局可以优化
 
-# 运行
-make run
-
-# 调试
-make debug
-
-# 清理
-make clean
-```
-
----
+### 建议的增强功能
+1. 添加启动配置文件支持
+2. 实现模块化内核设计
+3. 添加内核日志系统
+4. 性能分析工具
