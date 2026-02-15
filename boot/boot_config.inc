@@ -6,8 +6,8 @@
 ; ==============================================================================
 
 ; Kernel disk location (LBA/CHS)
-; Bootloader is 3 sectors (LBA 0-2), kernel starts at LBA 3 (sector 4, 1-based)
-%define KERNEL_LBA_START          3           ; Kernel starts at LBA 3 (0-based), sector 4 (1-based)
+; Bootloader is 4 sectors (LBA 0-3), kernel starts at LBA 4 (sector 5, 1-based)
+%define KERNEL_LBA_START          4           ; Kernel starts at LBA 4 (0-based), sector 5 (1-based)
 %define KERNEL_SECTOR_COUNT       1           ; TODO: Will be replaced by actual size
 
 ; Memory layout (ensure 1-sector gap from Stage 2)
@@ -15,7 +15,7 @@
 %define KERNEL_LOAD_OFFSET        0x0000
 
 ; Bootloader size info
-%define BOOTLOADER_SECTORS        3           ; Stage1(1) + Stage2(2)
+%define BOOTLOADER_SECTORS        4           ; Stage1(1) + Stage2(3) - updated for LBA support
 
 ; Memory gap: 1 sector between bootloader and kernel
 ; Stage 2 ends at:  0x7E00 + (3 sectors * 512) = 0x7E00 + 0x600 = 0x8400

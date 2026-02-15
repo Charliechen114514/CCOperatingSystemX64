@@ -38,19 +38,20 @@ start:
     mov si, welcome_msg
     call print_string
 
-    ; Load Stage 2 from disk (sectors 2-3)
+    ; Load Stage 2 from disk (sectors 2-4)
+    ; Bootloader is BOOTLOADER_SECTORS total, minus 1 for MBR = remaining sectors
     mov ax, 0x7E0
     mov es, ax
     xor bx, bx
     mov ah, 0x02
-    mov al, 0x02
+    mov al, BOOTLOADER_SECTORS - 1    ; Load remaining sectors (Stage 2)
     mov ch, 0x00
-    mov cl, 0x02
+    mov cl, 0x02                       ; Start from sector 2 (LBA 1)
     mov dh, 0x00
     mov dl, 0x80
     int 0x13
     jc load_error
-    cmp al, 0x02
+    cmp al, BOOTLOADER_SECTORS - 1     ; Verify all sectors read
     jne load_error
 
     ; jump to Stage 2
@@ -134,9 +135,8 @@ stage2_main:
     mov si, msg_stage2
     call print_bios
 
-    ; Load kernel using dynamic configuration from boot_config.inc
-    ; Uses CHS mode for maximum compatibility
-    call load_kernel_chs
+    ; Load kernel using automatic LBA/CHS selection
+    call load_kernel_auto
     jc kernel_error
 
     ; Load GDT and switch to protected mode
@@ -315,7 +315,255 @@ msg_ready:
 ; ==============================================================================
 ; These functions are called from Stage 2 in real mode
 
-; lba_to_chs - Convert LBA to CHS addressing
+; Disk Address Packet (DAP) for LBA extended reads
+; Structure: 16 bytes total
+;   Offset 0:    Size of packet (bytes)
+;   Offset 1:    Reserved (must be 0)
+;   Offset 2-3:  Number of blocks to transfer
+;   Offset 4-7:  Destination buffer address (segment:offset)
+;   Offset 8-15: Starting LBA address (64-bit)
+align 4
+dap_structure:
+    db 16                      ; Packet size (16 bytes)
+    db 0                       ; Reserved
+    dw 0                       ; Block count (filled at runtime)
+    dw 0                       ; Destination offset (filled at runtime)
+    dw 0                       ; Destination segment (filled at runtime)
+    dq 0                       ; Starting LBA (filled at runtime)
+
+
+; check_lba_support - Check if BIOS supports LBA extended reads
+; Input: none
+; Output: CF=0 if supported, CF=1 if not supported
+; Clobbers: AX, BX, CX
+bits 16
+check_lba_support:
+    pusha
+
+    ; Store current drive
+    mov dl, 0x80                    ; First hard drive
+
+    ; Check for LBA support using INT 13h AH=41h
+    mov ah, 0x41
+    mov bx, 0x55AA                  ; Magic value
+    int 0x13
+
+    ; Check if function is supported (CF=0 and BX=0xAA55)
+    jc .not_supported
+    cmp bx, 0xAA55
+    jne .not_supported
+
+    ; Check if LBA extensions are available (bit 0 of CX)
+    test cx, 0x01
+    jz .not_supported
+
+    ; LBA is supported!
+    popa
+    clc                             ; Clear carry = supported
+    ret
+
+.not_supported:
+    popa
+    stc                             ; Set carry = not supported
+    ret
+
+
+; read_sectors_lba - Read sectors using LBA extended addressing (INT 13h AH=42h)
+; Input:  EAX = Starting LBA address
+;         CX  = Number of sectors to read
+;         ES:BX = Destination buffer
+; Output: CF=0 on success, CF=1 on error
+; Clobbers: AX, BX, CX, DX, SI
+bits 16
+read_sectors_lba:
+    pusha
+
+    ; Validate sector count (max 127 for compatibility)
+    cmp cx, 0
+    je .error
+    cmp cx, 127
+    jbe .count_ok
+    mov cx, 127                     ; Cap at 127 sectors
+.count_ok:
+
+    ; Setup DS to point to our code segment (where dap_structure is)
+    push ax
+    mov ax, cs
+    mov ds, ax
+    pop ax
+
+    ; Fill in DAP structure
+    mov byte [dap_structure + 2], cl    ; Block count (low byte)
+    mov byte [dap_structure + 3], 0     ; Block count (high byte)
+
+    ; Destination buffer
+    mov [dap_structure + 4], bx         ; Offset
+    mov word [dap_structure + 6], es    ; Segment
+
+    ; Starting LBA (64-bit, we use lower 32 bits)
+    mov dword [dap_structure + 8], eax  ; LBA (low 32-bit)
+    mov dword [dap_structure + 12], 0   ; LBA (high 32-bit) = 0
+
+    ; Perform LBA read (INT 13h AH=42h)
+    mov si, dap_structure               ; DS:SI points to DAP
+    mov dl, 0x80                        ; First hard drive
+    mov ah, 0x42                        ; Extended read
+    int 0x13
+
+    ; Restore DS to 0
+    push ax
+    xor ax, ax
+    mov ds, ax
+    pop ax
+
+    jc .error
+
+    ; Success
+    popa
+    clc
+    ret
+
+.error:
+    ; Restore DS before error return
+    push ax
+    xor ax, ax
+    mov ds, ax
+    pop ax
+    popa
+    stc
+    ret
+
+
+; load_kernel_lba - Load kernel using LBA extended addressing
+; Input: none (uses KERNEL_LBA_START and KERNEL_SECTOR_COUNT from config)
+; Output: loads kernel to KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+; Clobbers: AX, BX, CX, DX, SI, DI, BP
+; Returns: CF=0 on success, CF=1 on error
+bits 16
+load_kernel_lba:
+    pusha
+
+    ; Setup destination address
+    mov ax, KERNEL_LOAD_SEGMENT
+    mov es, ax
+    mov bx, KERNEL_LOAD_OFFSET      ; ES:BX = destination
+
+    ; Initialize tracking variables
+    mov di, KERNEL_SECTOR_COUNT     ; DI = remaining sectors to read
+    mov si, KERNEL_LBA_START        ; SI = current LBA (low word)
+
+    ; Print loading message
+    pusha
+    mov si, msg_loading_lba
+    call print_bios
+    mov ax, di
+    call print_decimal
+    mov si, msg_sectors
+    call print_bios
+    popa
+
+.read_loop:
+    ; Check if all sectors read
+    cmp di, 0
+    je .read_complete
+
+    ; Calculate sectors to read this iteration (max 127)
+    mov cx, di
+    cmp cx, 127
+    jbe .sectors_ok
+    mov cx, 127
+.sectors_ok:
+
+    ; Save sector count
+    mov bp, cx
+
+    ; Convert SI to EAX (32-bit LBA)
+    xor eax, eax
+    mov ax, si
+
+    ; Perform LBA read
+    call read_sectors_lba
+    jc .read_error
+
+    ; Update tracking variables
+    sub di, bp                      ; Decrease remaining sectors
+    add si, bp                      ; Advance LBA
+
+    ; Advance buffer pointer (ES:BX += BP * 512)
+    push ax
+    push dx
+    mov ax, bp
+    xor dx, dx
+    mov cx, 512
+    mul cx                          ; DX:AX = bytes read
+    add bx, ax
+    pop dx
+    pop ax
+
+    jmp .read_loop                  ; Next iteration
+
+.read_complete:
+    popa
+    clc                             ; Clear carry = success
+    ret
+
+.read_error:
+    popa
+    stc                             ; Set carry = error
+    ret
+
+
+; load_kernel_auto - Load kernel with automatic LBA/CHS selection
+; Tries LBA first, falls back to CHS if LBA fails
+; Input: none
+; Output: loads kernel to KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+; Clobbers: AX, BX, CX, DX, SI, DI, BP
+; Returns: CF=0 on success, CF=1 on error
+bits 16
+load_kernel_auto:
+    pusha
+
+    ; First, try LBA extended read
+    call check_lba_support
+    jc .try_chs                     ; LBA not supported, try CHS
+
+    ; LBA is supported, attempt LBA load
+    pusha
+    mov si, msg_using_lba
+    call print_bios
+    popa
+
+    call load_kernel_lba
+    jnc .success                    ; LBA succeeded!
+
+    ; LBA failed, fall back to CHS
+    pusha
+    mov si, msg_lba_fallback
+    call print_bios
+    popa
+
+.try_chs:
+    ; Use CHS mode
+    pusha
+    mov si, msg_using_chs
+    call print_bios
+    popa
+
+    call load_kernel_chs
+    jc .error                       ; CHS also failed
+
+.success:
+    popa
+    clc
+    ret
+
+.error:
+    popa
+    stc
+    ret
+
+
+; lba_to_chs - Convert LBA to CHS addressing (fallback for CHS mode)
 ; Input: AX = LBA address (0-based)
 ; Output: CH = Cylinder, CL = Sector (1-based, bits 0-5), DH = Head
 ; Clobbers: AX, BX, CX, DX
@@ -457,8 +705,20 @@ load_kernel_chs:
 ; ============================================================================
 ; Error Messages
 ; ============================================================================
+msg_loading_lba:
+    db "[LOAD] LBA: loading ", 0
+
 msg_loading_kernel:
     db "[LOAD] CHS: loading ", 0
+
+msg_using_lba:
+    db "[MODE] Using LBA extended read", 0x0d, 0x0a, 0
+
+msg_using_chs:
+    db "[MODE] Using CHS fallback", 0x0d, 0x0a, 0
+
+msg_lba_fallback:
+    db "[WARN] LBA failed, falling back to CHS...", 0x0d, 0x0a, 0
 
 msg_sectors:
     db " sectors", 0x0d, 0x0a, 0
