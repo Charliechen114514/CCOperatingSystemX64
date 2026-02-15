@@ -139,6 +139,10 @@ stage2_main:
     call load_kernel_auto
     jc kernel_error
 
+    ; Kernel loaded successfully - print success message
+    mov si, msg_kernel_load_success
+    call print_bios
+
     ; Load GDT and switch to protected mode
     lgdt [gdt_ptr]
     mov eax, cr0
@@ -173,6 +177,9 @@ print_bios:
 
 msg_stage2:
     db "[2] Stage 2: Loading kernel...", 0x0d, 0x0a, 0
+
+msg_kernel_load_success:
+    db "[I] Kernel Load Success, About Enter", 0x0d, 0x0a, 0
 
 msg_kernel_error:
     db "[E2] Failed to load kernel", 0x0d, 0x0a, 0
