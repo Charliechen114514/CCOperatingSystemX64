@@ -62,7 +62,7 @@ add_custom_target(kernel DEPENDS ${CMAKE_BINARY_DIR}/kernel.bin)
 # 自动生成 boot_config.inc（两阶段构建）
 # ============================================================================
 # 阶段1：生成初始配置（用于首次编译）
-# 阶段2：在bootloader和kernel都构建后，生成实际配置
+# 阶段2：在bootloader和kernel都构建后，生成实际配置，然后重新编译bootloader
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/boot_config_final.inc
     COMMAND ${CMAKE_COMMAND}
@@ -70,6 +70,10 @@ add_custom_command(
         -DOUTPUT_FILE=${CMAKE_BINARY_DIR}/boot_config_final.inc
         -DBOOTLOADER_BIN=${CMAKE_BINARY_DIR}/bootloader.bin
         -P ${CMAKE_SOURCE_DIR}/cmake/GenerateKernelSize.cmake
+    # Copy final config to boot directory to trigger bootloader rebuild
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_BINARY_DIR}/boot_config_final.inc
+        ${CMAKE_SOURCE_DIR}/boot/boot_config.inc
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel.bin
         ${CMAKE_BINARY_DIR}/bootloader.bin

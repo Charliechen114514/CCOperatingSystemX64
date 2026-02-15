@@ -68,15 +68,39 @@ configure_file(
 add_subdirectory(boot)
 add_subdirectory(kernel)
 
-# Explicit dependency: final_config needs bootloader
+# Two-stage build: final_config depends on bootloader, and then rebuilds bootloader
 add_dependencies(final_config bootloader)
+
+# After final_config is generated, rebuild bootloader with correct config
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/bootloader_final.bin
+    COMMAND ${NASM} -f bin
+        -I${CMAKE_SOURCE_DIR}/boot/
+        ${CMAKE_SOURCE_DIR}/boot/bootloader.asm
+        -o ${CMAKE_BINARY_DIR}/bootloader_final.bin
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_BINARY_DIR}/bootloader_final.bin
+        ${CMAKE_BINARY_DIR}/bootloader.bin
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Final bootloader (with correct config):"
+    COMMAND ls -lh ${CMAKE_BINARY_DIR}/bootloader.bin
+    DEPENDS
+        ${CMAKE_SOURCE_DIR}/boot/bootloader.asm
+        ${CMAKE_SOURCE_DIR}/boot/boot_config.inc
+        ${CMAKE_BINARY_DIR}/boot_config_final.inc
+    COMMENT "Rebuilding bootloader with final config"
+    VERBATIM
+)
+
+add_custom_target(bootloader_final DEPENDS ${CMAKE_BINARY_DIR}/bootloader_final.bin)
+add_dependencies(bootloader_final final_config)
 
 # ============================================================================
 # 自定义目标：创建最终启动镜像
 # ============================================================================
-# Build order: bootloader -> kernel -> final_config -> boot_img
+# Build order: bootloader -> kernel -> final_config -> bootloader_final -> boot_img
 add_custom_target(boot_img ALL
-    DEPENDS bootloader kernel final_config
+    DEPENDS bootloader_final kernel final_config
     COMMAND ${CMAKE_COMMAND} -E echo ==========================================
     COMMAND ${CMAKE_COMMAND} -E echo "Creating boot image with dd..."
     COMMAND ${CMAKE_COMMAND} -E echo ==========================================
