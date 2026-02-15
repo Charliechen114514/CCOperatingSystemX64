@@ -32,9 +32,6 @@ AlwaysBreakTemplateDeclarations: No
 # 预处理器缩进: 与代码对齐
 IndentPPDirectives: AfterHash
 
-# 尾随逗号: 枚举/数组最后一项不加
-InsertTrailingCommas: false
-
 # 其他实用设置
 
 # 在二元运算符后换行
@@ -68,7 +65,6 @@ SpacesInSquareBrackets: false
 SpacesInContainerLiterals: false
 
 # lambda 相关
-SpaceAfterCStyleCast: false
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeCpp11BracedList: false
 

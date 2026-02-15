@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach QEMU GDB",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/kernel.elf",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "miDebuggerServerAddress": "localhost:1234",
+            "setupCommands": [
+                {
+                    "text": "-gdb-set architecture i386:x86-64"
+                },
+                {
+                    "text": "-gdb-set disassembly-flavor intel"
+                },
+                {
+                    "text": "-gdb-set pagination off"
+                }
+            ]
+        }
+    ]
+}

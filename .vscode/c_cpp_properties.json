@@ -1,0 +1,33 @@
+{
+    "configurations": [
+        {
+            "name": "CCOS",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/boot",
+                "${workspaceFolder}/build/include"
+            ],
+            "defines": [
+                "__CCOS__",
+                "__x86_64__"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c23",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerArgs": [
+                "-Wall",
+                "-Wextra",
+                "-ffreestanding",
+                "-fno-builtin",
+                "-fno-stack-protector",
+                "-nostdlib",
+                "-nostdinc",
+                "-mcmodel=large",
+                "-m64"
+            ],
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}

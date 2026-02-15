@@ -20,13 +20,20 @@ add_library(kernel_main OBJECT
 )
 
 target_include_directories(kernel_main PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/defines
     ${CMAKE_BINARY_DIR}/include
 )
+
+# 应用 freestanding 环境特定的编译标志
+target_compile_options(kernel_main PUBLIC ${CCOS_FREESTANDING_FLAGS})
 
 set_target_properties(kernel_main PROPERTIES
     POSITION_INDEPENDENT_CODE FALSE
 )
+
+# 添加驱动子目录
+add_subdirectory(driver)
 
 # 链接内核ELF
 add_custom_command(
@@ -37,9 +44,11 @@ add_custom_command(
         -o ${CMAKE_BINARY_DIR}/kernel.elf
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         $<TARGET_OBJECTS:kernel_main>
+        $<TARGET_FILE:driver>
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         kernel_main
+        driver
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

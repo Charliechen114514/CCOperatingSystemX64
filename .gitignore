@@ -22,7 +22,6 @@ serial.log
 *~
 *.swp
 *.swo
-.vscode/
 .idea/
 
 # 调试文件

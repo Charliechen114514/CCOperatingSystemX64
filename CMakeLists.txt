@@ -11,6 +11,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ============================================================================
 option(CCOS_ENABLE_SERIAL "Enable serial port debug output" OFF)
 option(CCOS_ENABLE_QEMU_DEBUG "Enable QEMU debug target by default" OFF)
+option(CCOS_BUILD_TESTS "Build the static test suite" ON)
+mark_as_advanced(CCOS_BUILD_TESTS)  # Hide from advanced UI, always on by default
 
 # 设置构建类型（支持Debug/Release）
 if(NOT CMAKE_BUILD_TYPE)
@@ -39,25 +41,33 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # ============================================================================
 # 编译器标志设置
 # ============================================================================
-# C编译器标志（freestanding环境）
+# 通用C编译器标志（所有目标共享）
 add_compile_options(
     $<$<COMPILE_LANGUAGE:C>:-Wall>
     $<$<COMPILE_LANGUAGE:C>:-Wextra>
     $<$<COMPILE_LANGUAGE:C>:-Werror>
-    $<$<COMPILE_LANGUAGE:C>:-ffreestanding>
-    $<$<COMPILE_LANGUAGE:C>:-fno-builtin>
-    $<$<COMPILE_LANGUAGE:C>:-fno-stack-protector>
-    $<$<COMPILE_LANGUAGE:C>:-nostdlib>
-    $<$<COMPILE_LANGUAGE:C>:-nostdinc>
-    $<$<COMPILE_LANGUAGE:C>:-nostartfiles>
-    $<$<COMPILE_LANGUAGE:C>:-nodefaultlibs>
-    $<$<COMPILE_LANGUAGE:C>:-mcmodel=large>
+    $<$<COMPILE_LANGUAGE:C>:-std=c23>
     $<$<COMPILE_LANGUAGE:C>:-m64>
 )
 
 # Debug/Release 特定标志
 set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+
+# ============================================================================
+# Freestanding 环境编译标志（仅内核使用）
+# ============================================================================
+# 这些标志在 kernel/CMakeLists.txt 中应用到内核目标
+set(CCOS_FREESTANDING_FLAGS
+    -ffreestanding
+    -fno-builtin
+    -fno-stack-protector
+    -nostdlib
+    -nostdinc
+    -nostartfiles
+    -nodefaultlibs
+    -mcmodel=large
+)
 
 # ============================================================================
 # 项目配置头文件（可选，用于条件编译）
@@ -72,6 +82,18 @@ configure_file(
 # ============================================================================
 add_subdirectory(boot)
 add_subdirectory(kernel)
+
+# ============================================================================
+# 测试套件（可选，独立于内核构建）
+# ============================================================================
+# 测试在构建时自动运行，任何失败都会停止构建
+if(CCOS_BUILD_TESTS)
+    add_subdirectory(test)
+
+    # 强制测试在任何内核构建目标之前通过
+    # 这确保了静态检查不会把问题带到运行时
+    # 注意：add_dependencies 调用需要在目标定义之后，见下方
+endif()
 
 # Two-stage build: final_config depends on bootloader, and then rebuilds bootloader
 add_dependencies(final_config bootloader)
@@ -185,3 +207,14 @@ add_custom_target(build-and-vga-run
 # 安装目标（可选，用于生成ISO或部署）
 # ============================================================================
 install(FILES ${CMAKE_BINARY_DIR}/boot.img DESTINATION . OPTIONAL)
+
+# ============================================================================
+# 测试依赖关系（必须在所有目标定义之后）
+# ============================================================================
+# 强制测试在任何内核构建目标之前通过
+if(CCOS_BUILD_TESTS)
+    add_dependencies(kernel check)
+    add_dependencies(bootloader check)
+    add_dependencies(boot_img check)
+    add_dependencies(bootloader_final check)
+endif()

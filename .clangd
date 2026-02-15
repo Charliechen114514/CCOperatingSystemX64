@@ -15,35 +15,15 @@
 CompileFlags:
   # 添加/覆盖编译标志
   Add:
-    # Freestanding 环境标志 - 禁用标准库依赖
-    - -ffreestanding
-    
-    # 禁用系统头文件和标准库
-    - -nostdlibinc
-    - -nostdinc
-    - -nobuiltininc
-    
-    # 目标架构设置
+    # 目标架构设置（所有目录共享）
     - -m64
     - -march=x86-64
     - -mtune=generic
-    - -mcmodel=large
-    
-    # 代码生成选项
-    - -fno-exceptions
-    - -fno-rtti
-    - -fno-pie
-    - -fno-pic
-    
-    # 警告选项
+
+    # 警告选项（所有目录共享）
     - -Wall
     - -Wextra
     - -Wpedantic
-    
-    # 头文件搜索路径（根据您的项目结构调整）
-    - -I${workspaceFolder}/kernel/include
-    - -I${workspaceFolder}/boot
-    - -I${workspaceFolder}/build/include
 
   # 移除可能与 freestanding 冲突的标志
   Remove:
@@ -51,15 +31,46 @@ CompileFlags:
     - -msse2
 
 # ==============================================================================
+# 内核源码目录 - Freestanding 环境
+# ==============================================================================
+If:
+  PathMatch: .*kernel/.*
+  PathExclude: .*/test/.*
+
+# ==============================================================================
+# 测试目录 - Hosted 环境（使用标准库）
+# ==============================================================================
+If:
+  PathMatch: .*test/.*
+CompileFlags:
+  Add:
+    # 测试环境使用标准库，不需要 freestanding 标志
+    # 头文件搜索路径
+    - -I${workspaceFolder}/test/include
+    - -I${workspaceFolder}/kernel/defines
+    - -I${workspaceFolder}/kernel/assert
+    - -I${workspaceFolder}/build/include
+
+# ==============================================================================
+# Bootloader 目录 - 汇编为主
+# ==============================================================================
+If:
+  PathMatch: .*boot/.*
+CompileFlags:
+  Add:
+    # Bootloader 也是 freestanding
+    - -ffreestanding
+    - -nostdlibinc
+    - -nostdinc
+    - -I${workspaceFolder}/boot
+    - -I${workspaceFolder}/build/include
+
+# ==============================================================================
 # 诊断选项 (Diagnostics)
 # ==============================================================================
 Diagnostics:
   # 未使用的头文件警告
   UnusedIncludes: Strict
-  
-  # 不可达代码警告
-  UnreachableCode: Yes
-  
   # ClangTidy 检查配置
   ClangTidy:
     Add:
@@ -74,7 +85,6 @@ Diagnostics:
     
     Remove:
       # 禁用不适合 freestanding 的检查
-      - clang-analyzer-security.insecureAPI.strcpy
       - modernize-use-auto
       - modernize-avoid-c-arrays
       - cppcoreguidelines-avoid-c-arrays
