@@ -6,6 +6,9 @@
 ; - Stage 2 (0x7E00): Switches to 64-bit long mode and loads kernel
 ; ==============================================================================
 
+; Include auto-generated configuration (must exist before first use)
+%include "boot_config.inc"
+
 ; ==============================================================================
 ; Stage 1: MBR (0x7C00)
 ; ==============================================================================
@@ -131,17 +134,9 @@ stage2_main:
     mov si, msg_stage2
     call print_bios
 
-    ; Load kernel (sector 3 now, since bootloader is sectors 1-2)
-    mov ax, 0x1000
-    mov es, ax
-    xor bx, bx
-    mov ah, 0x02
-    mov al, 0x01
-    mov ch, 0x00
-    mov cl, 0x03            ; sector 3 (kernel)
-    mov dh, 0x00
-    mov dl, 0x80
-    int 0x13
+    ; Load kernel using dynamic configuration from boot_config.inc
+    ; Uses CHS mode for maximum compatibility
+    call load_kernel_chs
     jc kernel_error
 
     ; Load GDT and switch to protected mode
@@ -313,3 +308,71 @@ kernel_halt:
 
 msg_ready:
     db "READY TO BOOT KERNEL", 0
+
+
+; ==============================================================================
+; Kernel Loading Functions
+; ==============================================================================
+; These functions are called from Stage 2 in real mode
+
+; load_kernel_chs - Load kernel using CHS addressing
+; Input: none (uses boot_config.inc defines)
+; Output: loads kernel to KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
+; Clobbers: AX, BX, CX, DX, SI
+; Returns: CF=0 on success, CF=1 on error
+bits 16
+load_kernel_chs:
+    pusha
+
+    ; Setup destination address
+    mov ax, KERNEL_LOAD_SEGMENT
+    mov es, ax
+    mov bx, KERNEL_LOAD_OFFSET
+
+    ; For large kernels, we may need multiple reads (BIOS can read max 127 sectors at once)
+    ; TODO: Implement multi-read loop for kernels > 127 sectors
+    ; For now, assert KERNEL_SECTOR_COUNT <= 127
+
+    mov ax, KERNEL_SECTOR_COUNT
+    cmp ax, 127
+    ja .kernel_too_large
+
+    ; BIOS disk read parameters
+    mov ah, 0x02                    ; read function
+    mov al, KERNEL_SECTOR_COUNT     ; number of sectors to read
+    mov ch, KERNEL_CHS_CYLINDER     ; cylinder
+    mov cl, KERNEL_CHS_SECTOR       ; sector (1-based)
+    mov dh, KERNEL_CHS_HEAD         ; head
+    mov dl, 0x80                    ; first hard drive
+
+    ; Perform the read
+    int 0x13
+
+    ; Check for errors
+    jc .read_error
+
+    ; Verify sectors read
+    cmp al, KERNEL_SECTOR_COUNT
+    jne .read_mismatch
+
+    popa
+    clc                             ; clear carry = success
+    ret
+
+.kernel_too_large:
+    mov si, msg_kernel_too_large
+    call print_bios
+    ; Fall through to error handler
+
+.read_error:
+.read_mismatch:
+    popa
+    stc                             ; set carry = error
+    ret
+
+
+; ============================================================================
+; Error Messages
+; ============================================================================
+msg_kernel_too_large:
+    db "[E3] Kernel too large for single CHS read", 0x0d, 0x0a, 0

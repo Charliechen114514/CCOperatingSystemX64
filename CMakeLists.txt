@@ -18,9 +18,11 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 # ============================================================================
 find_program(NASM nasm REQUIRED)
 find_program(QEMU qemu-system-x86_64 REQUIRED)
+find_program(PYTHON python3 REQUIRED)
 
 message(STATUS "Found NASM: ${NASM}")
 message(STATUS "Found QEMU: ${QEMU}")
+message(STATUS "Found Python: ${PYTHON}")
 
 # ============================================================================
 # 输出目录设置
@@ -90,6 +92,11 @@ add_custom_command(TARGET boot_img POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "  ${CMAKE_BINARY_DIR}/bootloader.bin"
     COMMAND ${CMAKE_COMMAND} -E echo "  ${CMAKE_BINARY_DIR}/kernel.bin"
     COMMAND ${CMAKE_COMMAND} -E echo "  ${CMAKE_BINARY_DIR}/boot.img"
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Verifying disk layout..."
+    COMMAND ${PYTHON} ${CMAKE_SOURCE_DIR}/scripts/verify_disk_layout.py
+        ${CMAKE_BINARY_DIR}/bootloader.bin
+        ${CMAKE_BINARY_DIR}/kernel.bin
 )
 
 # ============================================================================

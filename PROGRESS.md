@@ -4,6 +4,61 @@ x86_64 操作系统开发 - 从 bootloader 到内核
 
 ---
 
+## 📋 最新更新 (2026-02-15)
+
+### 动态内核加载配置系统
+
+已搭建动态内核配置生成流水线，支持最大64MB内核的CHS模式加载。
+
+#### 新增组件
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| 配置头文件 | [boot/boot_config.inc](boot/boot_config.inc) | Mock配置（首次编译使用） |
+| 配置生成脚本 | [cmake/GenerateKernelSize.cmake](cmake/GenerateKernelSize.cmake) | 动态计算内核大小和CHS参数 |
+| 布局验证脚本 | [scripts/verify_disk_layout.py](scripts/verify_disk_layout.py) | 磁盘/内存布局验证和魔数检测 |
+
+#### 磁盘布局（当前）
+
+```
+┌─────────┬──────────┬──────────────────┐
+│  LBA    │  扇区    │      内容        │
+├─────────┼──────────┼──────────────────┤
+│   0-2   │  1-3     │ bootloader.bin   │
+│   3+    │  4+      │ kernel.bin       │
+└─────────┴──────────┴──────────────────┘
+```
+
+#### 内存布局（确保隔离）
+
+```
+Stage 1:     0x7C00 - 0x7E00   (512 bytes)
+Stage 2:     0x7E00 - 0x8400   (1536 bytes)
+--- 62 sector gap (31744 bytes) ---
+Kernel:      0x10000 - 0x10200+ (动态大小，最大64MB)
+```
+
+#### 构建流水线
+
+```bash
+mkdir build && cd build
+cmake ..
+cmake --build . --target boot_img
+```
+
+每次构建时：
+1. 生成 `boot_config.inc`（含实际内核大小）
+2. 编译 bootloader（使用动态配置）
+3. 验证磁盘布局（MBR签名、内存重叠检测）
+
+#### 下一步工作
+
+- [ ] 实现 LBA 优先 + CHS 回退的加载策略
+- [ ] 支持多扇区分批读取（内核 > 127 扇区时）
+- [ ] 集成 `GenerateKernelSize.cmake` 到构建流程（自动替换mock值）
+
+---
+
 ## ✅ 已完成功能
 
 ### 1. Bootloader (统一架构)
@@ -165,18 +220,8 @@ make clean
 
 ## 📋 下一步计划
 
-- [ ] 内核切换到 C 语言（GCC 编译，配置链接脚本）
 - [ ] ACPI 内存检测（探测可用内存）
 - [ ] 串口驱动（UART 调试输出）
 
 ---
 
-## 📅 更新日志
-
-### 2026-02-14 - Bootloader 重构与内核加载完成
-- ✅ Bootloader 合并为单一文件 `bootloader.asm`
-- ✅ 工具库分离到 `boot/lib/`
-- ✅ 实模式加载内核到 0x10000
-- ✅ 长模式跳转到内核
-- ✅ 内核成功执行并输出 'X'
-- ✅ 完整文档体系
