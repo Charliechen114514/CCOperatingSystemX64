@@ -51,12 +51,31 @@ add_custom_command(
     COMMAND ${CMAKE_OBJCOPY} -O binary
         ${CMAKE_BINARY_DIR}/kernel.elf
         ${CMAKE_BINARY_DIR}/kernel.bin
-    COMMAND ${CMAKE_COMMAND} -E echo ""
-    COMMAND ${CMAKE_COMMAND} -E echo "Kernel size:"
-    COMMAND ls -lh ${CMAKE_BINARY_DIR}/kernel.bin
     DEPENDS ${CMAKE_BINARY_DIR}/kernel.elf
     COMMENT "Extracting kernel binary"
     VERBATIM
 )
 
 add_custom_target(kernel DEPENDS ${CMAKE_BINARY_DIR}/kernel.bin)
+
+# ============================================================================
+# 自动生成 boot_config.inc（两阶段构建）
+# ============================================================================
+# 阶段1：生成初始配置（用于首次编译）
+# 阶段2：在bootloader和kernel都构建后，生成实际配置
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/boot_config_final.inc
+    COMMAND ${CMAKE_COMMAND}
+        -DKERNEL_BIN=${CMAKE_BINARY_DIR}/kernel.bin
+        -DOUTPUT_FILE=${CMAKE_BINARY_DIR}/boot_config_final.inc
+        -DBOOTLOADER_BIN=${CMAKE_BINARY_DIR}/bootloader.bin
+        -P ${CMAKE_SOURCE_DIR}/cmake/GenerateKernelSize.cmake
+    DEPENDS
+        ${CMAKE_BINARY_DIR}/kernel.bin
+        ${CMAKE_BINARY_DIR}/bootloader.bin
+        ${CMAKE_SOURCE_DIR}/cmake/GenerateKernelSize.cmake
+    COMMENT "Generating final boot_config.inc with actual sizes"
+    VERBATIM
+)
+
+add_custom_target(final_config DEPENDS ${CMAKE_BINARY_DIR}/boot_config_final.inc)

@@ -6,7 +6,8 @@
 ; ==============================================================================
 
 ; Kernel disk location (LBA/CHS)
-%define KERNEL_LBA_START          4           ; Kernel starts at sector 4 (1-based)
+; Bootloader is 3 sectors (LBA 0-2), kernel starts at LBA 3 (sector 4, 1-based)
+%define KERNEL_LBA_START          3           ; Kernel starts at LBA 3 (0-based), sector 4 (1-based)
 %define KERNEL_SECTOR_COUNT       1           ; TODO: Will be replaced by actual size
 
 ; Memory layout (ensure 1-sector gap from Stage 2)
@@ -35,10 +36,10 @@
 %define SECTORS_PER_TRACK         63
 %define HEADS                     16
 
-; Kernel CHS start (LBA=4)
-; Cylinder = 4 / (63 * 16) = 0
-; Head     = (4 / 63) % 16 = 0
-; Sector   = (4 % 63) + 1 = 5
+; Kernel CHS start (LBA=3, 0-based)
+; Cylinder = 3 / (63 * 16) = 0
+; Head     = (3 / 63) % 16 = 0
+; Sector   = (3 % 63) + 1 = 4
 %define KERNEL_CHS_CYLINDER       0
 %define KERNEL_CHS_HEAD           0
-%define KERNEL_CHS_SECTOR         5
+%define KERNEL_CHS_SECTOR         4

@@ -6,19 +6,40 @@ x86_64 操作系统开发 - 从 bootloader 到内核
 
 ## 📋 最新更新 (2026-02-15)
 
-### 动态内核加载配置系统
+### 动态内核加载配置系统 v2
 
-已搭建动态内核配置生成流水线，支持最大64MB内核的CHS模式加载。
+已完成动态内核配置生成流水线的完整集成，支持最大64MB内核的CHS模式加载。
 
-#### 新增组件
+#### 构建流程
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Build Pipeline                           │
+├─────────────────────────────────────────────────────────────────┤
+│ 1. bootloader (mock config)  →  bootloader.bin                 │
+│ 2. kernel                     →  kernel.bin                     │
+│ 3. final_config               →  boot_config_final.inc          │
+│    ├─ 读取 bootloader.bin 大小                                   │
+│    ├─ 读取 kernel.bin 大小                                       │
+│    ├─ 计算 CHS 参数                                              │
+│    └─ 打印磁盘布局信息                                           │
+│ 4. boot_img                   →  boot.img (dd组装)              │
+│ 5. verify_disk_layout                                         │
+│ 6. verify_boot_image                                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 新增/修改组件
 
 | 组件 | 路径 | 说明 |
 |------|------|------|
-| 配置头文件 | [boot/boot_config.inc](boot/boot_config.inc) | Mock配置（首次编译使用） |
+| Mock配置 | [boot/boot_config.inc](boot/boot_config.inc) | 首次编译使用 |
 | 配置生成脚本 | [cmake/GenerateKernelSize.cmake](cmake/GenerateKernelSize.cmake) | 动态计算内核大小和CHS参数 |
+| Boot镜像组装 | [cmake/AssembleBootImage.cmake](cmake/AssembleBootImage.cmake) | 动态dd命令 |
 | 布局验证脚本 | [scripts/verify_disk_layout.py](scripts/verify_disk_layout.py) | 磁盘/内存布局验证和魔数检测 |
+| Boot镜像验证 | [scripts/verify_boot_image.py](scripts/verify_boot_image.py) | dd烧录验证 |
 
-#### 磁盘布局（当前）
+#### 磁盘布局（动态计算）
 
 ```
 ┌─────────┬──────────┬──────────────────┐
@@ -38,24 +59,38 @@ Stage 2:     0x7E00 - 0x8400   (1536 bytes)
 Kernel:      0x10000 - 0x10200+ (动态大小，最大64MB)
 ```
 
-#### 构建流水线
+#### 验证输出示例
 
-```bash
-mkdir build && cd build
-cmake ..
-cmake --build . --target boot_img
 ```
+============================================================
+  DISK LAYOUT CALCULATION
+============================================================
+Bootloader:
+  Size: 1082 bytes = 3 sectors
+  Location: Sector 1-3 (LBA 0-3-1)
 
-每次构建时：
-1. 生成 `boot_config.inc`（含实际内核大小）
-2. 编译 bootloader（使用动态配置）
-3. 验证磁盘布局（MBR签名、内存重叠检测）
+Kernel:
+  Size: 83 bytes = 1 sectors
+  Location: Sector 3+ (LBA 3+)
+  Load address: 0x10000
+
+CHS Parameters (for fallback):
+  Cylinder: 0
+  Head: 0
+  Sector: 3 (1-based)
+
+Memory Layout:
+  Stage 2 ends at:  0x33792
+  Kernel starts at: 0x10000
+  Memory gap: 31744 bytes (62 sectors)
+  ✓ Memory gap sufficient for safe loading
+============================================================
+```
 
 #### 下一步工作
 
 - [ ] 实现 LBA 优先 + CHS 回退的加载策略
 - [ ] 支持多扇区分批读取（内核 > 127 扇区时）
-- [ ] 集成 `GenerateKernelSize.cmake` 到构建流程（自动替换mock值）
 
 ---
 

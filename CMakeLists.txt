@@ -68,24 +68,27 @@ configure_file(
 add_subdirectory(boot)
 add_subdirectory(kernel)
 
+# Explicit dependency: final_config needs bootloader
+add_dependencies(final_config bootloader)
+
 # ============================================================================
 # 自定义目标：创建最终启动镜像
 # ============================================================================
+# Build order: bootloader -> kernel -> final_config -> boot_img
 add_custom_target(boot_img ALL
-    DEPENDS bootloader kernel
+    DEPENDS bootloader kernel final_config
     COMMAND ${CMAKE_COMMAND} -E echo ==========================================
-    COMMAND ${CMAKE_COMMAND} -E echo "Combining bootloader and kernel..."
+    COMMAND ${CMAKE_COMMAND} -E echo "Creating boot image with dd..."
     COMMAND ${CMAKE_COMMAND} -E echo ==========================================
-    COMMAND dd if=${CMAKE_BINARY_DIR}/bootloader.bin of=${CMAKE_BINARY_DIR}/boot.img bs=512 count=2 conv=notrunc 2>/dev/null
-    COMMAND dd if=${CMAKE_BINARY_DIR}/kernel.bin of=${CMAKE_BINARY_DIR}/boot.img bs=512 seek=2 conv=notrunc 2>/dev/null
-    COMMAND ${CMAKE_COMMAND} -E echo "Boot image created: ${CMAKE_BINARY_DIR}/boot.img"
-    COMMAND ${CMAKE_COMMAND} -E echo ""
-    COMMAND ${CMAKE_COMMAND} -E echo "Bootloader - Stage1+2: sectors 1-2"
-    COMMAND ${CMAKE_COMMAND} -E echo "Kernel - sector 3+"
+    # Create boot image by combining bootloader and kernel
+    COMMAND ${CMAKE_COMMAND} -DBOOTLOADER_BIN=${CMAKE_BINARY_DIR}/bootloader.bin
+        -DKERNEL_BIN=${CMAKE_BINARY_DIR}/kernel.bin
+        -DBOOT_IMG=${CMAKE_BINARY_DIR}/boot.img
+        -P ${CMAKE_SOURCE_DIR}/cmake/AssembleBootImage.cmake
     COMMENT "Creating boot image"
 )
 
-# 显示构建产物信息
+# 显示构建产物信息和验证
 add_custom_command(TARGET boot_img POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Build artifacts:"
@@ -95,6 +98,12 @@ add_custom_command(TARGET boot_img POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Verifying disk layout..."
     COMMAND ${PYTHON} ${CMAKE_SOURCE_DIR}/scripts/verify_disk_layout.py
+        ${CMAKE_BINARY_DIR}/bootloader.bin
+        ${CMAKE_BINARY_DIR}/kernel.bin
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "Verifying boot image integrity..."
+    COMMAND ${PYTHON} ${CMAKE_SOURCE_DIR}/scripts/verify_boot_image.py
+        ${CMAKE_BINARY_DIR}/boot.img
         ${CMAKE_BINARY_DIR}/bootloader.bin
         ${CMAKE_BINARY_DIR}/kernel.bin
 )
