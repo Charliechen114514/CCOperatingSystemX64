@@ -2,7 +2,7 @@
 
 # 🖥️ CCOperatingSystemX64
 
-### **从零构建的 64 位 x86_64 操作系统**
+### **从零构建的 64 位 x86_64 操作系统**，项目从CCOperateSystem（笔者的X86操作系统）派生
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
