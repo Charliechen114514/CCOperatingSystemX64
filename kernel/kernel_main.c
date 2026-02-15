@@ -1,17 +1,21 @@
 // CCOS Kernel Main Entry
 // C code entry point called from kernel_entry.asm
-
 #include "types.h"
 
-// Kernel main function - called from assembly entry
+// Simple kernel with more code to test multi-sector loading
 void kernel_main(void) {
-    // Simple VGA test - put 'C' on line 6 to prove C code is running
-    volatile uint16_t *vga = (uint16_t *)0xB8000;
-    vga[160 * 6] = 0x1F43;  // 'C' in white on blue
+    volatile char *video = (char*) 0xB8000;
+    const char *msg = "CCOS KERNEL RUNNING!";
 
-    // TODO: Initialize serial port for no-graphic debugging
+    // Print message to screen (simple version)
+    volatile int i = 0;
+    while (msg[i] != '\0' && i < 80) {
+        video[i * 2] = msg[i];
+        video[i * 2 + 1] = 0x0F; // White on black
+        i++;
+    }
 
-    // Infinite loop - halt here
+    // Halt
     while (1) {
         __asm__ volatile("hlt");
     }
