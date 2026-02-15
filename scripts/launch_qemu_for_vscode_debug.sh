@@ -274,7 +274,7 @@ start_qemu() {
     # 启动 QEMU（在后台运行）
     qemu-system-x86_64 \
         -drive format=raw,file="$BOOT_IMG",if=ide \
-        -nographic \
+        -vga std -display vnc=:0 \
         -s \
         -S \
         > /dev/null 2>&1 &
