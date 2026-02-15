@@ -364,20 +364,24 @@ bits 16
 load_kernel_chs:
     pusha
 
-    ; Print loading message
-    pusha
-    mov si, msg_loading_kernel
-    call print_bios
-    popa
-
     ; Setup destination address
     mov ax, KERNEL_LOAD_SEGMENT
     mov es, ax
     mov bx, KERNEL_LOAD_OFFSET      ; ES:BX = destination
 
-    ; Initialize tracking variables
+    ; Initialize tracking variables FIRST
     mov di, KERNEL_SECTOR_COUNT     ; DI = remaining sectors to read
     mov si, KERNEL_LBA_START        ; SI = current LBA
+
+    ; Print loading message (AFTER initialization)
+    pusha
+    mov si, msg_loading_kernel
+    call print_bios
+    mov ax, di                    ; AX = total sector count (now DI is initialized!)
+    call print_decimal
+    mov si, msg_sectors
+    call print_bios
+    popa
 
 .read_loop:
     ; Check if all sectors read
@@ -394,12 +398,6 @@ load_kernel_chs:
     ; Save sector count for later
     mov bp, cx
     mov bx, cx                      ; Also save in BX for 8-bit access
-
-    ; DEBUG: Print LBA we're about to read
-    pusha
-    mov si, msg_debug_lba
-    call print_bios
-    popa
 
     ; Convert LBA to CHS
     mov ax, si
@@ -419,13 +417,11 @@ load_kernel_chs:
 
     ; Perform read
     int 0x13
-
-    ; DEBUG: Check if error occurred
-    jc .debug_read_error
+    jc .read_error
 
     ; Verify sectors read (BIOS returns count in AL)
     cmp al, bl
-    jne .debug_mismatch
+    jne .read_mismatch
 
     ; Update tracking variables
     sub di, bp                      ; Decrease remaining sectors
@@ -457,35 +453,52 @@ load_kernel_chs:
     stc                             ; set carry = error
     ret
 
-.debug_read_error:
-    pusha
-    mov si, msg_debug_error
-    call print_bios
-    popa
-    jmp .read_error
-
-.debug_mismatch:
-    pusha
-    mov si, msg_debug_mismatch
-    call print_bios
-    popa
-    jmp .read_mismatch
-
 
 ; ============================================================================
 ; Error Messages
 ; ============================================================================
 msg_loading_kernel:
-    db "[LOAD] Loading kernel...", 0x0d, 0x0a, 0
+    db "[LOAD] CHS: loading ", 0
 
-msg_debug_lba:
-    db "[D] Before CHS read", 0x0d, 0x0a, 0
-
-msg_debug_error:
-    db "[D] Read error (CF=1)", 0x0d, 0x0a, 0
-
-msg_debug_mismatch:
-    db "[D] Sector count mismatch", 0x0d, 0x0a, 0
+msg_sectors:
+    db " sectors", 0x0d, 0x0a, 0
 
 msg_kernel_too_large:
     db "[E3] Kernel too large for single CHS read", 0x0d, 0x0a, 0
+
+
+; ============================================================================
+; Helper Functions
+; ============================================================================
+
+; print_decimal - Print AX as decimal number
+; Input: AX = value to print
+; Clobbers: AX, BX, CX, DX
+bits 16
+print_decimal:
+    push bx
+    push cx
+    push dx
+
+    mov bx, 10                   ; Base 10
+    xor cx, cx                   ; Digit count
+
+.dec_divide:
+    xor dx, dx
+    div bx                        ; DX:AX / 10
+    push dx                       ; Save remainder (digit)
+    inc cx
+    test ax, ax
+    jnz .dec_divide
+
+.dec_print:
+    pop ax
+    add al, '0'
+    mov ah, 0x0E
+    int 0x10
+    loop .dec_print
+
+    pop dx
+    pop cx
+    pop bx
+    ret

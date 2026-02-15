@@ -6,9 +6,9 @@ x86_64 操作系统开发 - 从 bootloader 到内核
 
 ## 📋 最新更新 (2026-02-15)
 
-### 动态内核加载配置系统 v2
+### 动态内核加载配置系统 v3 + CHS 多扇区读取
 
-已完成动态内核配置生成流水线的完整集成，支持最大64MB内核的CHS模式加载。
+已完成动态内核配置生成流水线和 CHS 动态多扇区读取功能。
 
 #### 构建流程
 
@@ -38,6 +38,7 @@ x86_64 操作系统开发 - 从 bootloader 到内核
 | Boot镜像组装 | [cmake/AssembleBootImage.cmake](cmake/AssembleBootImage.cmake) | 动态dd命令 |
 | 布局验证脚本 | [scripts/verify_disk_layout.py](scripts/verify_disk_layout.py) | 磁盘/内存布局验证和魔数检测 |
 | Boot镜像验证 | [scripts/verify_boot_image.py](scripts/verify_boot_image.py) | dd烧录验证 |
+| CHS 加载 | [boot/bootloader.asm](boot/bootloader.asm) | LBA→CHS转换 + 多扇区读取 |
 
 #### 磁盘布局（动态计算）
 
@@ -59,38 +60,15 @@ Stage 2:     0x7E00 - 0x8400   (1536 bytes)
 Kernel:      0x10000 - 0x10200+ (动态大小，最大64MB)
 ```
 
-#### 验证输出示例
+#### VGA 启动输出
 
 ```
-============================================================
-  DISK LAYOUT CALCULATION
-============================================================
-Bootloader:
-  Size: 1082 bytes = 3 sectors
-  Location: Sector 1-3 (LBA 0-3-1)
-
-Kernel:
-  Size: 83 bytes = 1 sectors
-  Location: Sector 3+ (LBA 3+)
-  Load address: 0x10000
-
-CHS Parameters (for fallback):
-  Cylinder: 0
-  Head: 0
-  Sector: 3 (1-based)
-
-Memory Layout:
-  Stage 2 ends at:  0x33792
-  Kernel starts at: 0x10000
-  Memory gap: 31744 bytes (62 sectors)
-  ✓ Memory gap sufficient for safe loading
-============================================================
+READY TO BOOT CCOS
+[1] Stage 1: Loading second stage...
+[2] Stage 2: Loading kernel...
+[LOAD] CHS: loading 1 sectors
+READY TO BOOT KERNEL
 ```
-
-#### 下一步工作
-
-- [ ] 实现 LBA 优先 + CHS 回退的加载策略
-- [ ] 支持多扇区分批读取（内核 > 127 扇区时）
 
 ---
 
@@ -109,7 +87,8 @@ Memory Layout:
 - GDT 加载
 - 保护模式切换
 - 长模式切换 (64-bit)
-- 模块化工具库 (`boot/lib/`)
+- **LBA→CHS 动态转换**
+- **CHS 多扇区分批读取 (最大127扇区/次)**
 
 ### 2. 内核加载
 
@@ -125,20 +104,7 @@ Memory Layout:
 - 跳转到 64 位内核入口
 - 内核成功输出验证字符
 
-### 3. 磁盘布局
-
-```
-┌─────────┬──────────┬──────────────────┐
-│  扇区   │  大小    │      内容        │
-├─────────┼──────────┼──────────────────┤
-│   0-2   │  1536B   │ bootloader.bin   │
-│   3+    │   512B   │ kernel.bin       │
-└─────────┴──────────┴──────────────────┘
-```
-
-> 注：bootloader.asm 合并了 Stage 1 + Stage 2，共占用 3 个扇区
-
-### 4. 模式切换
+### 3. 模式切换
 
 ```
 Real Mode (16-bit)
@@ -152,6 +118,33 @@ Kernel Execution
 
 ---
 
+## 📋 下一步工作
+
+- [ ] **实现 LBA 扩展读取 (INT 13h AH=42h)**
+  - 使用 DAP (Disk Address Packet) 数据包
+  - 支持大于 8GB 的磁盘访问
+  - 检测 BIOS 扩展读写支持
+
+- [ ] **实现 LBA 优先 + CHS 回退加载策略**
+  ```
+  尝试 LBA 扩展读取
+      ↓
+  成功？→ 完成
+      ↓ 失败
+  CHS 回退读取
+      ↓
+  成功？→ 完成 / 失败→错误
+  ```
+
+- [ ] **支持更大内核（>64KB）的分段加载**
+  - 处理 ES:BX 跨段边界
+  - 支持最大 64MB 内核
+
+- [ ] ACPI 内存检测（探测可用内存）
+- [ ] 串口驱动（UART 调试输出）
+
+---
+
 ## 🔬 预期现象
 
 ### 启动输出 (VGA)
@@ -159,19 +152,11 @@ Kernel Execution
 运行 `make run` 后，屏幕应显示：
 
 ```
-CCOS Bootloader Stage 1...
-Loading Stage 2...
-Stage 2 running...
-[LOAD] Loading kernel...
-[OK] Kernel loaded to 0x10000!
-[1] GDT loaded, PM enabled...
-```
-
-VGA 显存 (`0xB8000`) 调试字符：
-
-```
-行 0 位置 12-16:  G H I J K
-行 5 位置 0:     X (内核输出)
+READY TO BOOT CCOS
+[1] Stage 1: Loading second stage...
+[2] Stage 2: Loading kernel...
+[LOAD] CHS: loading 1 sectors
+READY TO BOOT KERNEL
 ```
 
 ### QEMU/GDB 调试
@@ -196,22 +181,19 @@ b *0x10000     # 内核入口
 CCOperatingSystemX64/
 ├── boot/                  # Bootloader 源码
 │   ├── bootloader.asm    # 统一 Bootloader (Stage 1 + Stage 2)
-│   └── lib/              # Bootloader 工具库
-│       ├── bios_screen.asm   # VGA 屏幕操作
-│       ├── bios_string.asm   # 字符串打印
-│       ├── disk_io.asm       # 磁盘 I/O
-│       ├── lmode.asm         # 长模式切换
-│       └── pmode.asm         # 保护模式切换
+│   └── boot_config.inc   # 自动生成的配置
 ├── kernel/                # 内核源码
-│   └── kernel.asm       # 64 位内核入口（待替换为 C）
+│   └── kernel_main.c     # 64 位内核入口 (C)
 ├── build/                 # 构建产物
-│   ├── bootloader.bin   # Bootloader (1007B)
-│   ├── kernel.bin       # 内核 (18B)
+│   ├── bootloader.bin   # Bootloader
+│   ├── kernel.bin       # 内核
 │   └── boot.img         # 完整启动镜像
-├── document/              # 文档
-│   ├── 01_bootloader/   # Bootloader 文档
-│   └── 02_load_asm_kernel/  # 内核加载文档
-├── Makefile              # 构建脚本
+├── cmake/                 # CMake 构建脚本
+│   ├── GenerateKernelSize.cmake
+│   └── AssembleBootImage.cmake
+├── scripts/               # 验证脚本
+│   ├── verify_disk_layout.py
+│   └── verify_boot_image.py
 └── PROGRESS.md           # 本文件
 ```
 
@@ -221,7 +203,7 @@ CCOperatingSystemX64/
 
 ```bash
 # 构建
-make
+cmake --build build
 
 # 运行
 make run
@@ -234,29 +216,3 @@ make clean
 ```
 
 ---
-
-## 📖 文档索引
-
-### 01_bootloader
-- [README](document/01_bootloader/README.md) - 文档导航
-- [开发笔记](document/01_bootloader/开发笔记.md) - Bootloader 开发经验
-- [技术参考](document/01_bootloader/技术参考.md) - x86 技术细节
-- [故障排查](document/01_bootloader/故障排查指南.md) - 问题诊断
-- [调试工具](document/01_bootloader/调试工具指南.md) - 工具使用
-
-### 02_load_asm_kernel
-- [README](document/02_load_asm_kernel/README.md) - 文档导航
-- [开发笔记](document/02_load_asm_kernel/开发笔记.md) - 内核加载实现
-- [技术参考](document/02_load_asm_kernel/技术参考.md) - 内存/磁盘布局
-- [故障排查](document/02_load_asm_kernel/故障排查指南.md) - 问题诊断
-- [调试工具](document/02_load_asm_kernel/调试工具指南.md) - 工具使用
-
----
-
-## 📋 下一步计划
-
-- [ ] ACPI 内存检测（探测可用内存）
-- [ ] 串口驱动（UART 调试输出）
-
----
-
