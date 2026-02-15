@@ -3,6 +3,7 @@ force_rebuild_with_run.sh
 force_rebuild_with_vga_run.sh
 # Claude Helpers
 .claude
+.cache
 
 # 构建目录
 build/

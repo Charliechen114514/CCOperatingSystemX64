@@ -1,0 +1,129 @@
+# ==============================================================================
+# clangd 配置文件 - CCOS x64 Freestanding Kernel
+# ==============================================================================
+#
+# clangd 是 LLVM 的 C/C++ 语言服务器，为编辑器提供代码补全、跳转、
+# 语法检查、格式化等功能。
+#
+# 文档: https://clangd.llvm.org/config
+#
+# ==============================================================================
+
+# ==============================================================================
+# 编译数据库 (Compile Commands)
+# ==============================================================================
+CompileFlags:
+  # 添加/覆盖编译标志
+  Add:
+    # Freestanding 环境标志 - 禁用标准库依赖
+    - -ffreestanding
+    
+    # 禁用系统头文件和标准库
+    - -nostdlibinc
+    - -nostdinc
+    - -nobuiltininc
+    
+    # 目标架构设置
+    - -m64
+    - -march=x86-64
+    - -mtune=generic
+    - -mcmodel=large
+    
+    # 代码生成选项
+    - -fno-exceptions
+    - -fno-rtti
+    - -fno-pie
+    - -fno-pic
+    
+    # 警告选项
+    - -Wall
+    - -Wextra
+    - -Wpedantic
+    
+    # 头文件搜索路径（根据您的项目结构调整）
+    - -I${workspaceFolder}/kernel/include
+    - -I${workspaceFolder}/boot
+    - -I${workspaceFolder}/build/include
+
+  # 移除可能与 freestanding 冲突的标志
+  Remove:
+    - -msse
+    - -msse2
+
+# ==============================================================================
+# 诊断选项 (Diagnostics)
+# ==============================================================================
+Diagnostics:
+  # 未使用的头文件警告
+  UnusedIncludes: Strict
+  
+  # 不可达代码警告
+  UnreachableCode: Yes
+  
+  # ClangTidy 检查配置
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - clang-analyzer-*
+      - modernize-use-nullptr
+      - modernize-use-override
+      - performance-*
+      - readability-identifier-naming
+      - readability-function-cognitive-complexity
+      - cert-*
+    
+    Remove:
+      # 禁用不适合 freestanding 的检查
+      - clang-analyzer-security.insecureAPI.strcpy
+      - modernize-use-auto
+      - modernize-avoid-c-arrays
+      - cppcoreguidelines-avoid-c-arrays
+      - cppcoreguidelines-pro-bounds-array-to-pointer-decay
+      - cppcoreguidelines-pro-type-vararg
+      - google-*
+      - fuchsia-*
+      - llvm-*
+
+# ==============================================================================
+# 索引选项 (Index)
+# ==============================================================================
+Index:
+  # 后台索引
+  Background: Build
+  
+  # 不索引标准库（freestanding 环境）
+  StandardLibrary: No
+
+# ==============================================================================
+# 补全选项 (Completion)
+# ==============================================================================
+Completion:
+  # 包含代码片段
+  AllScopes: Yes
+
+# ==============================================================================
+# 悬浮信息 (Hover)
+# ==============================================================================
+Hover:
+  # 显示 AKA (All Known) 信息
+  ShowAKA: Yes
+
+# ==============================================================================
+# Inlay Hints（内联提示）
+# ==============================================================================
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+  Designators: Yes
+  BlockEnd: Yes
+
+# ==============================================================================
+# 配置结束
+# ==============================================================================
+# 使用说明:
+# 1. 在项目根目录创建 compile_commands.json
+# 2. 使用 CMake: set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# 3. 或使用 Bear: bear -- make
+# 4. 重启 clangd
+# ==============================================================================

@@ -4,7 +4,7 @@
 #ifndef CCOS_TYPES_H
 #define CCOS_TYPES_H
 
-// Basic unsigned integer types
+// ints are alwayes requested to defines
 typedef unsigned char      uint8_t;
 typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
