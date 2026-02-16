@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Progress](https://img.shields.io/badge/progress-45%25-blue)]()
+[![Progress](https://img.shields.io/badge/progress-55%25-blue)]()
 [![Platform](https://img.shields.io/badge/platform-x86__64-orange)]()
 
 ---
@@ -63,6 +63,22 @@ cmake -B build && cmake --build build --target build-and-vga-run
 
 ### 调试模式
 
+#### VSCode 调试 (推荐)
+
+项目已配置完整的 VSCode 调试支持，只需按 `F5` 即可启动调试：
+
+- **断点调试**: 支持在 C/汇编代码中设置断点
+- **变量监视**: 实时查看变量值和内存内容
+- **调用栈**: 查看完整的函数调用链
+- **单步执行**: 逐行或逐汇编指令调试
+
+配置文件位于 `.vscode/launch.json`，自动处理：
+- QEMU 调试端口 (1234)
+- GDB 多语言支持 (C/Assembly)
+- 符号文件自动加载
+
+#### GDB 命令行调试
+
 ```bash
 # 启动 QEMU 调试服务器
 cmake --build build --target debug
@@ -70,6 +86,8 @@ cmake --build build --target debug
 # 在另一个终端连接 GDB
 gdb build/kernel.elf -ex 'target remote :1234'
 ```
+
+---
 
 ### ✅ 已完成功能
 
@@ -82,7 +100,20 @@ gdb build/kernel.elf -ex 'target remote :1234'
 - 64位长模式执行环境
 - 独立内核入口点
 - BSS 段自动清零
-- 基础 VGA 文本输出
+- 基础控制台输出
+
+#### VGA 图形驱动 🆕
+- **VGA 文本模式**: 80x25 字符显示支持
+- **颜色支持**: 16 色 VGA 调色板
+- **光标控制**: 硬件光标位置管理
+- **滚动功能**: 屏幕内容向上滚动
+- **格式化输出**: 支持 printf 风格的文本输出
+
+#### 开发工具 🆕
+- **VSCode 调试配置**: 一键启动调试环境
+- **clangd 支持**: 完整的 LSP 代码补全
+- **格式化配置**: 统一的代码风格
+- **CMake 集成**: 现代化构建流程
 
 ---
 
