@@ -212,6 +212,5 @@ gdb build/bootloader.bin
 
 ---
 
-**文档维护者**: Claude Code + User
+**作者**: CharlieChen114514
 **最后更新**: 2026-02-16
-**文档版本**: 1.0.0

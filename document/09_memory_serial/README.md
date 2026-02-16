@@ -336,6 +336,5 @@ qemu-system-x86_64 -drive format=raw,file=build/boot.img \
 
 ---
 
-**文档维护者**: Claude Code + User
+**作者**: CharlieChen114514
 **最后更新**: 2026-02-16
-**文档版本**: 1.0.0

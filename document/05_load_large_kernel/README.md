@@ -254,7 +254,5 @@ make vga-run
 
 ---
 
-**文档维护者**: Claude Code + User
+**作者**: CharlieChen114514
 **最后更新**: 2026-02-15
-**文档版本**: 1.0.0
-**对应提交**: `bb4a8bd` (retidy to cmake) → `02f3234` (stage/dynamic_load_pipeline)
