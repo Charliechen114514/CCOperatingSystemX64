@@ -7,6 +7,8 @@ add_library(driver STATIC
     vga/vga_helpers.c
     vga/vga_example.c
     vga/gui_helper/gui_helper.c
+    serial/serial.c
+    io/io.c
 )
 
 target_include_directories(driver PUBLIC

@@ -13,6 +13,7 @@ BUILD_DIR="$PROJECT_ROOT/build"
 KERNEL_ELF="$BUILD_DIR/kernel.elf"
 BOOT_IMG="$BUILD_DIR/boot.img"
 PID_FILE="$SCRIPT_DIR/.qemu_debug.pid"
+SERIAL_LOG="$SCRIPT_DIR/.qemu_serial.log"
 
 # 颜色输出
 GREEN='\033[0;32m'
@@ -150,6 +151,7 @@ show_status() {
 # 监控 GDB 连接状态，当 GDB 断开时自动停止 QEMU
 monitor_gdb_connection() {
     local qemu_pid=$1
+    local tail_pid=""
 
     echo -e "${GRAY}[监控] 正在监控 GDB 连接状态...${NC}"
 
@@ -160,9 +162,16 @@ monitor_gdb_connection() {
     local last_connected_time=0
     local connection_count=0
 
+    # 清空旧的串口日志
+    > "$SERIAL_LOG"
+
     while true; do
         # 检查 QEMU 是否还在运行
         if ! ps -p "$qemu_pid" > /dev/null 2>&1; then
+            # 停止 tail 进程
+            if [ -n "$tail_pid" ]; then
+                kill "$tail_pid" 2>/dev/null || true
+            fi
             echo -e "\n${GRAY}[监控] QEMU 已停止${NC}"
             rm -f "$PID_FILE"
             break
@@ -194,6 +203,9 @@ monitor_gdb_connection() {
                 gdb_connected=true
                 connection_count=$((connection_count + 1))
                 echo -e "\n${GREEN}[监控] GDB 已连接 (${connection_count})${NC}"
+                # 启动 tail 跟踪串口日志
+                tail -f "$SERIAL_LOG" 2>/dev/null &
+                tail_pid=$!
             fi
             last_connected_time=$current_time
         else
@@ -201,6 +213,11 @@ monitor_gdb_connection() {
                 # 连接断开
                 if [ $((current_time - last_connected_time)) -ge 2 ]; then
                     # 等待 2 秒确认是真的断开了（不是重连中）
+                    # 停止 tail 进程
+                    if [ -n "$tail_pid" ]; then
+                        kill "$tail_pid" 2>/dev/null || true
+                        tail_pid=""
+                    fi
                     echo -e "\n${YELLOW}[监控] 检测到 GDB 已断开连接${NC}"
 
                     # 再检查一次，确保不是正在重连
@@ -280,9 +297,11 @@ start_qemu() {
     echo -e "${BLUE}正在启动 QEMU 调试模式...${NC}"
 
     # 启动 QEMU（在后台运行）
+    # 串口输出到文件，同时保存到 fd 3 供 tail 读取
     qemu-system-x86_64 \
         -drive format=raw,file="$BOOT_IMG",if=ide \
         -vga std -display vnc=:0 \
+        -serial file:"$SERIAL_LOG" \
         -s \
         -S \
         > /dev/null 2>&1 &

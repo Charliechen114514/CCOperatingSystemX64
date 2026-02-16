@@ -1,4 +1,5 @@
 #include "kernel_init.h"
+#include "driver/serial/serial.h"
 #include "driver/vga/vga.h"
 #include "driver/vga/vga_helpers.h"
 
@@ -115,6 +116,10 @@ void vga_display_welcome(void) {
 }
 
 void kernel_init(void) {
+    // Initialize serial port first for early debug output
+    serial_init();
+    sync_serial_puts("\033[0;32mSerial is Enabled!\n\033[0m");
+    sync_serial_puts("Hello Kernel!");
     system_vga_init();
     vga_display_welcome();
 }

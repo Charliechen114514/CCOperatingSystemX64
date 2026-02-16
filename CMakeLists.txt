@@ -178,7 +178,7 @@ add_custom_command(TARGET boot_img POST_BUILD
 # 运行目标
 # ============================================================================
 add_custom_target(run
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide -nographic
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide -serial stdio
     DEPENDS boot_img
     COMMENT "Running CCOS in QEMU (text mode, no graphics)"
     VERBATIM
@@ -186,7 +186,7 @@ add_custom_target(run
 
 # VGA运行目标（图形界面 - VNC backend）
 add_custom_target(vga-run
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -vga std -display vnc=:0
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -vga std -display vnc=:0 
     DEPENDS boot_img
     COMMENT "Running CCOS in QEMU with VGA graphics (VNC backend, connect with: vncviewer localhost:5900)"
     VERBATIM
@@ -194,7 +194,7 @@ add_custom_target(vga-run
 
 # 调试目标
 add_custom_target(debug
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide -nographic -s -S
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide -serial stdio -nographic -s -S
     DEPENDS boot_img
     COMMENT "Running CCOS in QEMU (debug mode, connect with: gdb -ex 'target remote :1234')"
     VERBATIM

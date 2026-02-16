@@ -119,6 +119,7 @@ set_tests_properties(test_static_assert PROPERTIES
 add_executable(test_string
     test_string.c
     ${CMAKE_SOURCE_DIR}/kernel/base/string.c
+    assert_stub.c  # Host-side stub for ccos_assert_impl
 )
 
 target_include_directories(test_string PRIVATE ${TEST_INCLUDE_DIRS})
@@ -137,6 +138,7 @@ set_tests_properties(test_string PROPERTIES
 add_executable(test_memory
     test_memory.c
     ${CMAKE_SOURCE_DIR}/kernel/base/memory.c
+    assert_stub.c  # Host-side stub for ccos_assert_impl
 )
 
 target_include_directories(test_memory PRIVATE ${TEST_INCLUDE_DIRS})
