@@ -42,3 +42,18 @@ typedef enum {
  * @return static string containing ANSI escape sequence
  */
 const char* serial_color_ansi(serial_color_t color);
+
+/**
+ * @brief Get ANSI color escape sequence for log level
+ * @param level the log level (0=TRACE, 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR)
+ * @return static string containing ANSI escape sequence
+ *
+ * Color mapping:
+ * - TRACE (0)  -> Gray (bright black)
+ * - DEBUG (1)  -> Magenta (pink)
+ * - INFO (2)   -> Green
+ * - WARN (3)   -> Yellow
+ * - ERROR (4)  -> Red
+ * - other      -> Reset
+ */
+const char* serial_color_for_log_level(int level);

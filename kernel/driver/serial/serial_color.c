@@ -45,3 +45,14 @@ const char* serial_color_ansi(serial_color_t color) {
     }
     return g_ansi_colors[0];  // Return RESET on invalid color
 }
+
+const char* serial_color_for_log_level(int level) {
+    switch (level) {
+        case 0: return g_ansi_colors[9];  // TRACE  -> GRAY (index 9)
+        case 1: return g_ansi_colors[6];  // DEBUG  -> MAGENTA (index 6)
+        case 2: return g_ansi_colors[3];  // INFO   -> GREEN (index 3)
+        case 3: return g_ansi_colors[4];  // WARN   -> YELLOW (index 4)
+        case 4: return g_ansi_colors[2];  // ERROR  -> RED (index 2)
+        default: return g_ansi_colors[0]; // -1 or invalid -> RESET (index 0)
+    }
+}

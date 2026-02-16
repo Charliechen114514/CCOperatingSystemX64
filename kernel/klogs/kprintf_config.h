@@ -22,3 +22,11 @@
 #if KPRINTF_BUFFER_SIZE < 16
 #    error "Setting KPRINTF_BUFFER_SIZE less then 16 is never a good idea..."
 #endif
+
+/**
+ * @brief Defines in the @file kprintf_backends.h
+ *
+ */
+#define KPRINTF_DEFAULT_BACKEND (KLOG_BACKEND_SERIAL)
+
+#define KPRINTF_DEFAULT_FILTERED_LOGLEVEL (KLOG_LEVEL_TRACE)

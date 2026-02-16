@@ -19,29 +19,15 @@ static bool serial_is_ready(void) {
 }
 
 /**
- * @brief Get ANSI color for log level
- */
-static serial_color_t level_to_color(int level) {
-    switch (level) {
-        case 0: return SERIAL_COLOR_GRAY;    // TRACE
-        case 1: return SERIAL_COLOR_CYAN;    // DEBUG
-        case 2: return SERIAL_COLOR_GREEN;   // INFO
-        case 3: return SERIAL_COLOR_YELLOW;  // WARN
-        case 4: return SERIAL_COLOR_RED;     // ERROR
-        default: return SERIAL_COLOR_WHITE;
-    }
-}
-
-/**
  * @brief Process string with color based on log level
  */
 static void serial_process(const char* str, int level) {
     // Send color escape sequence
-    sync_serial_puts(serial_color_ansi(level_to_color(level)));
+    sync_serial_puts(serial_color_for_log_level(level));
     // Send the actual string
     sync_serial_puts(str);
     // Reset color
-    sync_serial_puts(serial_color_ansi(SERIAL_COLOR_RESET));
+    sync_serial_puts(serial_color_for_log_level(-1));  // -1 returns RESET
 }
 
 // Serial backend operations with color support

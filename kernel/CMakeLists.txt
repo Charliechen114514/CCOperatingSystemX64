@@ -49,6 +49,8 @@ add_subdirectory(klogs)
 add_subdirectory(welcomes)
 
 # 链接内核ELF
+# Note: Library order matters for traditional linkers - libraries must come AFTER
+# the object files that reference their symbols
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/kernel.elf
     COMMAND ${CMAKE_LINKER} -m elf_x86_64
@@ -61,8 +63,6 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_main.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_init.c.o
-        $<TARGET_FILE:assert>
-        $<TARGET_FILE:base>
         # klogs object files
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf_backends.c.o
@@ -71,6 +71,9 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/welcome.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/vga_welcomes.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/serial_welcome.c.o
+        # Libraries must come AFTER object files that reference them
+        $<TARGET_FILE:assert>
+        $<TARGET_FILE:base>
         $<TARGET_FILE:driver>
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o

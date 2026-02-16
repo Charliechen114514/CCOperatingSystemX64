@@ -12,10 +12,14 @@
 | Bootloader | 100% | ✅ 完成 |
 | 内核启动 | 100% | ✅ 完成 |
 | VGA 驱动 | 100% | ✅ 完成 |
+| 串口驱动 | 100% | ✅ 完成 |
+| 日志系统 | 100% | ✅ 完成 |
+| 欢迎界面 | 100% | ✅ 完成 |
 | 调试支持 | 100% | ✅ 完成 |
-| 基础库函数 | 60% | 🟡 部分完成 |
+| 断言系统 | 100% | ✅ 完成 |
+| 基础库函数 | 70% | 🟡 部分完成 |
 | 内存管理 | 30% | 🟡 部分完成 |
-| 中断处理 | 10% | 🔴 未开始 |
+| 中断处理 | 0% | 🔴 未开始 |
 | 进程管理 | 0% | 🔴 未开始 |
 | 文件系统 | 0% | 🔴 未开始 |
 
@@ -26,20 +30,9 @@
 ### 优先级 0：基础库的支持和预备
 
 #### 0.1 基础库目录结构
-- [x] 创建 `kernel/base/` 目录结构
-- [x] 创建 `kernel/base/string.h` / `kernel/base/string.c` - 字符串操作
-- [x] 创建 `kernel/base/memory.h` / `kernel/base/memory.c` - 内存操作
 - [ ] 创建 `kernel/base/list.h` - 嵌入式链表（通常仅头文件）
 - [ ] 创建 `kernel/base/bitmap.h` / `kernel/base/bitmap.c` - 位图操作
 - [ ] 创建 `kernel/base/math.h` / `kernel/base/math.c` - 数学函数
-
-**数值转换**
-- [ ] `long strtol(const char *nptr, char **endptr, int base)` - 字符串转长整型
-- [ ] `long long strtoll(const char *nptr, char **endptr, int base)` - 字符串转长长整型
-- [ ] `unsigned long strtoul(const char *nptr, char **endptr, int base)` - 字符串转无符号长整型
-- [ ] `int atoi(const char *nptr)` - 字符串转整型（简化版）
-- [ ] `char *itoa(int value, char *str, int base)` - 整型转字符串（非标准但常用）
-- [ ] `char *uitoa(unsigned int value, char *str, int base)` - 无符号整型转字符串
 
 #### 0.4 嵌入式链表 (list.h)
 
@@ -147,19 +140,10 @@
 - [ ] `BITS_PER_BYTE` - 每字节位数常量
 - [ ] `BITS_PER_LONG` - 每long位数常量
 
-#### 0.7 调试与断言辅助 (可选)
-
-**断言**
-- [x] `assert(cond)` - 基础断言宏
-- [x] `static_assert(cond, msg)` - 静态断言（已有 static_assert.h，可整合）
-
 **调试输出**
 - [ ] `dump_hex(buffer, length)` - 十六进制转储
 - [ ] `dump_mem(addr, length)` - 内存转储
 - [ ] `dump_stack()` - 栈回溯（需要栈帧信息）
-
-#### 0.8 控制台输出
-- [x] 完成QEMU nographic下正常的向控制台输出内容（串口驱动）
 
 ### 优先级 1：中断与异常处理 (近期)
 
@@ -319,39 +303,3 @@
 - 🌟 多任务操作系统
 
 ---
-
-## 📝 开发日志
-
-### 2026-02-16
-- ✅ 完成 VGA 文本模式驱动
-- ✅ 添加 VSCode 完整调试支持
-- ✅ 完善 clangd 代码补全配置
-- ✅ 更新构建系统目标
-
-### 2026-02-XX
-- ✅ 完成 GDB 基础调试支持
-- ✅ 实现内核调试信息输出
-
-### 2026-02-XX
-- ✅ 完成大内核加载支持
-- ✅ 实现动态扇区读取
-
-### 2026-02-XX
-- ✅ 完成第一个 CMake 构建系统
-- ✅ 支持 run/debug/clean 目标
-
-### 2026-02-XX
-- ✅ 完成 64 位长模式切换
-- ✅ 实现 4 级页表映射
-
-### 2026-02-XX
-- ✅ 完成 Stage 2 Bootloader
-- ✅ 支持 LBA/CHS 双模式
-
-### 2026-02-XX
-- ✅ 完成 Stage 1 MBR Bootloader
-- ✅ 项目启动
-
----
-
-*最后更新: 2026-02-16*

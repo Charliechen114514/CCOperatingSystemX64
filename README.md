@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Progress](https://img.shields.io/badge/progress-55%25-blue)]()
+[![Progress](https://img.shields.io/badge/progress-65%25-blue)]()
 [![Platform](https://img.shields.io/badge/platform-x86__64-orange)]()
 
 ---
@@ -102,12 +102,40 @@ gdb build/kernel.elf -ex 'target remote :1234'
 - BSS 段自动清零
 - 基础控制台输出
 
+#### 串口驱动 🆕
+- **串口初始化**: 支持 COM1 端口配置
+- **同步输出**: sync_serial_puts() 非阻塞输出
+- **ANSI 颜色**: 支持终端颜色转义序列
+- **日志集成**: 与日志系统无缝集成
+
 #### VGA 图形驱动 🆕
 - **VGA 文本模式**: 80x25 字符显示支持
 - **颜色支持**: 16 色 VGA 调色板
 - **光标控制**: 硬件光标位置管理
 - **滚动功能**: 屏幕内容向上滚动
 - **格式化输出**: 支持 printf 风格的文本输出
+
+#### 日志系统 🆕
+- **分级日志**: TRACE/DEBUG/INFO/WARN/ERROR 五级日志
+- **多后端支持**: 串口/VGA 双后端输出
+- **可配置**: 运行时日志级别过滤
+- **kprintf**: 内核 printf 风格格式化输出
+
+#### 欢迎界面 🆕
+- **模块化设计**: 支持串口/VGA 双欢迎界面
+- **自动检测**: 根据编译目标选择显示方式
+- **美观输出**: 支持 ASCII 艺术 logo
+
+#### 基础库函数 🆕
+- **字符串操作**: strlen, strcpy, strcmp, strchr, strstr, strtok 等完整字符串库
+- **内存操作**: memset, memcpy, memmove, memcmp
+- **数值转换**: strtol, strtoll, strtoul, atoi, itoa, uitoa
+- **字符处理**: isspace, isdigit, tolower
+
+#### 断言系统 🆕
+- **运行时断言**: assert(cond) 宏
+- **静态断言**: static_assert 编译时检查
+- **断言后端**: 可配置的断言失败处理
 
 #### 开发工具 🆕
 - **VSCode 调试配置**: 一键启动调试环境
