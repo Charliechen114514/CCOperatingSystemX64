@@ -42,6 +42,12 @@ add_subdirectory(base)
 # 添加驱动子目录
 add_subdirectory(driver)
 
+# 添加 klogs 日志模块
+add_subdirectory(klogs)
+
+# 添加 welcomes 欢迎界面模块
+add_subdirectory(welcomes)
+
 # 链接内核ELF
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/kernel.elf
@@ -57,6 +63,14 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_init.c.o
         $<TARGET_FILE:assert>
         $<TARGET_FILE:base>
+        # klogs object files
+        ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf_backends.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/backends/serial_backends.c.o
+        # welcomes object files
+        ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/welcome.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/vga_welcomes.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/serial_welcome.c.o
         $<TARGET_FILE:driver>
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
@@ -64,6 +78,8 @@ add_custom_command(
         assert
         base
         driver
+        klogs
+        welcomes
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

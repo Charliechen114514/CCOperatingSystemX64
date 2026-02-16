@@ -8,6 +8,7 @@ add_library(driver STATIC
     vga/vga_example.c
     vga/gui_helper/gui_helper.c
     serial/serial.c
+    serial/serial_color.c
     io/io.c
 )
 

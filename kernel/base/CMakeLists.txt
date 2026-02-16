@@ -5,6 +5,7 @@
 add_library(base STATIC
     string.c
     memory.c
+    strhelpers.c
 )
 
 target_include_directories(base PUBLIC

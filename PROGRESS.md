@@ -150,8 +150,8 @@
 #### 0.7 调试与断言辅助 (可选)
 
 **断言**
-- [ ] `assert(cond)` - 基础断言宏
-- [ ] `static_assert(cond, msg)` - 静态断言（已有 static_assert.h，可整合）
+- [x] `assert(cond)` - 基础断言宏
+- [x] `static_assert(cond, msg)` - 静态断言（已有 static_assert.h，可整合）
 
 **调试输出**
 - [ ] `dump_hex(buffer, length)` - 十六进制转储
@@ -159,7 +159,7 @@
 - [ ] `dump_stack()` - 栈回溯（需要栈帧信息）
 
 #### 0.8 控制台输出
-- [ ] 完成QEMU nographic下正常的向控制台输出内容（串口驱动）
+- [x] 完成QEMU nographic下正常的向控制台输出内容（串口驱动）
 
 ### 优先级 1：中断与异常处理 (近期)
 

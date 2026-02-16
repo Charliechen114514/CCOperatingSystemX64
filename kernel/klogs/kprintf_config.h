@@ -1,0 +1,24 @@
+/**
+ * @file kprintf_config.h
+ * @author Charliechen114514 (chengh1922@mails.jlu.edu.cn)
+ * @brief Configs for the Default kprintf backends
+ * @version 0.1
+ * @date 2026-02-16
+ *
+ * @copyright Copyright (c) 2026
+ *
+ */
+
+/**
+ * @brief How many backends shell we supports
+ *
+ */
+#define KPRINTF_MAX_BACKEND_N (4)
+#if KPRINTF_MAX_BACKEND_N < 1
+#    error "Hey, Can not silent backends in this way!"
+#endif
+
+#define KPRINTF_BUFFER_SIZE (512)
+#if KPRINTF_BUFFER_SIZE < 16
+#    error "Setting KPRINTF_BUFFER_SIZE less then 16 is never a good idea..."
+#endif
