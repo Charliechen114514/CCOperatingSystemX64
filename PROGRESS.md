@@ -28,16 +28,10 @@
 #### 0.1 基础库目录结构
 - [x] 创建 `kernel/base/` 目录结构
 - [x] 创建 `kernel/base/string.h` / `kernel/base/string.c` - 字符串操作
-- [ ] 创建 `kernel/base/memory.h` / `kernel/base/memory.c` - 内存操作
+- [x] 创建 `kernel/base/memory.h` / `kernel/base/memory.c` - 内存操作
 - [ ] 创建 `kernel/base/list.h` - 嵌入式链表（通常仅头文件）
 - [ ] 创建 `kernel/base/bitmap.h` / `kernel/base/bitmap.c` - 位图操作
 - [ ] 创建 `kernel/base/math.h` / `kernel/base/math.c` - 数学函数
-
-**内存与字符串转换**
-- [ ] `void *memset(void *s, int c, size_t n)` - 内存填充（放在 memory.c）
-- [ ] `void *memcpy(void *dest, const void *src, size_t n)` - 内存复制（放在 memory.c）
-- [ ] `void *memmove(void *dest, const void *src, size_t n)` - 重叠内存复制（放在 memory.c）
-- [ ] `int memcmp(const void *s1, const void *s2, size_t n)` - 内存比较
 
 **数值转换**
 - [ ] `long strtol(const char *nptr, char **endptr, int base)` - 字符串转长整型
@@ -46,32 +40,6 @@
 - [ ] `int atoi(const char *nptr)` - 字符串转整型（简化版）
 - [ ] `char *itoa(int value, char *str, int base)` - 整型转字符串（非标准但常用）
 - [ ] `char *uitoa(unsigned int value, char *str, int base)` - 无符号整型转字符串
-
-#### 0.3 内存操作函数 (memory.h/memory.c)
-
-**基础内存操作**（与 string.h 中的 mem* 函数共享）
-- [ ] `void *memset(void *s, int c, size_t n)` - 内存填充
-- [ ] `void *memset16(void *s, uint16_t c, size_t n)` - 16位填充
-- [ ] `void *memset32(void *s, uint32_t c, size_t n)` - 32位填充
-- [ ] `void *memset64(void *s, uint64_t c, size_t n)` - 64位填充
-- [ ] `void *memcpy(void *dest, const void *src, size_t n)` - 内存复制
-- [ ] `void *memmove(void *dest, const void *src, size_t n)` - 重叠内存复制
-- [ ] `int memcmp(const void *s1, const void *s2, size_t n)` - 内存比较
-
-**内存比较变体**
-- [ ] `int memcmp16(const void *s1, const void *s2, size_t n)` - 16位内存比较
-- [ ] `int memcmp32(const void *s1, const void *s2, size_t n)` - 32位内存比较
-
-**高端内存操作（可选）**
-- [ ] `void *memchr(const void *s, int c, size_t n)` - 内存查找
-- [ ] `void *memscan(const void *s, int c, size_t n)` - 反向内存查找
-- [ ] `size_t memspn(const void *s, int c, size_t n)` - 计算前缀匹配
-
-**内存交换**
-- [ ] `void memswap(void *a, void *b, size_t n)` - 交换两块内存
-- [ ] `void bswap16(uint16_t *x)` - 16位字节序交换
-- [ ] `void bswap32(uint32_t *x)` - 32位字节序交换
-- [ ] `void bswap64(uint64_t *x)` - 64位字节序交换
 
 #### 0.4 嵌入式链表 (list.h)
 
@@ -102,25 +70,6 @@
 - [ ] `list_for_each_entry_safe(pos, n, head, member)` - 安全遍历条目
 - [ ] `list_for_each_entry_reverse(pos, head, member)` - 反向遍历
 - [ ] `list_for_each_prev(pos, head)` - 反向遍历节点
-
-**单向链表**（可选）
-- [ ] `struct slist_head` 结构定义
-- [ ] `slist_add(new, head)` - 头部插入
-- [ ] `slist_del(entry)` - 删除节点
-- [ ] `slist_is_empty(head)` - 判断是否为空
-- [ ] `slist_for_each(pos, head)` - 遍历
-- [ ] `slist_for_each_safe(pos, n, head)` - 安全遍历
-
-**哈希链表**（可选，用于哈希表）
-- [ ] `struct hlist_head` / `struct hlist_node` 结构定义
-- [ ] `INIT_HLIST_HEAD(ptr)` - 初始化
-- [ ] `hlist_add_head(node, head)` - 头部添加
-- [ ] `hlist_add_before(node, next)` - 之前添加
-- [ ] `hlist_add_behind(node, prev)` - 之后添加
-- [ ] `hlist_del(node)` - 删除节点
-- [ ] `hlist_empty(head)` - 判断是否为空
-- [ ] `hlist_for_each(pos, head)` - 遍历
-- [ ] `hlist_for_each_safe(pos, n, head)` - 安全遍历
 
 #### 0.5 位图操作 (bitmap.h/bitmap.c)
 
