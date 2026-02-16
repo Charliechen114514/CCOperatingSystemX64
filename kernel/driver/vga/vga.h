@@ -67,5 +67,11 @@ void vga_set_cursor(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y);
 
 // Only vga_property_t are accept to filled
 void set_vga_property(CCOS_VGA* vga, void* data, vga_property_t what_property);
+
+// Scroll the screen up by n lines (positive: up, negative: down)
+// Positive lines: content moves up, top lines are lost, bottom cleared
+// Negative lines: content moves down, top cleared, bottom lines are lost
+void vga_scroll(CCOS_VGA* vga, int lines);
+
 void vga_print_string(CCOS_VGA* vga, const char* string);
 void vga_print_stringn(CCOS_VGA* vga, const char* string, const vga_sz_t str_sz);

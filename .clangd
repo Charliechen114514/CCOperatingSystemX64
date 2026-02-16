@@ -19,6 +19,7 @@ CompileFlags:
     - -m64
     - -march=x86-64
     - -mtune=generic
+    - -DNDEBUG=1
 
     # 警告选项（所有目录共享）
     - -Wall

@@ -33,6 +33,12 @@ set_target_properties(kernel_main PROPERTIES
     POSITION_INDEPENDENT_CODE FALSE
 )
 
+# 添加 assert 模块
+add_subdirectory(assert)
+
+# 添加 base 基础库模块
+add_subdirectory(base)
+
 # 添加驱动子目录
 add_subdirectory(driver)
 
@@ -49,10 +55,14 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_main.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_init.c.o
+        $<TARGET_FILE:assert>
+        $<TARGET_FILE:base>
         $<TARGET_FILE:driver>
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         kernel_main
+        assert
+        base
         driver
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"

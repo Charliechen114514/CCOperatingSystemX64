@@ -60,8 +60,10 @@ message(STATUS "Test Build type: ${CMAKE_BUILD_TYPE}")
 # ============================================================================
 set(TEST_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/kernel
     ${CMAKE_SOURCE_DIR}/kernel/defines
     ${CMAKE_SOURCE_DIR}/kernel/assert
+    ${CMAKE_SOURCE_DIR}/kernel/base
 )
 
 # ============================================================================
@@ -111,6 +113,26 @@ set_tests_properties(test_static_assert PROPERTIES
     TIMEOUT 10
 )
 
+# ----------------------------------------------------------------------------
+# Test: String Functions
+# ----------------------------------------------------------------------------
+add_executable(test_string
+    test_string.c
+    ${CMAKE_SOURCE_DIR}/kernel/base/string.c
+)
+
+target_include_directories(test_string PRIVATE ${TEST_INCLUDE_DIRS})
+target_compile_options(test_string PRIVATE ${TEST_C_FLAGS} -fno-builtin)
+# Define test environment so types.h won't define size_t (we use stddef.h)
+target_compile_definitions(test_string PRIVATE __CCOS_TEST_ENV__)
+
+add_test(NAME test_string COMMAND test_string)
+
+set_tests_properties(test_string PROPERTIES
+    LABELS "runtime"
+    TIMEOUT 10
+)
+
 # ============================================================================
 # Test Integration with Main Build
 # ============================================================================
@@ -121,9 +143,9 @@ set_tests_properties(test_static_assert PROPERTIES
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND}
         --output-on-failure
-        --label-regex "static"
+        --label-regex "(static|runtime)"
         $<IF:$<CONFIG:Debug>,--extra-verbose,>
-    DEPENDS test_types test_static_assert
+    DEPENDS test_types test_static_assert test_string
     COMMENT "Running static tests..."
     VERBATIM
 )

@@ -26,7 +26,7 @@
 ### 优先级 0：基础库的支持和预备
 
 #### 0.1 基础库目录结构
-- [ x ] 创建 `kernel/base/` 目录结构
+- [x] 创建 `kernel/base/` 目录结构
 - [ ] 创建 `kernel/base/string.h` / `kernel/base/string.c` - 字符串操作
 - [ ] 创建 `kernel/base/memory.h` / `kernel/base/memory.c` - 内存操作
 - [ ] 创建 `kernel/base/list.h` - 嵌入式链表（通常仅头文件）

@@ -71,7 +71,9 @@ static void vga_putc(CCOS_VGA* vga, char c) {
         x = 0;
         y++;
         if (y >= vga->height) {
-            y = vga->height - 1; // stay on last line
+            // Scroll up by 1 line and stay on last line
+            vga_scroll(vga, 1);
+            y = vga->height - 1;
         }
     } else {
         // Print character at current position
@@ -84,6 +86,8 @@ static void vga_putc(CCOS_VGA* vga, char c) {
             x = 0;
             y++;
             if (y >= vga->height) {
+                // Scroll up by 1 line and stay on last line
+                vga_scroll(vga, 1);
                 y = vga->height - 1;
             }
         }
@@ -109,6 +113,62 @@ void vga_print_stringn(CCOS_VGA* vga, const char* string, const vga_sz_t str_sz)
 
     for (vga_sz_t i = 0; i < str_sz; i++) {
         vga_putc(vga, string[i]);
+    }
+}
+
+void vga_scroll(CCOS_VGA* vga, int lines) {
+    if (vga == NULL || lines == 0)
+        return;
+
+    volatile uint16_t* video = (volatile uint16_t*)vga->base_addr;
+    uint16_t blank = vga_entry(' ', 0x0, vga->background_color);
+    vga_sz_t width = vga->width;
+    vga_sz_t height = vga->height;
+
+    if (lines > 0) {
+        // Scroll up (content moves up)
+        vga_sz_t scroll_lines = (vga_sz_t)lines;
+        if (scroll_lines >= height) {
+            // Clear entire screen if scrolling more than height
+            for (vga_sz_t i = 0; i < width * height; i++) {
+                video[i] = blank;
+            }
+        } else {
+            // Move content up
+            for (vga_sz_t y = 0; y < height - scroll_lines; y++) {
+                for (vga_sz_t x = 0; x < width; x++) {
+                    video[y * width + x] = video[(y + scroll_lines) * width + x];
+                }
+            }
+            // Clear bottom lines
+            for (vga_sz_t y = height - scroll_lines; y < height; y++) {
+                for (vga_sz_t x = 0; x < width; x++) {
+                    video[y * width + x] = blank;
+                }
+            }
+        }
+    } else {
+        // Scroll down (content moves down)
+        vga_sz_t scroll_lines = (vga_sz_t)(-lines);
+        if (scroll_lines >= height) {
+            // Clear entire screen if scrolling more than height
+            for (vga_sz_t i = 0; i < width * height; i++) {
+                video[i] = blank;
+            }
+        } else {
+            // Move content down
+            for (vga_sz_t y = height - 1; y >= scroll_lines; y--) {
+                for (vga_sz_t x = 0; x < width; x++) {
+                    video[y * width + x] = video[(y - scroll_lines) * width + x];
+                }
+            }
+            // Clear top lines
+            for (vga_sz_t y = 0; y < scroll_lines; y++) {
+                for (vga_sz_t x = 0; x < width; x++) {
+                    video[y * width + x] = blank;
+                }
+            }
+        }
     }
 }
 

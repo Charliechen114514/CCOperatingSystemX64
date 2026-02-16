@@ -26,29 +26,35 @@
  */
 #pragma once
 
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
+
+// ============================================================================
+// Global test counters (declare as extern, define in test file)
+// ============================================================================
+extern int g_test_passed;
+extern int g_test_failed;
 
 // ============================================================================
 #// Color Output for Better Test Visibility
 // ============================================================================
-#define COLOR_RESET   "\033[0m"
-#define COLOR_RED     "\033[31m"
-#define COLOR_GREEN   "\033[32m"
-#define COLOR_YELLOW  "\033[33m"
-#define COLOR_BLUE    "\033[34m"
+#define COLOR_RESET "\033[0m"
+#define COLOR_RED "\033[31m"
+#define COLOR_GREEN "\033[32m"
+#define COLOR_YELLOW "\033[33m"
+#define COLOR_BLUE "\033[34m"
 #define COLOR_MAGENTA "\033[35m"
-#define COLOR_CYAN    "\033[36m"
+#define COLOR_CYAN "\033[36m"
 
 // Disable colors on Windows or when not a TTY
 #if defined(_WIN32) || !defined(__unix__)
-    #define COLOR_RESET ""
-    #define COLOR_RED ""
-    #define COLOR_GREEN ""
-    #define COLOR_YELLOW ""
-    #define COLOR_BLUE ""
-    #define COLOR_MAGENTA ""
-    #define COLOR_CYAN ""
+#    define COLOR_RESET ""
+#    define COLOR_RED ""
+#    define COLOR_GREEN ""
+#    define COLOR_YELLOW ""
+#    define COLOR_BLUE ""
+#    define COLOR_MAGENTA ""
+#    define COLOR_CYAN ""
 #endif
 
 // ============================================================================
@@ -64,8 +70,8 @@
  *   STATIC_ASSERT(sizeof(int8_t) == 1, int8_size);
  *   STATIC_TEST_SECTION_END(type_sizes);
  */
-#define STATIC_TEST_SECTION(SectionName) \
-    void __test_section_begin_##SectionName(void) { \
+#define STATIC_TEST_SECTION(SectionName)                                                 \
+    void __test_section_begin_##SectionName(void) {                                      \
         printf(COLOR_CYAN "[TEST] " COLOR_RESET "Starting section: %s\n", #SectionName); \
     }
 
@@ -73,8 +79,8 @@
  * STATIC_TEST_SECTION_END - Mark the end of a test section
  * @param SectionName: Must match the corresponding STATIC_TEST_SECTION call
  */
-#define STATIC_TEST_SECTION_END(SectionName) \
-    void __test_section_end_##SectionName(void) { \
+#define STATIC_TEST_SECTION_END(SectionName)                                               \
+    void __test_section_end_##SectionName(void) {                                          \
         printf(COLOR_GREEN "[PASS] " COLOR_RESET "Section completed: %s\n", #SectionName); \
     }
 
@@ -89,8 +95,7 @@
  *
  * This uses _Static_assert for compile-time validation.
  */
-#define TEST_COMPILE_TIME(expr, name) \
-    _Static_assert((expr), "Compile-time test failed: " #name)
+#define TEST_COMPILE_TIME(expr, name) _Static_assert((expr), "Compile-time test failed: " #name)
 
 /**
  * TEST_ASSERT_SIZEOF - Verify type size at compile time
@@ -120,32 +125,32 @@
  *
  * Place at the beginning of main() after any setup.
  */
-#define TEST_RUNNER_BEGIN(test_suite_name) \
-    printf("\n"); \
-    printf("========================================\n"); \
+#define TEST_RUNNER_BEGIN(test_suite_name)                                  \
+    printf("\n");                                                           \
+    printf("========================================\n");                   \
     printf(COLOR_MAGENTA "CCOS Kernel Static Test Suite" COLOR_RESET "\n"); \
-    printf("Suite: %s\n", test_suite_name); \
-    printf("========================================\n\n"); \
-    int test_passed = 0; \
-    int test_failed = 0; \
-    (void)test_passed; \
-    (void)test_failed;
+    printf("Suite: %s\n", test_suite_name);                                 \
+    printf("========================================\n\n");                 \
+    int g_test_passed = 0;                                                  \
+    int g_test_failed = 0;                                                  \
+    (void)g_test_passed;                                                    \
+    (void)g_test_failed;
 
 /**
  * TEST_RUNNER_END - Exit point for test execution
  *
  * Place at the end of main() before return.
  */
-#define TEST_RUNNER_END() \
-    printf("\n"); \
-    printf("========================================\n"); \
-    if (test_failed == 0) { \
+#define TEST_RUNNER_END()                                        \
+    printf("\n");                                                \
+    printf("========================================\n");        \
+    if (g_test_failed == 0) {                                    \
         printf(COLOR_GREEN "ALL TESTS PASSED" COLOR_RESET "\n"); \
-    } else { \
-        printf(COLOR_RED "SOME TESTS FAILED" COLOR_RESET "\n"); \
-    } \
-    printf("========================================\n"); \
-    return (test_failed == 0) ? 0 : 1;
+    } else {                                                     \
+        printf(COLOR_RED "SOME TESTS FAILED" COLOR_RESET "\n");  \
+    }                                                            \
+    printf("========================================\n");        \
+    return (g_test_failed == 0) ? 0 : 1;
 
 // ============================================================================
 // Utility Macros
@@ -154,32 +159,180 @@
 /**
  * TEST_INFO - Print informational message during test
  */
-#define TEST_INFO(fmt, ...) \
-    printf(COLOR_BLUE "[INFO] " COLOR_RESET fmt "\n", ##__VA_ARGS__)
+#define TEST_INFO(fmt, ...) printf(COLOR_BLUE "[INFO] " COLOR_RESET fmt "\n", ##__VA_ARGS__)
 
 /**
  * TEST_WARN - Print warning during test (non-fatal)
  */
-#define TEST_WARN(fmt, ...) \
-    printf(COLOR_YELLOW "[WARN] " COLOR_RESET fmt "\n", ##__VA_ARGS__)
+#define TEST_WARN(fmt, ...) printf(COLOR_YELLOW "[WARN] " COLOR_RESET fmt "\n", ##__VA_ARGS__)
 
 /**
  * TEST_PASS - Explicitly mark a test as passed
  */
-#define TEST_PASS(name) \
-    do { \
-        test_passed++; \
+#define TEST_PASS(name)                                         \
+    do {                                                        \
         printf(COLOR_GREEN "[PASS] " COLOR_RESET "%s\n", name); \
-    } while(0)
+        g_test_passed++;                                        \
+    } while (0)
 
 /**
  * TEST_FAIL - Explicitly mark a test as failed
  */
-#define TEST_FAIL(name, reason) \
-    do { \
-        test_failed++; \
+#define TEST_FAIL(name, reason)                                           \
+    do {                                                                  \
         printf(COLOR_RED "[FAIL] " COLOR_RESET "%s: %s\n", name, reason); \
-    } while(0)
+        g_test_failed++;                                                  \
+    } while (0)
+
+// ============================================================================
+// Runtime Assertion Macros for Dynamic Testing
+// ============================================================================
+
+/**
+ * TEST_ASSERT_EQ - Assert two values are equal
+ * @param expr: Expression to evaluate
+ * @param expected: Expected value
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_EQ(expr, expected, name)                                      \
+    do {                                                                          \
+        if ((expr) == (expected)) {                                               \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Expected " #expected " but got different value");    \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_NE - Assert two values are not equal
+ * @param expr: Expression to evaluate
+ * @param unexpected: Value that should not match
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_NE(expr, unexpected, name)                                    \
+    do {                                                                          \
+        if ((expr) != (unexpected)) {                                             \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Value should not equal " #unexpected);              \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_NULL - Assert pointer is NULL
+ * @param ptr: Pointer to check
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_NULL(ptr, name)                                               \
+    do {                                                                          \
+        if ((ptr) == NULL) {                                                      \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Pointer should be NULL");                            \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_NOT_NULL - Assert pointer is not NULL
+ * @param ptr: Pointer to check
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_NOT_NULL(ptr, name)                                           \
+    do {                                                                          \
+        if ((ptr) != NULL) {                                                      \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Pointer should not be NULL");                        \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_TRUE - Assert expression is true (non-zero)
+ * @param expr: Expression to evaluate
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_TRUE(expr, name)                                              \
+    do {                                                                          \
+        if (expr) {                                                                \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Expression should be true");                         \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_FALSE - Assert expression is false (zero)
+ * @param expr: Expression to evaluate
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_FALSE(expr, name)                                             \
+    do {                                                                          \
+        if (!(expr)) {                                                             \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Expression should be false");                        \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_LT - Assert first value is less than second
+ * @param a: First value
+ * @param b: Second value
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_LT(a, b, name)                                                \
+    do {                                                                          \
+        if ((a) < (b)) {                                                          \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Expected " #a " < " #b);                             \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_GT - Assert first value is greater than second
+ * @param a: First value
+ * @param b: Second value
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_GT(a, b, name)                                                \
+    do {                                                                          \
+        if ((a) > (b)) {                                                          \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Expected " #a " > " #b);                             \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_STR_EQ - Assert two C strings are equal
+ * @param actual: Actual string
+ * @param expected: Expected string
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_STR_EQ(actual, expected, name)                                \
+    do {                                                                          \
+        if (strcmp((actual), (expected)) == 0) {                                  \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Strings are not equal");                             \
+        }                                                                        \
+    } while (0)
+
+/**
+ * TEST_ASSERT_STR_NE - Assert two C strings are not equal
+ * @param actual: Actual string
+ * @param unexpected: String that should not match
+ * @param name: Test name for reporting
+ */
+#define TEST_ASSERT_STR_NE(actual, unexpected, name)                              \
+    do {                                                                          \
+        if (strcmp((actual), (unexpected)) != 0) {                                \
+            TEST_PASS(name);                                                      \
+        } else {                                                                  \
+            TEST_FAIL(name, "Strings should not be equal");                       \
+        }                                                                        \
+    } while (0)
 
 // ============================================================================
 // Legacy Compatibility Macros
@@ -187,8 +340,3 @@
 // These maintain compatibility with existing test code
 #define STATIC_TEST_OK(SectionName) \
     printf(COLOR_GREEN "[OK] " COLOR_RESET "Test section: %s\n", #SectionName)
-
-
-
-
-
