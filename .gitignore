@@ -4,7 +4,7 @@ force_rebuild_with_vga_run.sh
 # Claude Helpers
 .claude
 .cache
-
+REQUEST.md
 # 构建目录
 build/
 iso/
