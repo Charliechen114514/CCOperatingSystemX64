@@ -118,8 +118,9 @@ void vga_display_welcome(void) {
 void kernel_init(void) {
     // Initialize serial port first for early debug output
     serial_init();
+    sync_serial_puts("\033[0;32m===Kernel Stage Start===\n\033[0m");
     sync_serial_puts("\033[0;32mSerial is Enabled!\n\033[0m");
-    sync_serial_puts("Hello Kernel!");
+    sync_serial_puts("Hello Kernel!\n");
     system_vga_init();
     vga_display_welcome();
 }

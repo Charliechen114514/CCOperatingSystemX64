@@ -10,6 +10,32 @@
 %include "boot_config.inc"
 
 ; ==============================================================================
+; Serial Port Constants (COM1)
+; ==============================================================================
+SERIAL_PORT        equ 0x3F8
+SERIAL_THR         equ 0x03F8  ; Transmit Holding Register (write)
+SERIAL_RBR         equ 0x03F8  ; Receive Buffer Register (read)
+SERIAL_IER         equ 0x03F9  ; Interrupt Enable Register
+SERIAL_IIR         equ 0x03FA  ; Interrupt Identification Register
+SERIAL_FCR         equ 0x03FA  ; FIFO Control Register (write)
+SERIAL_LCR         equ 0x03FB  ; Line Control Register
+SERIAL_MCR         equ 0x03FC  ; Modem Control Register
+SERIAL_LSR         equ 0x03FD  ; Line Status Register
+SERIAL_MSR         equ 0x03FE  ; Modem Status Register
+SERIAL_DLL         equ 0x03F8  ; Divisor Latch Low (when DLAB=1)
+SERIAL_DLM         equ 0x03F9  ; Divisor Latch High (when DLAB=1)
+
+; Line Control bits
+LCR_DLAB           equ 0x80    ; Divisor Latch Access Bit
+LCR_8BIT           equ 0x03    ; 8 bits per character
+LCR_NO_PARITY      equ 0x00    ; No parity
+LCR_ONE_STOP       equ 0x00    ; 1 stop bit
+
+; Line Status bits
+LSR_THRE           equ 0x20    ; Transmit Holding Register Empty
+LSR_TEMT           equ 0x40    ; Transmitter Empty
+
+; ==============================================================================
 ; Stage 1: MBR (0x7C00)
 ; ==============================================================================
 section .mbr
@@ -25,18 +51,33 @@ start:
     mov sp, 0x7c00
     sti
 
+    ; Initialize serial port (115200 8N1)
+    call serial_init
+
     ; clear screen
     mov ah, 0x00
     mov al, 0x03
     int 0x10
 
-    ; print header
+    ; boot serial stage can be started after the VGA OK
+    mov si, stage_boot_start_msg
+    call print_string    
+    mov si, stage_boot_start_msg
+    call serial_write_string
+
+    ; print header to VGA
     mov si, header_msg
     call print_string
+    ; also to serial
+    mov si, header_msg
+    call serial_write_string
 
-    ; print welcome
+    ; print welcome to VGA
     mov si, welcome_msg
     call print_string
+    ; also to serial
+    mov si, welcome_msg
+    call serial_write_string
 
     ; Load Stage 2 from disk (sectors 2-4)
     ; Bootloader is BOOTLOADER_SECTORS total, minus 1 for MBR = remaining sectors
@@ -60,9 +101,101 @@ start:
 load_error:
     mov si, load_error_msg
     call print_string
+    mov si, load_error_msg
+    call serial_write_string
 .hang:
     hlt
     jmp .hang
+
+; ============================================================================
+; Serial Port Functions (16-bit Real Mode)
+; ============================================================================
+
+; serial_init - Initialize COM1 for 115200 8N1
+; Input: none
+; Output: none
+; Clobbers: AX, DX
+serial_init:
+    push dx
+
+    ; Disable interrupts during setup
+    mov dx, SERIAL_IER
+    xor al, al
+    out dx, al
+
+    ; Enable DLAB to set divisor
+    mov dx, SERIAL_LCR
+    mov al, LCR_DLAB | LCR_8BIT | LCR_NO_PARITY | LCR_ONE_STOP
+    out dx, al
+
+    ; Set divisor low byte (115200 baud)
+    ; Base clock = 1.8432 MHz, Divisor = 1 for 115200
+    mov dx, SERIAL_DLL
+    mov al, 0x01    ; Divisor = 1 (115200 baud)
+    out dx, al
+
+    ; Set divisor high byte
+    mov dx, SERIAL_DLM
+    mov al, 0x00
+    out dx, al
+
+    ; Clear DLAB and set 8N1 format
+    mov dx, SERIAL_LCR
+    mov al, LCR_8BIT | LCR_NO_PARITY | LCR_ONE_STOP
+    out dx, al
+
+    ; Enable FIFO, clear buffers, 14-byte threshold
+    mov dx, SERIAL_FCR
+    mov al, 0x07    ; Enable FIFO, clear RX/TX
+    out dx, al
+
+    ; Set modem control (RTS+DTR on)
+    mov dx, SERIAL_MCR
+    mov al, 0x03    ; RTS + DTR
+    out dx, al
+
+    pop dx
+    ret
+
+
+; serial_write_char_blocking - Write a character to serial port (blocking)
+; Input: AL = character to write
+; Output: none
+; Clobbers: AX, DX
+serial_write_char_blocking:
+    push dx
+    push ax                         ; Save the character to write
+.write_loop:
+    ; Wait until THR is empty
+    mov dx, SERIAL_LSR
+    in al, dx
+    test al, LSR_THRE
+    jz .write_loop
+
+    ; Restore character and write to THR
+    pop ax                          ; Restore character
+    mov dx, SERIAL_THR
+    out dx, al
+
+    pop dx
+    ret
+
+
+; serial_write_string - Write null-terminated string to serial port
+; Input: SI = pointer to string
+; Output: none
+; Clobbers: AX, SI
+serial_write_string:
+    pusha
+.loop:
+    lodsb
+    test al, al
+    jz .done
+    call serial_write_char_blocking
+    jmp .loop
+.done:
+    popa
+    ret
 
 print_string:
     pusha
@@ -78,6 +211,9 @@ print_string:
 .done:
     popa
     ret
+
+stage_boot_start_msg:
+    db "=== BootLoader Stage Start ===", 0x0d, 0x0a, 0
 
 header_msg:
     db "READY TO BOOT CCOS", 0x0d, 0x0a, 0
@@ -131,17 +267,21 @@ stage2_main:
     mov ss, ax
     mov sp, 0x7E00
 
-    ; Print message
+    ; Print message (VGA + Serial)
     mov si, msg_stage2
     call print_bios
+    mov si, msg_stage2
+    call serial_write_string
 
     ; Load kernel using automatic LBA/CHS selection
     call load_kernel_auto
     jc kernel_error
 
-    ; Kernel loaded successfully - print success message
+    ; Kernel loaded successfully - print success message (VGA + Serial)
     mov si, msg_kernel_load_success
     call print_bios
+    mov si, msg_kernel_load_success
+    call serial_write_string
 
     ; Load GDT and switch to protected mode
     lgdt [gdt_ptr]
@@ -158,6 +298,8 @@ stage2_main:
 kernel_error:
     mov si, msg_kernel_error
     call print_bios
+    mov si, msg_kernel_error
+    call serial_write_string
 .hang:
     hlt
     jmp .hang
@@ -277,6 +419,9 @@ long_mode:
     mov ss, ax
     mov rsp, 0x7E00
 
+    ; Initialize serial port for 64-bit mode
+    call serial_init_64
+
     ; Clear screen
     push rax
     push rdi
@@ -292,7 +437,7 @@ long_mode:
     pop rdi
     pop rax
 
-    ; Print ready message
+    ; Print ready message to VGA
     mov rsi, msg_ready
     mov rdi, 0xB8000
     mov ah, 0x0F
@@ -304,6 +449,13 @@ long_mode:
     jmp .print_loop
 .print_done:
 
+    ; Also print ready message to serial
+    mov rsi, msg_ready
+    call serial_write_string_64
+
+    mov rsi, msg_boot_time_end
+    call serial_write_string_64
+
     ; Jump to kernel
     mov rdi, 0x10000
     call rdi
@@ -314,7 +466,176 @@ kernel_halt:
     jmp kernel_halt
 
 msg_ready:
-    db "READY TO BOOT KERNEL", 0
+    db "READY TO BOOT KERNEL", 0xd, 0xa, 0
+msg_boot_time_end:
+    db "=== BootLoader Stage End ===", 0xd, 0xa, 0
+
+; ============================================================================
+; 32-bit Serial Port Functions (Protected Mode)
+; ============================================================================
+
+; serial_init_32 - Initialize COM1 for 115200 8N1 (32-bit version)
+; Input: none
+; Output: none
+; Clobbers: EAX, EDX
+bits 32
+serial_init_32:
+    push edx
+
+    ; Disable interrupts during setup
+    mov dx, SERIAL_IER
+    xor al, al
+    out dx, al
+
+    ; Enable DLAB to set divisor
+    mov dx, SERIAL_LCR
+    mov al, LCR_DLAB | LCR_8BIT | LCR_NO_PARITY | LCR_ONE_STOP
+    out dx, al
+
+    ; Set divisor low byte (115200 baud)
+    mov dx, SERIAL_DLL
+    mov al, 0x01    ; Divisor = 1 (115200 baud)
+    out dx, al
+
+    ; Set divisor high byte
+    mov dx, SERIAL_DLM
+    mov al, 0x00
+    out dx, al
+
+    ; Clear DLAB and set 8N1 format
+    mov dx, SERIAL_LCR
+    mov al, LCR_8BIT | LCR_NO_PARITY | LCR_ONE_STOP
+    out dx, al
+
+    ; Enable FIFO, clear buffers
+    mov dx, SERIAL_FCR
+    mov al, 0x07
+    out dx, al
+
+    ; Set modem control
+    mov dx, SERIAL_MCR
+    mov al, 0x03
+    out dx, al
+
+    pop edx
+    ret
+
+
+; serial_write_char_32 - Write a character to serial port (32-bit, blocking)
+; Input: AL = character to write
+; Output: none
+; Clobbers: EAX, EDX
+bits 32
+serial_write_char_32:
+    push edx
+    push eax                        ; Save the character to write
+.write_loop:
+    mov dx, SERIAL_LSR
+    in al, dx
+    test al, LSR_THRE
+    jz .write_loop
+
+    pop eax                         ; Restore character
+    mov dx, SERIAL_THR
+    out dx, al
+
+    pop edx
+    ret
+
+
+; ============================================================================
+; 64-bit Serial Port Functions
+; ============================================================================
+
+; serial_init_64 - Initialize COM1 for 115200 8N1 (64-bit version)
+; Input: none
+; Output: none
+; Clobbers: RAX, RDX
+bits 64
+serial_init_64:
+    push rdx
+
+    ; Disable interrupts during setup
+    mov dx, SERIAL_IER
+    xor al, al
+    out dx, al
+
+    ; Enable DLAB to set divisor
+    mov dx, SERIAL_LCR
+    mov al, LCR_DLAB | LCR_8BIT | LCR_NO_PARITY | LCR_ONE_STOP
+    out dx, al
+
+    ; Set divisor low byte (115200 baud)
+    mov dx, SERIAL_DLL
+    mov al, 0x01    ; Divisor = 1 (115200 baud)
+    out dx, al
+
+    ; Set divisor high byte
+    mov dx, SERIAL_DLM
+    mov al, 0x00
+    out dx, al
+
+    ; Clear DLAB and set 8N1 format
+    mov dx, SERIAL_LCR
+    mov al, LCR_8BIT | LCR_NO_PARITY | LCR_ONE_STOP
+    out dx, al
+
+    ; Enable FIFO, clear buffers
+    mov dx, SERIAL_FCR
+    mov al, 0x07
+    out dx, al
+
+    ; Set modem control
+    mov dx, SERIAL_MCR
+    mov al, 0x03
+    out dx, al
+
+    pop rdx
+    ret
+
+
+; serial_write_char_64 - Write a character to serial port (64-bit, blocking)
+; Input: AL = character to write
+; Output: none
+; Clobbers: RAX, RDX
+bits 64
+serial_write_char_64:
+    push rdx
+    push rax                        ; Save the character to write
+.write_loop:
+    mov dx, SERIAL_LSR
+    in al, dx
+    test al, LSR_THRE
+    jz .write_loop
+
+    pop rax                         ; Restore character
+    mov dx, SERIAL_THR
+    out dx, al
+
+    pop rdx
+    ret
+
+
+; serial_write_string_64 - Write null-terminated string to serial port (64-bit)
+; Input: RSI = pointer to string
+; Output: none
+; Clobbers: RAX, RSI
+bits 64
+serial_write_string_64:
+    push rax
+    push rdx
+    push rdi
+.loop:
+    lodsb
+    test al, al
+    jz .done
+    call serial_write_char_64
+    jmp .loop
+.done:
+    pop rdi
+    pop rdx
+    pop rax
+    ret
 
 
 ; ==============================================================================
@@ -459,14 +780,23 @@ load_kernel_lba:
     mov di, KERNEL_SECTOR_COUNT     ; DI = remaining sectors to read
     mov si, KERNEL_LBA_START        ; SI = current LBA (low word)
 
-    ; Print loading message
+    ; Print loading message (VGA + Serial)
     pusha
     mov si, msg_loading_lba
     call print_bios
+    mov si, msg_loading_lba
+    call serial_write_string
     mov ax, di
     call print_decimal
+    push ax
+    mov al, ah
+    call serial_write_char_blocking
+    pop ax
+    call serial_write_decimal
     mov si, msg_sectors
     call print_bios
+    mov si, msg_sectors
+    call serial_write_string
     popa
 
 .read_loop:
@@ -538,6 +868,8 @@ load_kernel_auto:
     pusha
     mov si, msg_using_lba
     call print_bios
+    mov si, msg_using_lba
+    call serial_write_string
     popa
 
     call load_kernel_lba
@@ -547,6 +879,8 @@ load_kernel_auto:
     pusha
     mov si, msg_lba_fallback
     call print_bios
+    mov si, msg_lba_fallback
+    call serial_write_string
     popa
 
 .try_chs:
@@ -554,6 +888,8 @@ load_kernel_auto:
     pusha
     mov si, msg_using_chs
     call print_bios
+    mov si, msg_using_chs
+    call serial_write_string
     popa
 
     call load_kernel_chs
@@ -628,14 +964,23 @@ load_kernel_chs:
     mov di, KERNEL_SECTOR_COUNT     ; DI = remaining sectors to read
     mov si, KERNEL_LBA_START        ; SI = current LBA
 
-    ; Print loading message (AFTER initialization)
+    ; Print loading message (AFTER initialization) - VGA + Serial
     pusha
     mov si, msg_loading_kernel
     call print_bios
+    mov si, msg_loading_kernel
+    call serial_write_string
     mov ax, di                    ; AX = total sector count (now DI is initialized!)
     call print_decimal
+    push ax
+    mov al, ah
+    call serial_write_char_blocking
+    pop ax
+    call serial_write_decimal
     mov si, msg_sectors
     call print_bios
+    mov si, msg_sectors
+    call serial_write_string
     popa
 
 .read_loop:
@@ -763,6 +1108,38 @@ print_decimal:
     add al, '0'
     mov ah, 0x0E
     int 0x10
+    loop .dec_print
+
+    pop dx
+    pop cx
+    pop bx
+    ret
+
+
+; serial_write_decimal - Write AX as decimal to serial port
+; Input: AX = value to print
+; Clobbers: AX, BX, CX, DX
+bits 16
+serial_write_decimal:
+    push bx
+    push cx
+    push dx
+
+    mov bx, 10                   ; Base 10
+    xor cx, cx                   ; Digit count
+
+.dec_divide:
+    xor dx, dx
+    div bx                        ; DX:AX / 10
+    push dx                       ; Save remainder (digit)
+    inc cx
+    test ax, ax
+    jnz .dec_divide
+
+.dec_print:
+    pop ax
+    add al, '0'
+    call serial_write_char_blocking
     loop .dec_print
 
     pop dx

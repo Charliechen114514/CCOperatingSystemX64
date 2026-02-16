@@ -2,6 +2,7 @@
 // C code entry point called from kernel_entry.asm
 #include "assert/assert.h"
 #include "defines/types.h"
+#include "driver/serial/serial.h"
 #include "driver/vga/vga.h"
 #include "kernel_init.h"
 
@@ -22,6 +23,8 @@ void kernel_main(void) {
 
     // CCOS_ASSERT(0 == 1);
     // Halt
+
+    sync_serial_puts("\033[0;32m===Kernel Stage Reach End===\n\033[0m");
     while (1) {
         __asm__ volatile("hlt");
     }
