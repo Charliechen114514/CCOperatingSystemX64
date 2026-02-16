@@ -236,6 +236,21 @@ start_qemu() {
     echo -e "${GREEN}========================================${NC}"
     echo
 
+    echo -e "${GREEN}为确保调试的是最新的文件，正在清理build目录:${BUILD_DIR}中${NC}"
+    rm -rf ${BUILD_DIR}
+    echo -e "${GREEN}清理完成，使用CMake重新构建中...${NC}"
+    cmake -DCMAKE_BUILD_TYPE=Debug -B ${BUILD_DIR} -S ${PROJECT_ROOT} || {
+        echo -e "${RED}错误: CMake 配置失败${NC}"
+        exit 1
+    }
+
+    cmake --build ${BUILD_DIR} || {
+        echo -e "${RED}错误: CMake 构建失败${NC}"
+        exit 1
+    }
+
+    echo -e "${GREEN}CMake构建完成！${NC}"
+
     # 检查文件和工具
     check_files
     check_tools
@@ -263,13 +278,6 @@ start_qemu() {
     fi
 
     echo -e "${BLUE}正在启动 QEMU 调试模式...${NC}"
-    echo
-    echo -e "${YELLOW}QEMU 参数:${NC}"
-    echo "  -drive format=raw,file=$BOOT_IMG,if=ide"
-    echo "  -nographic"
-    echo "  -s (GDB server on :1234)"
-    echo "  -S (暂停启动)"
-    echo
 
     # 启动 QEMU（在后台运行）
     qemu-system-x86_64 \

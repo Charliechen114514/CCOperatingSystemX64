@@ -17,6 +17,7 @@ add_custom_command(
 # 使用 OBJECT 库类型便于未来扩展
 add_library(kernel_main OBJECT
     kernel_main.c
+    kernel_init.c
 )
 
 target_include_directories(kernel_main PUBLIC
@@ -41,9 +42,13 @@ add_custom_command(
     COMMAND ${CMAKE_LINKER} -m elf_x86_64
         -T ${CMAKE_SOURCE_DIR}/linker.ld
         -nostdlib
+        --gc-sections
+        -no-pie
+        -z noexecstack
         -o ${CMAKE_BINARY_DIR}/kernel.elf
         ${CMAKE_BINARY_DIR}/kernel_entry.o
-        $<TARGET_OBJECTS:kernel_main>
+        ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_main.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_init.c.o
         $<TARGET_FILE:driver>
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o

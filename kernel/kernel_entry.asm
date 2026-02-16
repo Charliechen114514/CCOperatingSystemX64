@@ -15,8 +15,12 @@ kernel_start:
     cli
 
     ; Set up stack - grow down from 0x80000
-    ; Give us 8KB of stack space
-    mov rsp, 0x80000
+    ; Ensure 16-byte alignment for SSE/AVX instructions used by O2/O3 optimizations
+    ; The bootloader's 'call rdi' pushed 8 bytes (return address), so we need to
+    ; account for that. We want the stack to be 16-byte aligned BEFORE we call
+    ; kernel_main (which will push another 8 bytes).
+    mov rsp, 0x80000 - 8  ; Adjust for bootloader's call
+    and rsp, -16           ; Align to 16-byte boundary
     mov rbp, rsp
 
     ; Clear BSS section (uninitialized data)

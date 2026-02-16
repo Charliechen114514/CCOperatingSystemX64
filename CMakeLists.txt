@@ -48,11 +48,26 @@ add_compile_options(
     $<$<COMPILE_LANGUAGE:C>:-Werror>
     $<$<COMPILE_LANGUAGE:C>:-std=c23>
     $<$<COMPILE_LANGUAGE:C>:-m64>
+    $<$<COMPILE_LANGUAGE:C>:-mno-sse>
+    $<$<COMPILE_LANGUAGE:C>:-mno-sse2>
 )
 
-# Debug/Release 特定标志
-set(CMAKE_C_FLAGS_DEBUG "-g -O0")
-set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+# Debug/Release 特定标志（仅当未设置时才使用默认值）
+if(NOT CMAKE_C_FLAGS_DEBUG)
+    set(CMAKE_C_FLAGS_DEBUG "-g -O0")
+endif()
+if(NOT CMAKE_C_FLAGS_RELEASE)
+    set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+endif()
+
+# 打印当前构建类型的编译器标志
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "C flags for Debug build: ${CMAKE_C_FLAGS_DEBUG}")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(STATUS "C flags for Release build: ${CMAKE_C_FLAGS_RELEASE}")
+else()
+    message(STATUS "C flags for ${CMAKE_BUILD_TYPE} build: ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE}}")
+endif()
 
 # ============================================================================
 # Freestanding 环境编译标志（仅内核使用）
