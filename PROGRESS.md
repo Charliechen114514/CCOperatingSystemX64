@@ -27,46 +27,17 @@
 
 #### 0.1 基础库目录结构
 - [x] 创建 `kernel/base/` 目录结构
-- [ ] 创建 `kernel/base/string.h` / `kernel/base/string.c` - 字符串操作
+- [x] 创建 `kernel/base/string.h` / `kernel/base/string.c` - 字符串操作
 - [ ] 创建 `kernel/base/memory.h` / `kernel/base/memory.c` - 内存操作
 - [ ] 创建 `kernel/base/list.h` - 嵌入式链表（通常仅头文件）
 - [ ] 创建 `kernel/base/bitmap.h` / `kernel/base/bitmap.c` - 位图操作
 - [ ] 创建 `kernel/base/math.h` / `kernel/base/math.c` - 数学函数
-
-#### 0.2 字符串操作函数 (string.h/string.c)
-
-**基础字符串操作**
-- [ ] `size_t strlen(const char *s)` - 字符串长度
-- [ ] `size_t strnlen(const char *s, size_t maxlen)` - 限制最大长度
-- [ ] `char *strcpy(char *dest, const char *src)` - 字符串复制
-- [ ] `char *strncpy(char *dest, const char *src, size_t n)` - 限制长度复制
-
-
-**字符串比较**
-- [ ] `int strcmp(const char *s1, const char *s2)` - 字符串比较
-- [ ] `int strncmp(const char *s1, const char *s2, size_t n)` - 限制长度比较
-- [ ] `int strcasecmp(const char *s1, const char *s2)` - 忽略大小写比较
-- [ ] `int strncasecmp(const char *s1, const char *s2, size_t n)` - 忽略大小写限制长度比较
-
-**字符串搜索**
-- [ ] `char *strchr(const char *s, int c)` - 查找字符首次出现
-- [ ] `char *strrchr(const char *s, int c)` - 查找字符最后出现
-- [ ] `char *strstr(const char *haystack, const char *needle)` - 查找子串
-- [ ] `char *strpbrk(const char *s, const char *accept)` - 查找任意匹配字符
-- [ ] `size_t strspn(const char *s, const char *accept)` - 计算前缀匹配长度
-- [ ] `size_t strcspn(const char *s, const char *reject)` - 计算非匹配字符长度
-
-**字符串分割与标记**
-- [ ] `char *strtok(char *str, const char *delim)` - 字符串分割
-- [ ] `char *strtok_r(char *str, const char *delim, char **saveptr)` - 可重入版本
 
 **内存与字符串转换**
 - [ ] `void *memset(void *s, int c, size_t n)` - 内存填充（放在 memory.c）
 - [ ] `void *memcpy(void *dest, const void *src, size_t n)` - 内存复制（放在 memory.c）
 - [ ] `void *memmove(void *dest, const void *src, size_t n)` - 重叠内存复制（放在 memory.c）
 - [ ] `int memcmp(const void *s1, const void *s2, size_t n)` - 内存比较
-- [ ] `void *memchr(const void *s, int c, size_t n)` - 内存中查找字符
-- [ ] `void *memrchr(const void *s, int c, size_t n)` - 内存中反向查找字符
 
 **数值转换**
 - [ ] `long strtol(const char *nptr, char **endptr, int base)` - 字符串转长整型

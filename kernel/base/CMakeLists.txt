@@ -4,6 +4,7 @@
 
 add_library(base STATIC
     string.c
+    memory.c
 )
 
 target_include_directories(base PUBLIC
