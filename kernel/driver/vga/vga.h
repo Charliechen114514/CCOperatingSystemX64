@@ -75,3 +75,83 @@ void vga_scroll(CCOS_VGA* vga, int lines);
 
 void vga_print_string(CCOS_VGA* vga, const char* string);
 void vga_print_stringn(CCOS_VGA* vga, const char* string, const vga_sz_t str_sz);
+
+// Enable or disable the hardware cursor
+void vga_enable_cursor(bool enable);
+
+// Set the hardware cursor color (foreground and background)
+// fg_color: cursor foreground color (0-15)
+// bg_color: cursor background color (0-15)
+// Note: This affects the Attribute Controller palette, not just cursor.
+// For text mode, consider using software cursor instead.
+void vga_set_cursor_color(vga_color_t fg_color, vga_color_t bg_color);
+
+/* ============================================================================
+ * Software Cursor Functions
+ * ============================================================================ */
+
+/**
+ * @brief Software cursor state structure
+ */
+typedef struct vga_soft_cursor {
+    bool enabled;           // Whether software cursor is active
+    bool visible;           // Current visibility state (for blinking)
+    vga_sz_t x;             // Cursor X position
+    vga_sz_t y;             // Cursor Y position
+    vga_color_t fg_color;   // Cursor foreground color
+    vga_color_t bg_color;   // Cursor background color
+    uint16_t saved_char;    // Saved character at cursor position
+    bool has_saved_char;    // Whether saved_char is valid
+} vga_soft_cursor_t;
+
+/**
+ * @brief Initialize software cursor
+ *
+ * Disables hardware cursor and enables software cursor with specified colors.
+ *
+ * @param vga VGA instance
+ * @param fg_color Cursor foreground color (0-15)
+ * @param bg_color Cursor background color (0-15)
+ */
+void vga_soft_cursor_init(CCOS_VGA* vga, vga_color_t fg_color, vga_color_t bg_color);
+
+/**
+ * @brief Enable or disable software cursor
+ *
+ * @param vga VGA instance
+ * @param enable true to enable, false to disable
+ */
+void vga_soft_cursor_enable(CCOS_VGA* vga, bool enable);
+
+/**
+ * @brief Update software cursor position
+ *
+ * Removes cursor from old position and draws at new position.
+ *
+ * @param vga VGA instance
+ * @param x New X position
+ * @param y New Y position
+ */
+void vga_soft_cursor_update(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y);
+
+/**
+ * @brief Draw software cursor at current position
+ *
+ * @param vga VGA instance
+ */
+void vga_soft_cursor_draw(CCOS_VGA* vga);
+
+/**
+ * @brief Remove software cursor from current position (restore original char)
+ *
+ * @param vga VGA instance
+ */
+void vga_soft_cursor_hide(CCOS_VGA* vga);
+
+/**
+ * @brief Get software cursor state
+ *
+ * @param vga VGA instance
+ * @return Pointer to software cursor state, or NULL if not initialized
+ */
+vga_soft_cursor_t* vga_soft_cursor_get(CCOS_VGA* vga);

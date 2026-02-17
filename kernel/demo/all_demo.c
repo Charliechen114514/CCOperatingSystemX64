@@ -8,7 +8,7 @@
 
 // Include individual demo headers based on compile-time flags
 #ifdef RTC_DEMO_ENABLED
-#include "rtc/rtc_demo.h"
+#    include "rtc/rtc_demo.h"
 #endif
 
 /**
@@ -17,11 +17,12 @@
  * This function checks which demos are enabled at compile time and runs them.
  */
 void run_possible_demos(void) {
+#ifdef CCOS_ENABLE_DEMO
     klog_trace("\n");
     klog_trace("╔════════════════════════════════════════╗\n");
     klog_trace("║   Running Enabled Demos                ║\n");
     klog_trace("╚════════════════════════════════════════╝\n");
-
+#endif
 #ifdef RTC_DEMO_ENABLED
     klog_trace("[Demo Controller] RTC Demo is enabled, running...\n");
     rtc_run_demo();
@@ -37,8 +38,9 @@ void run_possible_demos(void) {
     // #ifdef KEYBOARD_DEMO_ENABLED
     //     keyboard_run_demo();
     // #endif
-
+#ifdef CCOS_ENABLE_DEMO
     klog_trace("╔════════════════════════════════════════╗\n");
     klog_trace("║   Demo Controller Finished             ║\n");
     klog_trace("╚════════════════════════════════════════╝\n");
+#endif
 }

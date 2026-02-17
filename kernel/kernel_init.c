@@ -1,6 +1,7 @@
 #include "kernel_init.h"
 #include "driver/serial/serial.h"
 #include "driver/serial/serial_intr.h"
+#include "driver/keyboard/keyboard.h"
 #include "driver/timer/timer.h"
 #include "driver/rtc/rtc.h"
 #include "driver/vga/vga.h"
@@ -9,6 +10,7 @@
 #include "klogs/kprintf_config.h"
 #include "welcomes/welcome.h"
 #include "shell/backends/serial_shell.h"
+#include "shell/backends/vga_shell.h"
 
 // Forward declaration for demo controller (always available, checks internally)
 void run_possible_demos(void);
@@ -41,13 +43,14 @@ void kernel_init(void) {
     timer_init(0); // 0 = use default frequency (1000 Hz)
     rtc_init();    // Initialize RTC (periodic interrupt disabled by default)
     uart_init_intr_mode();  // Initialize UART interrupt mode for interactive communication
-    // Add more device initializations here (keyboard, etc.)
+    keyboard_init();        // Initialize keyboard driver for VGA shell
 
     // Phase 3: Finalize interrupt initialization (enable IRQs + CPU interrupts)
     interrupt_finalize();
 
-    // Initialize serial-specific shell commands (time, ticks, echo)
-    serial_shell_init_commands();
+    // Initialize shell-specific commands
+    serial_shell_init_commands();  // Serial shell commands (time, ticks, echo, uart)
+    vga_shell_init_commands();     // VGA shell commands (cls, color, goto, keyboard)
 
     klog_info("kernel init finished!\n");
 }

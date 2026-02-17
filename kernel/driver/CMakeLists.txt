@@ -10,6 +10,7 @@ add_library(driver STATIC
     serial/serial.c
     serial/serial_color.c
     serial/serial_intr.c
+    keyboard/keyboard.c
     io/io.c
     pic/pic.c
     timer/timer.c

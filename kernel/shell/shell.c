@@ -10,9 +10,9 @@
  */
 
 #include "shell.h"
-#include "string.h"
 #include "klogs/kprintf.h"
 #include "klogs/ksnprintf.h"
+#include "string.h"
 
 /* ============================================================================
  * Command Registry
@@ -37,7 +37,7 @@ static int cmd_help(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
-    shell_context_t* ctx = (shell_context_t*)argv[-1];  // Hack: get context from argv
+    shell_context_t* ctx = (shell_context_t*)argv[-1]; // Hack: get context from argv
     if (ctx == NULL || ctx->backend == NULL) {
         return -1;
     }
@@ -74,7 +74,7 @@ static int cmd_clear(int argc, char* argv[]) {
 static int cmd_exit(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
-    return 1;  // Special return code to exit shell
+    return 1; // Special return code to exit shell
 }
 
 /* ============================================================================
@@ -146,7 +146,7 @@ static void execute_command(shell_context_t* ctx) {
 
     // Parse command
     char* argv[SHELL_MAX_ARGS + 1];
-    argv[0] = (char*)ctx;  // Store context pointer in argv[-1] for commands
+    argv[0] = (char*)ctx; // Store context pointer in argv[-1] for commands
 
     int argc = parse_command(ctx->cmd_buffer, &argv[1]);
 
@@ -283,7 +283,8 @@ int shell_register_command(const char* name, const char* description,
     if (description != NULL) {
         strncpy(g_commands[g_command_count].description, description,
                 sizeof(g_commands[g_command_count].description) - 1);
-        g_commands[g_command_count].description[sizeof(g_commands[g_command_count].description) - 1] = '\0';
+        g_commands[g_command_count]
+            .description[sizeof(g_commands[g_command_count].description) - 1] = '\0';
     } else {
         g_commands[g_command_count].description[0] = '\0';
     }

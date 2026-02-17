@@ -5,6 +5,7 @@
 add_library(shell STATIC
     shell.c
     backends/serial_shell.c
+    backends/vga_shell.c
 )
 
 target_include_directories(shell PUBLIC
