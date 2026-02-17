@@ -5,6 +5,7 @@
  */
 
 #include "stacktrace.h"
+#include "symbol.h"
 #include "klogs/kprintf.h"
 
 // Stack bounds for validation
@@ -68,33 +69,52 @@ void dump_stack(int max_frames) {
     uintptr_t rbp = get_rbp();
     uintptr_t rsp = get_rsp();
 
-    kprintf(KLOG_BACKEND_SERIAL, "\n--- Stack Trace ---\n");
-    kprintf(KLOG_BACKEND_SERIAL, "RSP: 0x%016lx\n", rsp);
-    kprintf(KLOG_BACKEND_SERIAL, "RBP: 0x%016lx\n\n", rbp);
-
-    kprintf(KLOG_BACKEND_SERIAL, "  #     RIP                RBP\n");
-    kprintf(KLOG_BACKEND_SERIAL, "--------------------------------\n");
+    kprintf(KLOG_BACKEND_SERIAL, "\n");
+    kprintf(KLOG_BACKEND_SERIAL, "╔═══════════════════════════════════════════════════════════════╗\n");
+    kprintf(KLOG_BACKEND_SERIAL, "║                      Stack Trace                             ║\n");
+    kprintf(KLOG_BACKEND_SERIAL, "╠═══════════════════════════════════════════════════════════════╣\n");
+    kprintf(KLOG_BACKEND_SERIAL, "║  RSP: 0x%016lx                                    ║\n", rsp);
+    kprintf(KLOG_BACKEND_SERIAL, "║  RBP: 0x%016lx                                    ║\n", rbp);
+    kprintf(KLOG_BACKEND_SERIAL, "╠═══════════════════════════════════════════════════════════════╣\n");
+    kprintf(KLOG_BACKEND_SERIAL, "║  #  Address           Function                           ║\n");
+    kprintf(KLOG_BACKEND_SERIAL, "╠═══════════════════════════════════════════════════════════════╣\n");
 
     int frame = 0;
+    bool found_valid_frame = false;
 
     while (rbp != 0 && frame < max_frames) {
         // Validate frame pointer
         if (!is_valid_frame(rbp)) {
-            kprintf(KLOG_BACKEND_SERIAL, "  #%2d    <invalid frame: 0x%016lx>\n", frame, rbp);
+            kprintf(KLOG_BACKEND_SERIAL, "║  %-2d <invalid frame: 0x%016lx>                    ║\n", frame, rbp);
             break;
         }
 
+        found_valid_frame = true;
+
         // Get return address (saved RIP is at RBP + 8)
-        // We need to be careful with memory access
         uintptr_t* frame_ptr = (uintptr_t*)rbp;
         uintptr_t prev_rbp = frame_ptr[0];      // Saved RBP
         uintptr_t rip = frame_ptr[1];           // Saved return address
 
-        // Print the frame
+        // Print the frame with symbol information
         if (rip != 0) {
-            kprintf(KLOG_BACKEND_SERIAL, "  #%2d    0x%016lx    0x%016lx\n", frame, rip, rbp);
+            const char* sym_name;
+            uintptr_t sym_offset;
+
+            if (find_symbol(rip, &sym_name, &sym_offset)) {
+                // Symbol found - print address + name + offset
+                if (sym_offset == 0) {
+                    kprintf(KLOG_BACKEND_SERIAL, "║  %d   0x%016lx  %-34s║\n", frame, rip, sym_name);
+                } else {
+                    kprintf(KLOG_BACKEND_SERIAL, "║  %d   0x%016lx  %s+0x%lx                 ║\n",
+                            frame, rip, sym_name, sym_offset);
+                }
+            } else {
+                // No symbol found - just print address
+                kprintf(KLOG_BACKEND_SERIAL, "║  %d   0x%016lx  %-34s║\n", frame, rip, "???");
+            }
         } else {
-            kprintf(KLOG_BACKEND_SERIAL, "  #%2d    <no return address>\n", frame);
+            kprintf(KLOG_BACKEND_SERIAL, "║  %d   %-49s║\n", frame, "<no return address>");
         }
 
         // Move to previous frame
@@ -103,16 +123,21 @@ void dump_stack(int max_frames) {
 
         // Check for potential loop (same frame repeating)
         if (rbp == get_rbp()) {
-            kprintf(KLOG_BACKEND_SERIAL, "  --- Detected frame loop, stopping ---\n");
+            kprintf(KLOG_BACKEND_SERIAL, "╠═══════════════════════════════════════════════════════════════╣\n");
+            kprintf(KLOG_BACKEND_SERIAL, "║  <frame loop detected>                                     ║\n");
             break;
         }
     }
 
-    if (frame >= max_frames && rbp != 0) {
-        kprintf(KLOG_BACKEND_SERIAL, "  ... (truncated, max frames reached)\n");
+    if (!found_valid_frame) {
+        kprintf(KLOG_BACKEND_SERIAL, "║  <no valid stack frames>                                   ║\n");
+    } else if (frame >= max_frames && rbp != 0) {
+        kprintf(KLOG_BACKEND_SERIAL, "╠═══════════════════════════════════════════════════════════════╣\n");
+        kprintf(KLOG_BACKEND_SERIAL, "║  ... (truncated, max frames reached)                        ║\n");
     }
 
-    kprintf(KLOG_BACKEND_SERIAL, "------------------\n\n");
+    kprintf(KLOG_BACKEND_SERIAL, "╚═══════════════════════════════════════════════════════════════╝\n");
+    kprintf(KLOG_BACKEND_SERIAL, "\n");
 }
 
 void dump_stack_full(void) {

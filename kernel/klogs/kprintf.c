@@ -27,7 +27,7 @@ static char g_format_buffer[32];
  * @brief Minimal vsnprintf implementation
  *
  * Supports: %c, %s, %d/%i, %u, %x, %lx, %p
- * Width/flags: %Nx, %0Nx (where N is width)
+ * Width/flags: %Nx, %0Nx, %-Ns (where N is width, - means left align)
  */
 static int format_string(char* buffer, size_t size, const char* format, va_list args) {
     size_t pos = 0;
@@ -46,13 +46,21 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
             break;
         }
 
-        // Parse width and flags: %0Nx or %Nx
+        // Parse width and flags: %0Nx or %Nx or %-Ns
         // E.g., %016x means pad with zeros to 16 chars
+        // %-34s means left-align string in 34 char field
         int width = 0;
         int pad_with_zero = 0;
+        int left_align = 0;
 
-        // Check for zero-padding flag
-        if (*p == '0') {
+        // Check for left-align flag
+        if (*p == '-') {
+            left_align = 1;
+            p++;
+        }
+
+        // Check for zero-padding flag (only for right-align)
+        if (*p == '0' && !left_align) {
             pad_with_zero = 1;
             p++;
         }
@@ -77,7 +85,21 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
                 break;
             case 'c': {
                 char c = (char)va_arg(args, int);
-                buffer[pos++] = c;
+                if (width > 1) {
+                    if (left_align) {
+                        buffer[pos++] = c;
+                        for (int i = 1; i < width && pos < size - 1; i++) {
+                            buffer[pos++] = ' ';
+                        }
+                    } else {
+                        for (int i = 1; i < width && pos < size - 1; i++) {
+                            buffer[pos++] = ' ';
+                        }
+                        if (pos < size - 1) buffer[pos++] = c;
+                    }
+                } else {
+                    buffer[pos++] = c;
+                }
                 break;
             }
             case 's': {
@@ -85,8 +107,34 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
                 if (s == NULL) {
                     s = "(null)";
                 }
-                while (*s != '\0' && pos < size - 1) {
-                    buffer[pos++] = *s++;
+                int len = 0;
+                const char* tmp = s;
+                while (*tmp != '\0') {
+                    len++;
+                    tmp++;
+                }
+
+                if (width > len) {
+                    int pad = width - len;
+                    if (left_align) {
+                        while (*s != '\0' && pos < size - 1) {
+                            buffer[pos++] = *s++;
+                        }
+                        for (int i = 0; i < pad && pos < size - 1; i++) {
+                            buffer[pos++] = ' ';
+                        }
+                    } else {
+                        for (int i = 0; i < pad && pos < size - 1; i++) {
+                            buffer[pos++] = ' ';
+                        }
+                        while (*s != '\0' && pos < size - 1) {
+                            buffer[pos++] = *s++;
+                        }
+                    }
+                } else {
+                    while (*s != '\0' && pos < size - 1) {
+                        buffer[pos++] = *s++;
+                    }
                 }
                 break;
             }
@@ -94,18 +142,64 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
             case 'i': {
                 int64_t val = is_long ? va_arg(args, int64_t) : va_arg(args, int);
                 itoa_signed(val, g_format_buffer, 10);
+
+                int len = 0;
                 char* s = g_format_buffer;
+                while (*s != '\0') {
+                    len++;
+                    s++;
+                }
+
+                if (width > len && !left_align) {
+                    char pad_char = pad_with_zero ? '0' : ' ';
+                    int pad_count = width - len;
+                    for (int i = 0; i < pad_count && pos < size - 1; i++) {
+                        buffer[pos++] = pad_char;
+                    }
+                }
+
+                s = g_format_buffer;
                 while (*s != '\0' && pos < size - 1) {
                     buffer[pos++] = *s++;
+                }
+
+                if (width > len && left_align) {
+                    int pad_count = width - len;
+                    for (int i = 0; i < pad_count && pos < size - 1; i++) {
+                        buffer[pos++] = ' ';
+                    }
                 }
                 break;
             }
             case 'u': {
                 uint64_t val = is_long ? va_arg(args, uint64_t) : va_arg(args, unsigned int);
                 uitoa64(val, g_format_buffer, 10);
+
+                int len = 0;
                 char* s = g_format_buffer;
+                while (*s != '\0') {
+                    len++;
+                    s++;
+                }
+
+                if (width > len && !left_align) {
+                    char pad_char = pad_with_zero ? '0' : ' ';
+                    int pad_count = width - len;
+                    for (int i = 0; i < pad_count && pos < size - 1; i++) {
+                        buffer[pos++] = pad_char;
+                    }
+                }
+
+                s = g_format_buffer;
                 while (*s != '\0' && pos < size - 1) {
                     buffer[pos++] = *s++;
+                }
+
+                if (width > len && left_align) {
+                    int pad_count = width - len;
+                    for (int i = 0; i < pad_count && pos < size - 1; i++) {
+                        buffer[pos++] = ' ';
+                    }
                 }
                 break;
             }

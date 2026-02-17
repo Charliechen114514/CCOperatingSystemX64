@@ -15,6 +15,11 @@ option(CCOS_BUILD_TESTS "Build the static test suite" ON)
 mark_as_advanced(CCOS_BUILD_TESTS)  # Hide from advanced UI, always on by default
 option(CCOS_ENABLE_FRAME_POINTER "Enable frame pointer for stack tracing (adds -fno-omit-frame-pointer)" OFF)
 
+# 如果启用了帧指针，添加全局编译选项
+if(CCOS_ENABLE_FRAME_POINTER)
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-fno-omit-frame-pointer>)
+endif()
+
 # 设置构建类型（支持Debug/Release）
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -104,6 +109,7 @@ add_subdirectory(kernel)
 # ============================================================================
 # 测试在构建时自动运行，任何失败都会停止构建
 if(CCOS_BUILD_TESTS)
+    enable_testing()
     add_subdirectory(test)
 
     # 强制测试在任何内核构建目标之前通过
@@ -142,8 +148,9 @@ add_dependencies(bootloader_final final_config)
 # 自定义目标：创建最终启动镜像
 # ============================================================================
 # Build order: bootloader -> kernel -> final_config -> bootloader_final -> boot_img
+# kernel_with_symbols handles two-stage symbol extraction automatically
 add_custom_target(boot_img ALL
-    DEPENDS bootloader_final kernel final_config
+    DEPENDS bootloader_final kernel_with_symbols final_config
     COMMAND ${CMAKE_COMMAND} -E echo ==========================================
     COMMAND ${CMAKE_COMMAND} -E echo "Creating boot image with dd..."
     COMMAND ${CMAKE_COMMAND} -E echo ==========================================

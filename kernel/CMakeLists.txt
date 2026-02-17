@@ -29,10 +29,14 @@ target_include_directories(kernel_main PUBLIC
 # 应用 freestanding 环境特定的编译标志
 target_compile_options(kernel_main PUBLIC ${CCOS_FREESTANDING_FLAGS})
 
-# 如果启用了帧指针选项，添加 -fno-omit-frame-pointer 以支持栈回溯
+# 如果启用了帧指针选项，给所有目标添加 -fno-omit-frame-pointer 以支持栈回溯
 if(CCOS_ENABLE_FRAME_POINTER)
+    # 为 kernel 主目标添加帧指针
     target_compile_options(kernel_main PUBLIC -fno-omit-frame-pointer)
     message(STATUS "Frame pointer enabled for stack tracing support")
+
+    # 创建一个全局的编译选项变量，供所有子目标使用
+    set(CCOS_FRAME_POINTER_FLAGS -fno-omit-frame-pointer CACHE INTERNAL "Flags for frame pointer support")
 endif()
 
 set_target_properties(kernel_main PROPERTIES
@@ -129,6 +133,50 @@ add_custom_command(
 )
 
 add_custom_target(kernel DEPENDS ${CMAKE_BINARY_DIR}/kernel.bin)
+
+# ============================================================================
+# 两阶段符号提取（避免竞态条件）
+# ============================================================================
+# 使用 POST_BUILD + stamp 文件模式来实现确定性的两阶段构建
+#
+# 工作原理：
+# 1. kernel 目标完成后，提取符号到 stacktrace/symbols.c
+# 2. symbols.c 是 stacktrace 库的源文件，会触发重新编译
+# 3. kernel.elf 需要重新链接以包含新的符号
+#
+# 关键：使用 .stamp 文件来追踪状态，避免递归 cmake --build
+
+# 符号提取的 stamp 文件（位于构建目录，避免污染源码）
+set(SYMBOLS_EXTRACTED_STAMP ${CMAKE_CURRENT_BINARY_DIR}/.symbols_extracted)
+
+# 符号提取命令：在 kernel 构建后自动执行
+# 使用 POST_BUILD 确保每次 kernel.elf 更新后都会重新提取符号
+add_custom_command(
+    TARGET kernel
+    POST_BUILD
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/extract_symbols.py
+        ${CMAKE_BINARY_DIR}/kernel.elf
+        -o ${CMAKE_CURRENT_SOURCE_DIR}/stacktrace
+    COMMAND ${CMAKE_COMMAND} -E touch ${SYMBOLS_EXTRACTED_STAMP}
+    COMMENT "Extracting symbols from kernel.elf (triggering rebuild if changed)"
+    VERBATIM
+)
+
+# ============================================================================
+# kernel_with_symbols: 确保符号被包含的最终 kernel
+# ============================================================================
+# 这个目标依赖于符号提取的 stamp 文件
+# 当 symbols.c 变化时，stacktrace 库会重新编译
+# 这会触发 kernel.elf 的重新链接（因为 kernel 依赖 stacktrace）
+#
+# 注意：这里不需要递归的 cmake --build
+# CMake 的依赖系统会自动处理重新编译/链接
+add_custom_target(kernel_with_symbols
+    COMMAND ${CMAKE_COMMAND} -E echo "=== Kernel built with up-to-date symbols ==="
+    DEPENDS ${SYMBOLS_EXTRACTED_STAMP} kernel
+    COMMENT "Final kernel with symbols"
+    VERBATIM
+)
 
 # ============================================================================
 # 自动生成 boot_config.inc（两阶段构建）

@@ -1,0 +1,15 @@
+#!/bin/bash
+# Auto-generated wrapper for two-pass kernel build
+set -e
+
+cd "@CMAKE_BINARY_DIR@"
+
+# First pass: build kernel and extract symbols
+echo "=== First pass: Building kernel and extracting symbols ==="
+make kernel
+
+# Second pass: rebuild with new symbols
+echo "=== Second pass: Rebuilding with extracted symbols ==="
+make kernel
+
+echo "=== Done: Kernel built with up-to-date symbols ==="
