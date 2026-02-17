@@ -9,69 +9,54 @@
 #include "idt_constants.h"
 #include "klogs/kprintf.h"
 
-// Timer tick counter
-static volatile uint64_t timer_ticks = 0;
-
-/* ============================================================================
- * Timer Interrupt Handler
- * ============================================================================ */
-
-void timer_handler(interrupt_frame_t* frame, uint64_t error_code) {
-    (void)frame;
-    (void)error_code;
-
-    timer_ticks++;
-
-    // Log first few timer interrupts to confirm they're happening
-    if (timer_ticks <= 5) {
-        klog_info("[TIMER] Tick #%lu received\n", timer_ticks);
-        if (timer_ticks == 5) {
-            klog_info("Welp, print it to here as INTR handles finished");
-        }
-    }
-
-    // Send EOI to acknowledge the interrupt
-    pic_send_eoi(0);
-}
-
-/**
- * @brief Get the current timer tick count
- * @return Number of timer interrupts since boot
- */
-uint64_t timer_get_ticks(void) {
-    return timer_ticks;
-}
-
 /* ============================================================================
  * Interrupt Subsystem Initialization
  * ============================================================================ */
 
+/**
+ * @brief Internal function to enable all IRQ lines
+ *
+ * This is called by interrupt_finalize() after all handlers
+ * have been registered.
+ */
+static void interrupt_enable_all_irqs(void) {
+    for (int i = 0; i < 16; i++) {
+        pic_enable_irq(i);
+    }
+    klog_trace("All IRQs (0-15) enabled\n");
+}
+
 void interrupt_init(void) {
-    klog_info("Initializing interrupt subsystem...\n");
+    klog_trace("Initializing interrupt subsystem...\n");
 
     // Step 1: Initialize and remap the PIC
     // Remap IRQs 0-15 to vectors 32-47 to avoid CPU exceptions (0-31)
     pic_init(0x20, 0x28); // offset1=32, offset2=40
-    klog_info("PIC initialized: IRQs remapped to vectors 32-47\n");
+    klog_trace("PIC initialized: IRQs remapped to vectors 32-47\n");
 
     // Step 2: Disable all IRQs first
     pic_disable_all();
 
     // Step 3: Initialize the IDT
     idt_init();
-    klog_info("IDT initialized\n");
+    klog_trace("IDT initialized\n");
 
-    // Step 4: Register IRQ handlers
-    idt_register_handler(IDT_IRQ0, (interrupt_handler_fn)timer_handler);
-    klog_info("Timer interrupt handler registered\n");
+    // Note: Interrupts are NOT enabled yet.
+    // All interrupt-dependent devices should be initialized first,
+    // then call interrupt_finalize() to enable interrupts.
+}
 
-    // Step 5: Enable all IRQs
-    for (int i = 0; i < 16; i++) {
-        pic_enable_irq(i);
-    }
-    klog_info("All IRQs (0-15) enabled\n");
+/**
+ * @brief Finalize interrupt initialization and enable interrupts
+ *
+ * This function should be called AFTER all interrupt handlers
+ * have been registered (e.g., timer_init(), keyboard_init(), etc.)
+ */
+void interrupt_finalize(void) {
+    // Enable all IRQ lines
+    interrupt_enable_all_irqs();
 
-    // Step 6: Enable interrupts
+    // Enable CPU interrupts
     interrupt_enable();
     klog_info("Interrupts enabled\n");
 }

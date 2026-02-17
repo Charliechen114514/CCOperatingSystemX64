@@ -1,10 +1,17 @@
 #include "kernel_init.h"
 #include "driver/serial/serial.h"
+#include "driver/serial/serial_intr.h"
+#include "driver/timer/timer.h"
+#include "driver/rtc/rtc.h"
 #include "driver/vga/vga.h"
+#include "interrupt/interrupt.h"
 #include "klogs/kprintf.h"
 #include "klogs/kprintf_config.h"
 #include "welcomes/welcome.h"
-#include "interrupt/interrupt.h"
+#include "shell/backends/serial_shell.h"
+
+// Forward declaration for demo controller (always available, checks internally)
+void run_possible_demos(void);
 
 static void driver_subsystem_inits(void) {
     // Initialize serial port first for early debug output
@@ -26,8 +33,21 @@ void kernel_init(void) {
     bootAllWelcomes();
     klog_trace("Boot Welcomes Done!\n");
 
-    // Initialize interrupt subsystem (must be after klog_init for logging)
+    // Phase 1: Initialize interrupt subsystem (PIC + IDT, but interrupts disabled)
     interrupt_init();
+
+    // Phase 2: Initialize all interrupt-dependent devices
+    // They will register their IRQ handlers during this phase
+    timer_init(0); // 0 = use default frequency (1000 Hz)
+    rtc_init();    // Initialize RTC (periodic interrupt disabled by default)
+    uart_init_intr_mode();  // Initialize UART interrupt mode for interactive communication
+    // Add more device initializations here (keyboard, etc.)
+
+    // Phase 3: Finalize interrupt initialization (enable IRQs + CPU interrupts)
+    interrupt_finalize();
+
+    // Initialize serial-specific shell commands (time, ticks, echo)
+    serial_shell_init_commands();
 
     klog_info("kernel init finished!\n");
 }

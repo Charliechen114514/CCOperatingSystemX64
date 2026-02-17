@@ -30,47 +30,186 @@
 
 ### 优先级 1：中断与异常处理 (进行中)
 
-#### 1.1 中断描述符表 (IDT) ✅
-- [x] 创建 IDT 数据结构 (256 个描述符)
-- [x] 实现 ISR (中断服务程序) 框架
-- [x] 中断存根代码生成
-- [x] 中断处理注册机制
+#### 中断子系统现状分析
 
-#### 1.2 异常处理 ✅
-- [x] 除零异常 (#DE)
-- [x] 调试异常 (#DB)
-- [x] 断点异常 (#BP)
-- [x] 缺页异常 (#PF)
-- [x] 双重故障 (#DF)
+**已完成功能** (60%):
+- ✅ IDT 完整实现 (256 个向量)
+- ✅ 32 个 CPU 异常处理存根 (Vector 0-31)
+- ✅ 16 个 IRQ 处理存根 (Vector 32-47)
+- ✅ 8259A PIC 驱动 (重映射 + EOI + 屏蔽控制)
+- ✅ 基础定时器中断 (IRQ 0)
+- ✅ 异常详细信息输出和栈回溯
 
-#### 1.3 PIC 可编程控制器 ✅
-- [x] 8259A PIC 初始化
-- [x] IRQ 重映射 (IRQ 0-15 → 32-47)
-- [x] 中断屏蔽管理
-- [x] 中断结束 (EOI) 处理
 
-#### 1.4 基础硬件中断 🟡
-- [x] PIT (8254) 定时器中断
-- [ ] PS/2 键盘中断
-- [ ] PS/2 鼠标中断 (可选)
-- [ ] 串口中断 (可选)
-- [ ] 支持串口输入，做基本的串口管理
-- [ ] 支持键盘输入
+---
 
-### 优先级 3：输入子系统 (中期)
+#### 中断子系统发展规划
 
-#### 3.1 键盘驱动
-- [ ] PS/2 键盘控制器初始化
-- [ ] 扫描码集 1/2/3 支持
-- [ ] 扫描码到 ASCII 转换表
-- [ ] Shift/Ctrl/Alt 修饰键处理
-- [ ] 输入缓冲区管理
+##### 阶段 1: 基础硬件中断 (1-2 周) ⭐ 当前优先级
 
-#### 3.2 鼠标驱动
-- [ ] PS/2 鼠标初始化
-- [ ] 鼠标数据包解析
-- [ ] 指针绘制与移动
-- [ ] 点击事件处理
+**1.1 键盘中断 (IRQ 1)**
+```
+kernel/driver/keyboard/
+├── keyboard.h          - 键盘驱动接口
+├── keyboard.c          - 键盘驱动实现
+├── scancode.h          - 扫描码定义 (集 1)
+└── keymap.h            - 扫描码到 ASCII 映射表
+```
+- [ ] PS/2 控制器 (0x60/0x64) 初始化
+- [ ] 扫描码集 1 解析
+- [ ] Shift/Ctrl/Alt 修饰键状态跟踪
+- [ ] 环形缓冲区 (256 字节) 存储按键
+- [ ] 中断处理函数注册
+
+**1.2 串口中断 (IRQ 3/4)**
+```
+kernel/driver/uart/
+├── uart_intr.h         - 串口中断接口
+└── uart_intr.c         - 串口中断实现
+```
+- [ ] IER (Interrupt Enable Register) 配置
+- [ ] 接收就绪 (RX Ready) 中断
+- [ ] 发送保持寄存器空 (TX Empty) 中断
+- [ ] 线路状态中断处理
+
+**1.3 RTC 时钟中断 (IRQ 8)**
+```
+kernel/driver/rtc/
+├── rtc.h               - RTC 驱动接口
+└── rtc.c               - RTC 驱动实现
+```
+- [x] CMOS RTC (0x70/0x71) 初始化
+- [x] 周期性中断使能 (Register B)
+- [x] 中断频率选择 (2Hz ~ 8192Hz)
+- [x] BCD 时间格式转换
+
+**1.4 中断统计系统**
+```
+kernel/interrupt/
+├── intr_stats.h         [新增] - 中断统计接口
+└── idt.c                [修改] - 添加统计计数
+```
+- [ ] 各中断触发计数
+- [ ] 中断延迟测量
+- [ ] 统计信息查询接口
+- [ ] `intr_stats_dump()` 打印函数
+
+---
+
+##### 阶段 2: 异常处理增强 (2-3 周) ⭐ 第二优先级
+
+**2.1 页错误处理 (Vector 14)**
+```
+kernel/mm/vmm/
+├── fault.h          [新增] - 缺页异常处理
+└── fault.c          [新增] - 缺页异常实现
+```
+- [ ] 解析 CR2 寄存器获取故障地址
+- [ ] 错误码分析 (P/W/U/S 位)
+- [ ] 按需分页支持
+- [ ] Copy-on-Write 机制
+
+**2.2 异常恢复机制**
+```
+kernel/interrupt/
+├── exception.h          [新增] - 异常恢复接口
+└── exception.c          [新增] - 异常恢复实现
+```
+- [ ] General Protection Fault 恢复
+- [ ] Stack Fault 自动修复
+- [ ] Double Fault 嵌套处理
+- [ ] IST (Interrupt Stack Table) 配置
+
+**2.3 调试异常增强**
+```
+kernel/debug/
+├── breakpoint.h         [新增] - 断点管理
+└── breakpoint.c         [新增] - 断点实现
+```
+- [ ] 断点异常 (#BP) 增强
+- [ ] 调试寄存器支持 (DR0-DR7)
+- [ ] 单步执行模式
+- [ ] 栈回溯自动触发
+
+---
+
+##### 阶段 3: 中断子系统架构升级 (3-4 周) ⭐ 第三优先级
+
+**3.1 分层抽象接口**
+```
+kernel/interrupt/
+├── intr.h               [新增] - 中断抽象层接口
+└── intr.c               [新增] - 中断抽象层实现
+```
+```c
+// 统一的中断注册接口
+int intr_request_irq(uint8_t irq, intr_handler_fn handler,
+                     const char* name, intr_flags_t flags);
+void intr_free_irq(uint8_t irq, intr_handler_fn handler);
+void intr_enable_irq(uint8_t irq);
+void intr_disable_irq(uint8_t irq);
+```
+
+**3.2 中断描述符管理**
+- [ ] 中断描述符结构定义
+- [ ] 处理器链表 (支持共享 IRQ)
+- [ ] 中断计数和伪中断检测
+- [ ] 名称和标志管理
+
+**3.3 软中断支持**
+```
+kernel/interrupt/
+├── softirq.h            [新增] - 软中断接口
+└── softirq.c            [新增] - 软中断实现
+```
+```c
+#define SOFTIRQ_SCHED   0  // 调度器
+#define SOFTIRQ_NET     1  // 网络栈
+#define SOFTIRQ_TIMER   2  // 定时器软中断
+```
+- [ ] 软中断注册接口
+- [ ] 软中断触发机制
+- [ ] 软中断处理 (在硬中断退出时调用)
+
+**3.4 中断优先级与嵌套**
+- [ ] 中断优先级定义 (LOW/NORMAL/HIGH/CRITICAL)
+- [ ] 中断嵌套计数器
+- [ ] 高优先级中断可抢占低优先级
+
+---
+
+##### 阶段 4: APIC 与多核准备 (4-6 周) 📋 后续阶段
+
+**4.1 Local APIC**
+```
+kernel/interrupt/apic/
+├── local_apic.c/h      - Local APIC 驱动
+└── lapic_constants.h   - LAPIC 寄存器定义
+```
+
+**4.2 I/O APIC**
+```
+kernel/interrupt/apic/
+├── io_apic.c/h         - I/O APIC 驱动
+└── ioapic_constants.h  - IOAPIC 寄存器定义
+```
+
+**4.3 多核中断支持**
+- [ ] 中断亲和性设置
+- [ ] 多核中断分发
+- [ ] IPI (Inter-Processor Interrupt) 支持
+
+---
+
+##### 阶段 5: 高级特性 (长期) 🌟 远期规划
+
+- [ ] MSI/MSI-X 支持 (PCI 设备直接中断)
+- [ ] 中断线程化 (硬中断推迟到内核线程)
+- [ ] 中断聚合 (Interrupt Coalescing)
+
+---
+
+#### 输入子系统 (中期)
 
 ---
 
@@ -173,8 +312,10 @@
 ## 🔮 未来展望
 
 ### 短期目标 (3-6 个月)
-- ✅ 完成中断处理框架 (基础部分完成)
-- 🟡 实现 PS/2 键盘驱动
+- ✅ 完成中断处理框架 (基础部分完成 60%)
+- 🟡 阶段 1: 基础硬件中断 (键盘/串口/RTC/统计)
+- 🟡 阶段 2: 异常处理增强 (页错误/恢复/调试)
+- 🟡 阶段 3: 中断子系统架构升级 (抽象层/软中断)
 - 🟡 完善物理/虚拟内存管理
 
 ### 中期目标 (6-12 个月)

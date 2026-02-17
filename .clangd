@@ -25,6 +25,9 @@ CompileFlags:
     - -Wall
     - -Wextra
     - -Wpedantic
+    # 禁用一些对内核开发不适用/过于严格的警告
+    - -Wno-gnu                                    # 禁用所有 GNU 扩展警告（内核开发常用）
+    - -Wno-unused-command-line-argument           # 忽略 clang 不支持的某些 gcc 参数
 
   # 移除可能与 freestanding 冲突的标志
   Remove:

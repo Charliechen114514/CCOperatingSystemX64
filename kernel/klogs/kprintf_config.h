@@ -30,3 +30,13 @@
 #define KPRINTF_DEFAULT_BACKEND (KLOG_BACKEND_SERIAL)
 
 #define KPRINTF_DEFAULT_FILTERED_LOGLEVEL (KLOG_LEVEL_TRACE)
+
+/**
+ * @brief Size of the format buffer for number conversion
+ *
+ * Used by the shared formatting module for converting numbers to strings.
+ * Must be large enough for:
+ * - 64-bit numbers in decimal (up to 20 digits + sign)
+ * - 64-bit numbers in hex (16 digits + "0x" prefix)
+ */
+#define KPRINTF_FORMAT_BUFFER_SIZE (32)

@@ -13,14 +13,20 @@
  * This function initializes:
  * 1. The PIC (Programmable Interrupt Controller)
  * 2. The IDT (Interrupt Descriptor Table)
- * 3. Enables interrupts
  *
- * Must be called before any hardware interrupts can be serviced.
+ * Note: Interrupts are NOT enabled yet. Call interrupt_finalize()
+ * after all interrupt handlers have been registered.
  */
 void interrupt_init(void);
 
 /**
- * @brief Get the current timer tick count
- * @return Number of timer interrupts since boot
+ * @brief Finalize interrupt initialization and enable interrupts
+ *
+ * This function should be called AFTER all interrupt handlers
+ * have been registered (e.g., after timer_init(), keyboard_init(), etc.)
+ *
+ * It will:
+ * 1. Enable all IRQ lines
+ * 2. Enable CPU interrupts (sti)
  */
-uint64_t timer_get_ticks(void);
+void interrupt_finalize(void);

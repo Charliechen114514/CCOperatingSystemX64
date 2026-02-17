@@ -84,6 +84,15 @@ add_subdirectory(stacktrace)
 # 添加 interrupt 中断子系统模块
 add_subdirectory(interrupt)
 
+# 添加 demo 演示模块（可选）
+option(CCOS_ENABLE_DEMO "Enable kernel demo programs" ON)
+if(CCOS_ENABLE_DEMO)
+    add_subdirectory(demo)
+endif()
+
+# 添加 shell 模块
+add_subdirectory(shell)
+
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
 # the object files that reference their symbols
@@ -123,6 +132,10 @@ add_custom_command(
         $<TARGET_FILE:driver>
         $<TARGET_FILE:stacktrace>
         --end-group
+        # Demo libraries (optional, added after main libs)
+        $<TARGET_FILE:demo_rtc>
+        # Shell library
+        $<TARGET_FILE:shell>
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         ${CMAKE_BINARY_DIR}/interrupt_asm.o
@@ -137,6 +150,8 @@ add_custom_command(
         welcomes
         stacktrace
         interrupt
+        demo_rtc
+        shell
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

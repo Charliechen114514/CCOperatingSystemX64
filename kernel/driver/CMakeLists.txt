@@ -9,8 +9,11 @@ add_library(driver STATIC
     vga/gui_helper/gui_helper.c
     serial/serial.c
     serial/serial_color.c
+    serial/serial_intr.c
     io/io.c
     pic/pic.c
+    timer/timer.c
+    rtc/rtc.c
 )
 
 target_include_directories(driver PUBLIC
@@ -20,6 +23,8 @@ target_include_directories(driver PUBLIC
 )
 
 target_compile_options(driver PUBLIC ${CCOS_FREESTANDING_FLAGS})
+
+target_link_libraries(driver PUBLIC base klogs)
 
 set_target_properties(driver PROPERTIES
     POSITION_INDEPENDENT_CODE FALSE

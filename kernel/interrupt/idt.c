@@ -50,6 +50,36 @@ static idt_entry_t idt[IDT_ENTRIES];
 static interrupt_handler_fn custom_handlers[IDT_ENTRIES] = {NULL};
 
 /* ============================================================================
+ * New IRQ Handler Table
+ * ============================================================================ */
+
+/**
+ * @brief IRQ vector table entry
+ */
+typedef struct irq_vector_entry {
+    irq_descriptor_t* descriptor; // Handler descriptor (NULL = no handler)
+    bool in_use;                  // Whether this IRQ has a handler registered
+} irq_vector_entry_t;
+
+// IRQ handler table (16 IRQ lines)
+static irq_vector_entry_t irq_table[16] = {0};
+
+/* ============================================================================
+ * IRQ Handler Adapter
+ * ============================================================================ */
+
+/**
+ * @brief Adapter to bridge new irq_handler_fn to old interrupt_handler_fn
+ *
+ * The new API uses irq_handler_fn(frame, context) while the old
+ * interrupt dispatcher uses interrupt_handler_fn(frame, error_code).
+ * We store the new-style handlers and dispatch them correctly.
+ */
+
+// We'll directly call new-style handlers in interrupt_handler()
+// No need for compatibility wrapper since we control both sides
+
+/* ============================================================================
  * External Handler Tables (from interrupt.asm)
  * ============================================================================ */
 extern void* const isr_handler_table[]; // Array of 32 ISR entry points
@@ -146,7 +176,7 @@ void idt_init(void) {
     // Load the IDT
     idt_load((uint64_t)&idt_ptr);
 
-    klog_info("IDT initialized with %d entries at 0x%016lx\n", IDT_ENTRIES, (uint64_t)&idt);
+    klog_trace("IDT initialized with %d entries at 0x%016lx\n", IDT_ENTRIES, (uint64_t)&idt);
 }
 
 void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr, uint16_t segment_selector) {
@@ -168,6 +198,70 @@ const char* idt_get_exception_name(uint8_t vector) {
         return exception_names[vector];
     }
     return "Unknown";
+}
+
+/**
+ * @brief Register an IRQ handler with descriptor
+ */
+int irq_register_handler(uint8_t irq, irq_descriptor_t* descriptor) {
+    if (irq >= 16) {
+        klog_error("Invalid IRQ number: %d (must be 0-15)\n", irq);
+        return -1;
+    }
+
+    if (descriptor == NULL) {
+        klog_error("NULL descriptor for IRQ %d\n", irq);
+        return -2;
+    }
+
+    if (descriptor->handler == NULL) {
+        klog_error("NULL handler in descriptor for IRQ %d\n", irq);
+        return -3;
+    }
+
+    irq_vector_entry_t* entry = &irq_table[irq];
+
+    // Check if IRQ already has a handler (simplified: no shared IRQ support yet)
+    if (entry->in_use && entry->descriptor != NULL) {
+        klog_error("IRQ %d already has a handler registered (%s)\n", irq, entry->descriptor->name);
+        return -4;
+    }
+
+    // Register the handler
+    entry->descriptor = descriptor;
+    entry->in_use = true;
+
+    // Note: We don't use custom_handlers[] for new-style IRQ handlers anymore.
+    // The interrupt_handler() function now checks irq_table[] first for IRQs.
+    klog_trace("Registered IRQ %d handler: %s\n", irq,
+               descriptor->name ? descriptor->name : "unnamed");
+
+    return 0;
+}
+
+/**
+ * @brief Unregister an IRQ handler
+ */
+int irq_unregister_handler(uint8_t irq, irq_descriptor_t* descriptor) {
+    if (irq >= 16) {
+        return -1;
+    }
+
+    irq_vector_entry_t* entry = &irq_table[irq];
+
+    if (entry->descriptor != descriptor) {
+        klog_error("Descriptor mismatch for IRQ %d\n", irq);
+        return -2;
+    }
+
+    // Clear the entry
+    entry->descriptor = NULL;
+    entry->in_use = false;
+
+    klog_trace("Unregistered IRQ %d handler: %s\n", irq,
+               descriptor->name ? descriptor->name : "unnamed");
+
+    return 0;
 }
 
 /* ============================================================================
@@ -200,24 +294,44 @@ static void default_exception_handler(interrupt_frame_t* frame, uint64_t vector,
 
 void interrupt_handler(uint64_t vector, uint64_t error_code, interrupt_frame_t* frame) {
     (void)error_code;
-    (void)frame;
+    extern void pic_send_eoi(uint8_t irq);
 
-    // Check if there's a custom handler registered
-    if (custom_handlers[vector] != NULL) {
-        custom_handlers[vector](frame, error_code);
-    } else if (vector < 32) {
-        // Default exception handler
-        default_exception_handler(frame, vector, error_code);
+    if (vector < 32) {
+        // CPU exceptions - use default exception handler
+        // Note: Exception handlers use the old interrupt_handler_fn signature
+        if (custom_handlers[vector] != NULL) {
+            custom_handlers[vector](frame, error_code);
+        } else {
+            default_exception_handler(frame, vector, error_code);
+        }
     } else if (vector >= 32 && vector < 48) {
-        // Default IRQ handler - just acknowledge and continue
-        klog_debug("IRQ %d occurred\n", vector - 32);
-        // Send EOI for the IRQ
-        extern void pic_send_eoi(uint8_t irq);
-        pic_send_eoi(vector - 32);
+        // IRQ interrupt
+        uint8_t irq = vector - 32;
+        irq_vector_entry_t* entry = &irq_table[irq];
+
+        if (entry->in_use && entry->descriptor != NULL) {
+            // Call new-style IRQ handler
+            irq_descriptor_t* desc = entry->descriptor;
+            desc->invocation_count++;
+            desc->handler(frame, desc->context);
+
+            // Check if handler sends EOI automatically
+            if (!(desc->flags & IRQ_FLAG_AUTOEOI)) {
+                pic_send_eoi(irq); // Marking as Handled Already
+            }
+        } else if (custom_handlers[vector] != NULL) {
+            // Fallback to old-style handler for compatibility
+            custom_handlers[vector](frame, error_code);
+            pic_send_eoi(irq);
+        } else {
+            klog_warn("Meeting One IRQ: %d occurred but no handler registered, that might be "
+                      "unexpected...",
+                      irq);
+            pic_send_eoi(irq);
+        }
     } else {
         // Spurious interrupt or unexpected interrupt
-        // Just send EOI to both PICs in case it's from PIC
-        klog_debug("Spurious interrupt: vector %d\n", vector);
+        klog_warn("Meeting Spurious interrupt: vector %d\n", vector);
         extern void pic_send_eoi(uint8_t irq);
         pic_send_eoi(7); // Send EOI for IRQ 7 (common spurious interrupt)
     }

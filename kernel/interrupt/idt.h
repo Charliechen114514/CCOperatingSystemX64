@@ -42,6 +42,37 @@ typedef struct PACKED {
 typedef void (*interrupt_handler_fn)(interrupt_frame_t* frame, uint64_t error_code);
 
 /* ============================================================================
+ * IRQ Handler Registration Types (New)
+ * ============================================================================ */
+
+/**
+ * @brief IRQ handler flags
+ */
+typedef enum irq_handler_flags {
+    IRQ_FLAG_NONE = 0,
+    IRQ_FLAG_AUTOEOI = (1 << 0),  // Handler sends EOI automatically
+} irq_handler_flags_t;
+
+/**
+ * @brief New IRQ handler function type with context support
+ *
+ * @param frame Pointer to the interrupt stack frame
+ * @param context Context pointer passed during registration
+ */
+typedef void (*irq_handler_fn)(interrupt_frame_t* frame, void* context);
+
+/**
+ * @brief IRQ descriptor - describes an IRQ handler
+ */
+typedef struct irq_descriptor {
+    const char* name;              // Handler name (for debugging)
+    irq_handler_fn handler;        // Handler function
+    void* context;                 // Context pointer passed to handler
+    irq_handler_flags_t flags;     // Handler flags
+    uint64_t invocation_count;     // Statistics: number of times called
+} irq_descriptor_t;
+
+/* ============================================================================
  * IDT Management Functions
  * ============================================================================ */
 
@@ -69,6 +100,45 @@ void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr, uint16_t 
  * @param handler Handler function
  */
 void idt_register_handler(uint8_t vector, interrupt_handler_fn handler);
+
+/* ============================================================================
+ * New IRQ Registration API
+ * ============================================================================ */
+
+/**
+ * @brief Register an IRQ handler with descriptor
+ *
+ * @param irq IRQ number (0-15)
+ * @param descriptor Pointer to irq_descriptor_t (caller allocated, typically static)
+ * @return int 0 on success, negative on error
+ */
+int irq_register_handler(uint8_t irq, irq_descriptor_t* descriptor);
+
+/**
+ * @brief Unregister an IRQ handler
+ *
+ * @param irq IRQ number (0-15)
+ * @param descriptor Pointer to irq_descriptor_t to unregister
+ * @return int 0 on success, negative on error
+ */
+int irq_unregister_handler(uint8_t irq, irq_descriptor_t* descriptor);
+
+/**
+ * @brief Simple IRQ registration macro
+ *
+ * Usage: IRQ_REGISTER_SIMPLE(0, timer_irq_handler, "PIT Timer")
+ */
+#define IRQ_REGISTER_SIMPLE(irq, handler_fn, name_str) \
+    do { \
+        static irq_descriptor_t __desc_##handler_fn = { \
+            .name = (name_str), \
+            .handler = (irq_handler_fn)(handler_fn), \
+            .context = NULL, \
+            .flags = IRQ_FLAG_NONE, \
+            .invocation_count = 0 \
+        }; \
+        irq_register_handler((irq), &__desc_##handler_fn); \
+    } while(0)
 
 /**
  * @brief Get the name of an exception/vector
