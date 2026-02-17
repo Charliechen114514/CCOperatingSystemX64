@@ -39,6 +39,15 @@ add_subdirectory(assert)
 # 添加 base 基础库模块
 add_subdirectory(base)
 
+# 添加 math 数学模块
+add_subdirectory(math)
+
+# 添加 bitmap 位图模块
+add_subdirectory(bitmap)
+
+# 添加 list 嵌入式链表模块
+add_subdirectory(list)
+
 # 添加驱动子目录
 add_subdirectory(driver)
 
@@ -72,14 +81,23 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/vga_welcomes.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/serial_welcome.c.o
         # Libraries must come AFTER object files that reference them
+        # Use --start-group/--end-group to handle circular dependencies
+        # (assert depends on base/driver, but base also calls assert functions)
+        --start-group
         $<TARGET_FILE:assert>
         $<TARGET_FILE:base>
+        $<TARGET_FILE:bitmap>
+        $<TARGET_FILE:list>
         $<TARGET_FILE:driver>
+        --end-group
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         kernel_main
         assert
         base
+        math
+        bitmap
+        list
         driver
         klogs
         welcomes
