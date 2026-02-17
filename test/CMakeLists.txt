@@ -64,6 +64,8 @@ set(TEST_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/kernel/defines
     ${CMAKE_SOURCE_DIR}/kernel/assert
     ${CMAKE_SOURCE_DIR}/kernel/base
+    ${CMAKE_SOURCE_DIR}/kernel/math
+    ${CMAKE_SOURCE_DIR}/kernel/bitmap
 )
 
 # ============================================================================
@@ -133,7 +135,7 @@ set_tests_properties(test_string PROPERTIES
 )
 
 # ----------------------------------------------------------------------------
-# Test: String Functions
+# Test: Memory Functions
 # ----------------------------------------------------------------------------
 add_executable(test_memory
     test_memory.c
@@ -151,6 +153,62 @@ set_tests_properties(test_memory PROPERTIES
     TIMEOUT 10
 )
 
+# ----------------------------------------------------------------------------
+# Test: Math Functions
+# ----------------------------------------------------------------------------
+add_executable(test_math
+    test_math.c
+    ${CMAKE_SOURCE_DIR}/kernel/math/math.c
+    assert_stub.c  # Host-side stub for ccos_assert_impl
+)
+
+target_include_directories(test_math PRIVATE ${TEST_INCLUDE_DIRS})
+target_compile_options(test_math PRIVATE ${TEST_C_FLAGS})
+
+add_test(NAME test_math COMMAND test_math)
+
+set_tests_properties(test_math PROPERTIES
+    LABELS "runtime"
+    TIMEOUT 10
+)
+
+# ----------------------------------------------------------------------------
+# Test: Bits Functions
+# ----------------------------------------------------------------------------
+add_executable(test_bits
+    test_bits.c
+    assert_stub.c  # Host-side stub for ccos_assert_impl
+)
+
+target_include_directories(test_bits PRIVATE ${TEST_INCLUDE_DIRS})
+target_compile_options(test_bits PRIVATE ${TEST_C_FLAGS})
+
+add_test(NAME test_bits COMMAND test_bits)
+
+set_tests_properties(test_bits PROPERTIES
+    LABELS "runtime"
+    TIMEOUT 10
+)
+
+# ----------------------------------------------------------------------------
+# Test: Bitmap Functions
+# ----------------------------------------------------------------------------
+add_executable(test_bitmap
+    test_bitmap.c
+    ${CMAKE_SOURCE_DIR}/kernel/bitmap/bitmap.c
+    assert_stub.c  # Host-side stub for ccos_assert_impl
+)
+
+target_include_directories(test_bitmap PRIVATE ${TEST_INCLUDE_DIRS})
+target_compile_options(test_bitmap PRIVATE ${TEST_C_FLAGS} -fno-builtin)
+
+add_test(NAME test_bitmap COMMAND test_bitmap)
+
+set_tests_properties(test_bitmap PROPERTIES
+    LABELS "runtime"
+    TIMEOUT 10
+)
+
 # ============================================================================
 # Test Integration with Main Build
 # ============================================================================
@@ -163,7 +221,7 @@ add_custom_target(check
         --output-on-failure
         --label-regex "(static|runtime)"
         $<IF:$<CONFIG:Debug>,--extra-verbose,>
-    DEPENDS test_types test_static_assert test_string test_memory
+    DEPENDS test_types test_static_assert test_string test_memory test_math test_bits test_bitmap
     COMMENT "Running static tests..."
     VERBATIM
 )

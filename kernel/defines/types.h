@@ -24,6 +24,7 @@ typedef unsigned long long uint64_t;
 typedef int64_t intptr_t;
 typedef uint64_t uintptr_t;
 typedef uint64_t size_t;
+typedef int64_t ssize_t;
 typedef int64_t ptrdiff_t;
 // ============================================================================
 // Type Limits (Min/Max Values)
@@ -46,6 +47,7 @@ typedef int64_t ptrdiff_t;
 #    else
 #        include <stddef.h>
 #        include <stdint.h>
+#        include <sys/types.h>  // For ssize_t in hosted environment
 #    endif
 #else
 #    if __STDC_HOSTED__ == 0
@@ -61,6 +63,7 @@ typedef unsigned long long uint64_t;
 typedef int32_t intptr_t;
 typedef uint32_t uintptr_t;
 typedef uint32_t size_t;
+typedef int32_t ssize_t;
 typedef int32_t ptrdiff_t;
 // ============================================================================
 // Type Limits (Min/Max Values)
@@ -83,6 +86,7 @@ typedef int32_t ptrdiff_t;
 #    else
 #        include <stddef.h>
 #        include <stdint.h>
+#        include <sys/types.h>  // For ssize_t in hosted environment
 #    endif
 #endif
 
@@ -104,3 +108,5 @@ typedef int32_t ptrdiff_t;
 // ============================================================================
 typedef uint32_t physical_addr_t; // Physical memory address
 typedef uintptr_t virtual_addr_t; // Virtual memory address
+
+typedef uint8_t byte_t;

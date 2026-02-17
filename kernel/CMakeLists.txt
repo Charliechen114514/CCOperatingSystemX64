@@ -39,6 +39,12 @@ add_subdirectory(assert)
 # 添加 base 基础库模块
 add_subdirectory(base)
 
+# 添加 math 数学模块
+add_subdirectory(math)
+
+# 添加 bitmap 位图模块
+add_subdirectory(bitmap)
+
 # 添加驱动子目录
 add_subdirectory(driver)
 
@@ -74,12 +80,15 @@ add_custom_command(
         # Libraries must come AFTER object files that reference them
         $<TARGET_FILE:assert>
         $<TARGET_FILE:base>
+        $<TARGET_FILE:bitmap>
         $<TARGET_FILE:driver>
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         kernel_main
         assert
         base
+        math
+        bitmap
         driver
         klogs
         welcomes

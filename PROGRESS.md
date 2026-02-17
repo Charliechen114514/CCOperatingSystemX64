@@ -31,7 +31,7 @@
 
 #### 0.1 基础库目录结构
 - [ ] 创建 `kernel/base/list.h` - 嵌入式链表（通常仅头文件）
-- [ ] 创建 `kernel/base/bitmap.h` / `kernel/base/bitmap.c` - 位图操作
+- [x] 创建 `kernel/base/bitmap/bitmap.h` / `kernel/base/bitmap/bitmap.c` - 位图操作
 - [ ] 创建 `kernel/base/math.h` / `kernel/base/math.c` - 数学函数
 
 #### 0.4 嵌入式链表 (list.h)
@@ -67,78 +67,61 @@
 #### 0.5 位图操作 (bitmap.h/bitmap.c)
 
 **基础位图操作**
-- [ ] `struct bitmap` 结构定义（或使用数组 + 长度）
-- [ ] `bitmap_init(bitmap, bits)` - 初始化位图
-- [ ] `bitmap_alloc(bits)` - 动态分配位图
-- [ ] `bitmap_free(bitmap)` - 释放位图
-- [ ] `bitmap_set(bitmap, bit)` - 设置位为1
-- [ ] `bitmap_clear(bitmap, bit)` - 清除位为0
-- [ ] `bitmap_test(bitmap, bit)` - 测试位值
-- [ ] `bitmap_flip(bitmap, bit)` - 翻转位值
+- [x] `struct bitmap` 结构定义（或使用数组 + 长度）
+- [x] `bitmap_init(bitmap, bits)` - 初始化位图
+- [x] `bitmap_alloc(bits)` - 动态分配位图
+- [x] `bitmap_free(bitmap)` - 释放位图
+- [x] `bitmap_set(bitmap, bit)` - 设置位为1
+- [x] `bitmap_clear(bitmap, bit)` - 清除位为0
+- [x] `bitmap_test(bitmap, bit)` - 测试位值
+- [x] `bitmap_flip(bitmap, bit)` - 翻转位值
 
 **批量位操作**
-- [ ] `bitmap_set_range(bitmap, start, count)` - 设置多个位
-- [ ] `bitmap_clear_range(bitmap, start, count)` - 清除多个位
-- [ ] `bitmap_find_first_zero(bitmap, size)` - 查找第一个0位
-- [ ] `bitmap_find_first_set(bitmap, size)` - 查找第一个1位
-- [ ] `bitmap_find_next_zero(bitmap, start, size)` - 从指定位置查找下一个0位
-- [ ] `bitmap_find_next_set(bitmap, start, size)` - 从指定位置查找下一个1位
+- [x] `bitmap_set_range(bitmap, start, count)` - 设置多个位
+- [x] `bitmap_clear_range(bitmap, start, count)` - 清除多个位
+- [x] `bitmap_find_first_zero(bitmap, size)` - 查找第一个0位
+- [x] `bitmap_find_first_set(bitmap, size)` - 查找第一个1位
+- [x] `bitmap_find_next_zero(bitmap, start, size)` - 从指定位置查找下一个0位
+- [x] `bitmap_find_next_set(bitmap, start, size)` - 从指定位置查找下一个1位
 
 **位图比较与拷贝**
-- [ ] `bitmap_equal(src1, src2, nbits)` - 比较两个位图
-- [ ] `bitmap_copy(dst, src, nbits)` - 复制位图
-- [ ] `bitmap_and(dst, src1, src2, nbits)` - 按位与
-- [ ] `bitmap_or(dst, src1, src2, nbits)` - 按位或
-- [ ] `bitmap_xor(dst, src1, src2, nbits)` - 按位异或
-- [ ] `bitmap_andnot(dst, src1, src2, nbits)` - 按位与非
-- [ ] `bitmap_complement(dst, src, nbits)` - 按位取反
-
-**位图统计**
-- [ ] `bitmap_weight(bitmap, nbits)` - 计算1位的数量
-- [ ] `bitmap_full(bitmap, nbits)` - 检查是否全为1
-- [ ] `bitmap_empty(bitmap, nbits)` - 检查是否全为0
-- [ ] `bitmap_set_bitcount(bitmap, nbits)` - 设置位数量统计
+- [x] `bitmap_equal(src1, src2, nbits)` - 比较两个位图
+- [x] `bitmap_copy(dst, src, nbits)` - 复制位图
+- [x] `bitmap_and(dst, src1, src2, nbits)` - 按位与
+- [x] `bitmap_or(dst, src1, src2, nbits)` - 按位或
+- [x] `bitmap_xor(dst, src1, src2, nbits)` - 按位异或
+- [x] `bitmap_andnot(dst, src1, src2, nbits)` - 按位与非
+- [x] `bitmap_complement(dst, src, nbits)` - 按位取反
 
 **位图打印/调试**
-- [ ] `bitmap_print(bitmap, nbits)` - 打印位图内容
-- [ ] `bitmap_to_string(buffer, bitmap, nbits)` - 转换为字符串
+- [x] `bitmap_to_string(buffer, bitmap, nbits)` - 转换为字符串
 
 #### 0.6 数学函数 (math.h/math.c)
 
 **基础数学**
-- [ ] `int abs(int x)` - 整型绝对值
-- [ ] `long labs(long x)` - 长整型绝对值
-- [ ] `int max(int a, int b)` - 最大值
-- [ ] `int min(int a, int b)` - 最小值
-- [ ] `int clamp(int val, int min_val, int max_val)` - 值限制在范围内
+- [x] `int abs(int x)` - 整型绝对值
+- [x] `long labs(long x)` - 长整型绝对值
+- [x] `int max(int a, int b)` - 最大值
+- [x] `int min(int a, int b)` - 最小值
+- [x] `int clamp(int val, int min_val, int max_val)` - 值限制在范围内
 
 **位运算辅助**
-- [ ] `bool is_power_of_2(unsigned long n)` - 检查是否为2的幂
-- [ ] `unsigned long round_up_to_power_of_2(unsigned long n)` - 向上取整到2的幂
-- [ ] `unsigned long round_down_to_power_of_2(unsigned long n)` - 向下取整到2的幂
-- [ ] `unsigned long align_up(unsigned long value, unsigned long alignment)` - 向上对齐
-- [ ] `unsigned long align_down(unsigned long value, unsigned long alignment)` - 向下对齐
-- [ ] `bool is_aligned(unsigned long value, unsigned long alignment)` - 检查对齐
+- [x] `bool is_power_of_2(unsigned long n)` - 检查是否为2的幂
+- [x] `unsigned long round_up_to_power_of_2(unsigned long n)` - 向上取整到2的幂
+- [x] `unsigned long round_down_to_power_of_2(unsigned long n)` - 向下取整到2的幂
+- [x] `unsigned long align_up(unsigned long value, unsigned long alignment)` - 向上对齐
+- [x] `unsigned long align_down(unsigned long value, unsigned long alignment)` - 向下对齐
+- [x] `bool is_aligned(unsigned long value, unsigned long alignment)` - 检查对齐
 
 **除法与取模变体**
-- [ ] `unsigned long div_round_up(unsigned long n, unsigned long d)` - 向上取整除法
-- [ ] `unsigned long div_round_down(unsigned long n, unsigned long d)` - 向下取整除法
-- [ ] `unsigned long div_round_nearest(unsigned long n, unsigned long d)` - 四舍五入除法
-
-**对数运算**
-- [ ] `unsigned long ilog2(unsigned long n)` - 整数log2（向下取整）
-- [ ] `unsigned long ilog2_round_up(unsigned long n)` - 整数log2（向上取整）
-- [ ] `int fls(unsigned long x)` - 查找最后一个设置位（从1开始）
-- [ ] `int fls64(uint64_t x)` - 64位版本
-- [ ] `int ffs(unsigned long x)` - 查找第一个设置位（从1开始）
-- [ ] `int ffz(unsigned long x)` - 查找第一个零位（从0开始）
+- [x] `unsigned long div_round_up(unsigned long n, unsigned long d)` - 向上取整除法
+- [x] `unsigned long div_round_down(unsigned long n, unsigned long d)` - 向下取整除法
+- [x] `unsigned long div_round_nearest(unsigned long n, unsigned long d)` - 四舍五入除法
 
 **位操作宏/内联函数**
-- [ ] `BIT(nr)` - 生成位掩码 (1 << nr)
-- [ ] `BIT_MASK(nr)` - 位掩码生成
-- [ ] `BIT_WORD(nr)` - 计算位所在的字索引
-- [ ] `BITS_PER_BYTE` - 每字节位数常量
-- [ ] `BITS_PER_LONG` - 每long位数常量
+- [x] `BIT(nr)` - 生成位掩码 (1 << nr)
+- [x] `BIT_MASK(nr)` - 位掩码生成
+- [x] `BIT_WORD(nr)` - 计算位所在的字索引
 
 **调试输出**
 - [ ] `dump_hex(buffer, length)` - 十六进制转储
