@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Progress](https://img.shields.io/badge/progress-70%25-blue)]()
+[![Progress](https://img.shields.io/badge/progress-75%25-blue)]()
 [![Platform](https://img.shields.io/badge/platform-x86__64-orange)]()
 
 ---
@@ -166,6 +166,13 @@ Linux kernel 风格双向链表，提供完整的链表操作接口：
 - **格式化配置**: 统一的代码风格
 - **CMake 集成**: 现代化构建流程
 
+#### 栈回溯支持 🆕
+- **栈帧遍历**: 基于 x86_64 帧指针 (RBP) 约定的栈遍历
+- **符号解析**: 地址到符号名的自动映射与偏移量计算
+- **符号表生成**: Python 脚本从 ELF 文件自动提取符号
+- **美观输出**: 表格化栈回溯显示，集成日志系统
+- **安全验证**: 栈帧对齐检查、边界验证、循环检测
+
 ---
 
 ## 📚 文档
@@ -174,6 +181,7 @@ Linux kernel 风格双向链表，提供完整的链表操作接口：
 - [内核加载文档](document/02_load_asm_kernel/)
 - [大内核支持文档](document/05_load_large_kernel/)
 - [构建指南](document/build.md)
+- [调试教程](document/debug_tutorial/)
 
 ---
 
