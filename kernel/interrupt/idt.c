@@ -5,6 +5,7 @@
 
 #include "idt.h"
 #include "base/memory.h"
+#include "idt_constants.h"
 #include "klogs/kprintf.h"
 
 /* ============================================================================
@@ -47,6 +48,12 @@ typedef struct PACKED {
 
 static idt_entry_t idt[IDT_ENTRIES];
 static interrupt_handler_fn custom_handlers[IDT_ENTRIES] = {NULL};
+
+/* ============================================================================
+ * External Handler Tables (from interrupt.asm)
+ * ============================================================================ */
+extern void* const isr_handler_table[]; // Array of 32 ISR entry points
+extern void* const irq_handler_table[]; // Array of 16 IRQ entry points
 
 /* ============================================================================
  * Exception Name Table
@@ -122,59 +129,19 @@ void idt_init(void) {
     // Bootloader GDT: gdt_code64 is at offset 0x18 (3rd selector)
     uint16_t kernel_cs = 0x18;
 
-    // Set up exception handlers (ISRs 0-31)
-    idt_set_entry(IDT_DE, (uint64_t)isr0, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_DB, (uint64_t)isr1, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_NMI, (uint64_t)isr2, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_BP, (uint64_t)isr3, IDT_KERNEL_TRAP_GATE,
-                  kernel_cs); // Trap gate for breakpoint
-    idt_set_entry(IDT_OF, (uint64_t)isr4, IDT_KERNEL_TRAP_GATE,
-                  kernel_cs); // Trap gate for overflow
-    idt_set_entry(IDT_BR, (uint64_t)isr5, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_UD, (uint64_t)isr6, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_NM, (uint64_t)isr7, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_DF, (uint64_t)isr8, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_CSO, (uint64_t)isr9, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_TS, (uint64_t)isr10, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_NP, (uint64_t)isr11, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_SS, (uint64_t)isr12, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_GP, (uint64_t)isr13, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_PF, (uint64_t)isr14, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_MF, (uint64_t)isr15, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_AC, (uint64_t)isr16, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_MC, (uint64_t)isr17, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_XM, (uint64_t)isr18, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_VE, (uint64_t)isr19, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_CP, (uint64_t)isr20, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(21, (uint64_t)isr21, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(22, (uint64_t)isr22, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(23, (uint64_t)isr23, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(24, (uint64_t)isr24, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(25, (uint64_t)isr25, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(26, (uint64_t)isr26, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(27, (uint64_t)isr27, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(28, (uint64_t)isr28, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_XF, (uint64_t)isr29, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(30, (uint64_t)isr30, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(31, (uint64_t)isr31, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
+    // Set up exception handlers (ISRs 0-31) using loop
+    for (int i = 0; i < 32; i++) {
+        // Breakpoint (#BP) and Overflow (#OF) use trap gates
+        uint8_t type =
+            (i == IDT_BP || i == IDT_OF) ? IDT_KERNEL_TRAP_GATE : IDT_KERNEL_INTERRUPT_GATE;
+        idt_set_entry(i, (uint64_t)isr_handler_table[i], type, kernel_cs);
+    }
 
-    // Set up IRQ handlers (IRQs 0-15 -> vectors 32-47)
-    idt_set_entry(IDT_IRQ0, (uint64_t)irq0, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ1, (uint64_t)irq1, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ2, (uint64_t)irq2, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ3, (uint64_t)irq3, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ4, (uint64_t)irq4, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ5, (uint64_t)irq5, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ6, (uint64_t)irq6, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ7, (uint64_t)irq7, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ8, (uint64_t)irq8, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ9, (uint64_t)irq9, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ10, (uint64_t)irq10, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ11, (uint64_t)irq11, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ12, (uint64_t)irq12, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ13, (uint64_t)irq13, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ14, (uint64_t)irq14, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
-    idt_set_entry(IDT_IRQ15, (uint64_t)irq15, IDT_KERNEL_INTERRUPT_GATE, kernel_cs);
+    // Set up IRQ handlers (IRQs 0-15 -> vectors 32-47) using loop
+    for (int i = 0; i < 16; i++) {
+        idt_set_entry(IDT_IRQ_BASE + i, (uint64_t)irq_handler_table[i], IDT_KERNEL_INTERRUPT_GATE,
+                      kernel_cs);
+    }
 
     // Load the IDT
     idt_load((uint64_t)&idt_ptr);

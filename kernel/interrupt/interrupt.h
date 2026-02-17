@@ -18,3 +18,9 @@
  * Must be called before any hardware interrupts can be serviced.
  */
 void interrupt_init(void);
+
+/**
+ * @brief Get the current timer tick count
+ * @return Number of timer interrupts since boot
+ */
+uint64_t timer_get_ticks(void);

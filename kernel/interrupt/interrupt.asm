@@ -314,3 +314,27 @@ idt_load:
     ; RDI contains the address of the idt_ptr structure
     lidt [rdi]
     ret
+
+; ============================================================================
+; Handler Tables (exported for C code to use in loops)
+; ============================================================================
+
+; Export an array of all ISR handler addresses
+section .rodata
+
+global isr_handler_table
+isr_handler_table:
+    %assign i 0
+    %rep 32
+        dq isr %+ i
+        %assign i i+1
+    %endrep
+
+; Export an array of all IRQ handler addresses
+global irq_handler_table
+irq_handler_table:
+    %assign i 0
+    %rep 16
+        dq irq %+ i
+        %assign i i+1
+    %endrep

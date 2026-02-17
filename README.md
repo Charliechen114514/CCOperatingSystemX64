@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Progress](https://img.shields.io/badge/progress-75%25-blue)]()
+[![Progress](https://img.shields.io/badge/progress-80%_for_base_stage-blue)]()
 [![Platform](https://img.shields.io/badge/platform-x86__64-orange)]()
 
 ---
@@ -172,6 +172,12 @@ Linux kernel 风格双向链表，提供完整的链表操作接口：
 - **符号表生成**: Python 脚本从 ELF 文件自动提取符号
 - **美观输出**: 表格化栈回溯显示，集成日志系统
 - **安全验证**: 栈帧对齐检查、边界验证、循环检测
+
+#### 中断处理框架 🆕
+- **IDT (中断描述符表)**: 256 个中断描述符，完整的中断服务程序 (ISR) 框架
+- **异常处理**: 除零异常 (#DE)、调试异常 (#DB)、断点异常 (#BP)、缺页异常 (#PF)、双重故障 (#DF)
+- **PIC 可编程控制器**: 8259A PIC 初始化、IRQ 重映射 (IRQ 0-15 → 32-47)、中断屏蔽管理、EOI 处理
+- **PIT 定时器中断**: 8254 可编程间隔定时器驱动，支持定时中断
 
 ---
 
