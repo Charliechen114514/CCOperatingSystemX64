@@ -13,6 +13,7 @@ option(CCOS_ENABLE_SERIAL "Enable serial port debug output" OFF)
 option(CCOS_ENABLE_QEMU_DEBUG "Enable QEMU debug target by default" OFF)
 option(CCOS_BUILD_TESTS "Build the static test suite" ON)
 mark_as_advanced(CCOS_BUILD_TESTS)  # Hide from advanced UI, always on by default
+option(CCOS_ENABLE_FRAME_POINTER "Enable frame pointer for stack tracing (adds -fno-omit-frame-pointer)" OFF)
 
 # 设置构建类型（支持Debug/Release）
 if(NOT CMAKE_BUILD_TYPE)

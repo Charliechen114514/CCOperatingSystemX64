@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Progress](https://img.shields.io/badge/progress-65%25-blue)]()
+[![Progress](https://img.shields.io/badge/progress-70%25-blue)]()
 [![Platform](https://img.shields.io/badge/platform-x86__64-orange)]()
 
 ---
@@ -131,6 +131,29 @@ gdb build/kernel.elf -ex 'target remote :1234'
 - **内存操作**: memset, memcpy, memmove, memcmp
 - **数值转换**: strtol, strtoll, strtoul, atoi, itoa, uitoa
 - **字符处理**: isspace, isdigit, tolower
+
+#### 嵌入式链表 (kernel/list) 🆕
+Linux kernel 风格双向链表，提供完整的链表操作接口：
+- **基础操作**: 头部/尾部插入、删除节点、替换节点、判断空链表
+- **链表拼接**: list_splice、list_splice_tail、list_cut_position
+- **条目获取**: list_entry、list_first_entry、list_last_entry
+- **遍历宏**: list_for_each、list_for_each_safe、list_for_each_entry、list_for_each_entry_reverse 等
+
+#### 位图操作 (kernel/bitmap) 🆕
+完整的位图管理功能，用于物理内存管理等场景：
+- **基础位操作**: bitmap_set、bitmap_clear、bitmap_test、bitmap_flip
+- **批量操作**: bitmap_set_range、bitmap_clear_range
+- **位查找**: bitmap_find_first_zero、bitmap_find_first_set、bitmap_find_next_zero、bitmap_find_next_set
+- **位图运算**: bitmap_and、bitmap_or、bitmap_xor、bitmap_complement、bitmap_equal
+- **调试支持**: bitmap_to_string
+
+#### 数学函数 (kernel/math) 🆕
+基础数学工具与位运算辅助函数：
+- **基础数学**: abs、labs、max、min、clamp
+- **对齐操作**: align_up、align_down、is_aligned
+- **幂运算**: is_power_of_2、round_up_to_power_of_2、round_down_to_power_of_2
+- **除法变体**: div_round_up、div_round_down、div_round_nearest
+- **位操作宏**: BIT、BIT_MASK、BIT_WORD
 
 #### 断言系统 🆕
 - **运行时断言**: assert(cond) 宏

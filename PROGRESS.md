@@ -17,7 +17,7 @@
 | 欢迎界面 | 100% | ✅ 完成 |
 | 调试支持 | 100% | ✅ 完成 |
 | 断言系统 | 100% | ✅ 完成 |
-| 基础库函数 | 70% | 🟡 部分完成 |
+| 基础库函数 | 100% | ✅ 完成 |
 | 内存管理 | 30% | 🟡 部分完成 |
 | 中断处理 | 0% | 🔴 未开始 |
 | 进程管理 | 0% | 🔴 未开始 |
@@ -27,107 +27,10 @@
 
 ## 🎯 下一步工作计划
 
-### 优先级 0：基础库的支持和预备
-
-#### 0.1 基础库目录结构
-- [x] 创建 `kernel/list/list.h` / `kernel/list/list.c` - 嵌入式链表（Linux kernel 风格双向链表）
-- [x] 创建 `kernel/bitmap/bitmap.h` / `kernel/bitmap/bitmap.c` - 位图操作
-- [x] 创建 `kernel/math/math.h` / `kernel/math/math.c` - 数学函数
-
-#### 0.4 嵌入式链表 (list.h/list.c)
-
-**双向链表**（Linux kernel 风格）
-- [x] `struct list_head` 结构定义
-- [x] `LIST_HEAD(name)` - 静态初始化宏
-- [x] `INIT_LIST_HEAD(ptr)` - 动态初始化宏
-- [x] `list_add(new, head)` - 头部插入
-- [x] `list_add_tail(new, head)` - 尾部插入
-- [x] `list_del(entry)` - 删除节点
-- [x] `list_del_init(entry)` - 删除并重新初始化
-- [x] `list_replace(old, new)` - 替换节点
-- [x] `list_replace_init(old, new)` - 替换并初始化旧节点
-- [x] `list_is_empty(head)` - 判断是否为空
-- [x] `list_is_last(entry, head)` - 判断是否为最后一个
-- [x] `list_splice(list, head)` - 拼接两个链表
-- [x] `list_splice_tail(list, head)` - 尾部拼接
-- [x] `list_splice_init(list, head)` - 拼接并初始化原链表
-- [x] `list_cut_position(list, head, entry)` - 切割链表
-- [x] `list_entry(ptr, type, member)` - 从链表指针获取结构体
-- [x] `list_first_entry(ptr, type, member)` - 获取第一个条目
-- [x] `list_last_entry(ptr, type, member)` - 获取最后一个条目
-- [x] `list_next_entry(pos, member)` - 获取下一个条目
-- [x] `list_prev_entry(pos, member)` - 获取前一个条目
-- [x] `list_for_each(pos, head)` - 遍历链表
-- [x] `list_for_each_safe(pos, n, head)` - 安全遍历（支持删除）
-- [x] `list_for_each_entry(pos, head, member)` - 遍历条目
-- [x] `list_for_each_entry_safe(pos, n, head, member)` - 安全遍历条目
-- [x] `list_for_each_entry_reverse(pos, head, member)` - 反向遍历
-- [x] `list_for_each_prev(pos, head)` - 反向遍历节点
-
-#### 0.5 位图操作 (bitmap.h/bitmap.c)
-
-**基础位图操作**
-- [x] `struct bitmap` 结构定义（或使用数组 + 长度）
-- [x] `bitmap_init(bitmap, bits)` - 初始化位图
-- [x] `bitmap_alloc(bits)` - 动态分配位图
-- [x] `bitmap_free(bitmap)` - 释放位图
-- [x] `bitmap_set(bitmap, bit)` - 设置位为1
-- [x] `bitmap_clear(bitmap, bit)` - 清除位为0
-- [x] `bitmap_test(bitmap, bit)` - 测试位值
-- [x] `bitmap_flip(bitmap, bit)` - 翻转位值
-
-**批量位操作**
-- [x] `bitmap_set_range(bitmap, start, count)` - 设置多个位
-- [x] `bitmap_clear_range(bitmap, start, count)` - 清除多个位
-- [x] `bitmap_find_first_zero(bitmap, size)` - 查找第一个0位
-- [x] `bitmap_find_first_set(bitmap, size)` - 查找第一个1位
-- [x] `bitmap_find_next_zero(bitmap, start, size)` - 从指定位置查找下一个0位
-- [x] `bitmap_find_next_set(bitmap, start, size)` - 从指定位置查找下一个1位
-
-**位图比较与拷贝**
-- [x] `bitmap_equal(src1, src2, nbits)` - 比较两个位图
-- [x] `bitmap_copy(dst, src, nbits)` - 复制位图
-- [x] `bitmap_and(dst, src1, src2, nbits)` - 按位与
-- [x] `bitmap_or(dst, src1, src2, nbits)` - 按位或
-- [x] `bitmap_xor(dst, src1, src2, nbits)` - 按位异或
-- [x] `bitmap_andnot(dst, src1, src2, nbits)` - 按位与非
-- [x] `bitmap_complement(dst, src, nbits)` - 按位取反
-
-**位图打印/调试**
-- [x] `bitmap_to_string(buffer, bitmap, nbits)` - 转换为字符串
-
-#### 0.6 数学函数 (math.h/math.c)
-
-**基础数学**
-- [x] `int abs(int x)` - 整型绝对值
-- [x] `long labs(long x)` - 长整型绝对值
-- [x] `int max(int a, int b)` - 最大值
-- [x] `int min(int a, int b)` - 最小值
-- [x] `int clamp(int val, int min_val, int max_val)` - 值限制在范围内
-
-**位运算辅助**
-- [x] `bool is_power_of_2(unsigned long n)` - 检查是否为2的幂
-- [x] `unsigned long round_up_to_power_of_2(unsigned long n)` - 向上取整到2的幂
-- [x] `unsigned long round_down_to_power_of_2(unsigned long n)` - 向下取整到2的幂
-- [x] `unsigned long align_up(unsigned long value, unsigned long alignment)` - 向上对齐
-- [x] `unsigned long align_down(unsigned long value, unsigned long alignment)` - 向下对齐
-- [x] `bool is_aligned(unsigned long value, unsigned long alignment)` - 检查对齐
-
-**除法与取模变体**
-- [x] `unsigned long div_round_up(unsigned long n, unsigned long d)` - 向上取整除法
-- [x] `unsigned long div_round_down(unsigned long n, unsigned long d)` - 向下取整除法
-- [x] `unsigned long div_round_nearest(unsigned long n, unsigned long d)` - 四舍五入除法
-
-**位操作宏/内联函数**
-- [x] `BIT(nr)` - 生成位掩码 (1 << nr)
-- [x] `BIT_MASK(nr)` - 位掩码生成
-- [x] `BIT_WORD(nr)` - 计算位所在的字索引
-
-**调试输出**
-- [ ] `dump_mem(addr, length)` - 内存转储
-- [ ] `dump_stack()` - 栈回溯（需要栈帧信息）
-
 ### 优先级 1：中断与异常处理 (近期)
+
+### 补充
+- [ ] dump stack功能
 
 #### 1.1 中断描述符表 (IDT)
 - [ ] 创建 IDT 数据结构 (256 个描述符)

@@ -204,3 +204,59 @@ char* uitoa(unsigned int value, char* str, int base) {
     reverse_str(str, i);
     return str;
 }
+
+/**
+ * @brief Convert signed 64-bit integer to string in given base.
+ */
+char* itoa_signed(int64_t value, char* str, int base) {
+    if (base < 2 || base > 36) {
+        str[0] = '\0';
+        return str;
+    }
+
+    int i = 0;
+    int neg = 0;
+    uint64_t uval;
+
+    if (value < 0 && base == 10) {
+        neg = 1;
+        uval = (uint64_t)(-value);
+    } else
+        uval = (uint64_t)value;
+
+    do {
+        int digit = uval % base;
+        str[i++] = (digit < 10) ? ('0' + digit) : ('a' + digit - 10);
+        uval /= base;
+    } while (uval != 0);
+
+    if (neg)
+        str[i++] = '-';
+
+    str[i] = '\0';
+    reverse_str(str, i);
+    return str;
+}
+
+/**
+ * @brief Convert unsigned 64-bit integer to string in given base.
+ */
+char* uitoa64(uint64_t value, char* str, int base) {
+    if (base < 2 || base > 36) {
+        str[0] = '\0';
+        return str;
+    }
+
+    int i = 0;
+    uint64_t uval = value;
+
+    do {
+        int digit = uval % base;
+        str[i++] = (digit < 10) ? ('0' + digit) : ('a' + digit - 10);
+        uval /= base;
+    } while (uval != 0);
+
+    str[i] = '\0';
+    reverse_str(str, i);
+    return str;
+}

@@ -29,6 +29,12 @@ target_include_directories(kernel_main PUBLIC
 # 应用 freestanding 环境特定的编译标志
 target_compile_options(kernel_main PUBLIC ${CCOS_FREESTANDING_FLAGS})
 
+# 如果启用了帧指针选项，添加 -fno-omit-frame-pointer 以支持栈回溯
+if(CCOS_ENABLE_FRAME_POINTER)
+    target_compile_options(kernel_main PUBLIC -fno-omit-frame-pointer)
+    message(STATUS "Frame pointer enabled for stack tracing support")
+endif()
+
 set_target_properties(kernel_main PROPERTIES
     POSITION_INDEPENDENT_CODE FALSE
 )
@@ -56,6 +62,9 @@ add_subdirectory(klogs)
 
 # 添加 welcomes 欢迎界面模块
 add_subdirectory(welcomes)
+
+# 添加 stacktrace 栈回溯模块
+add_subdirectory(stacktrace)
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -89,6 +98,7 @@ add_custom_command(
         $<TARGET_FILE:bitmap>
         $<TARGET_FILE:list>
         $<TARGET_FILE:driver>
+        $<TARGET_FILE:stacktrace>
         --end-group
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
@@ -101,6 +111,7 @@ add_custom_command(
         driver
         klogs
         welcomes
+        stacktrace
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

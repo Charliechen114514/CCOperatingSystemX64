@@ -115,3 +115,31 @@ char* itoa(int value, char* str, int base);
  * @return Pointer to the resulting string (same as @p str).
  */
 char* uitoa(unsigned int value, char* str, int base);
+
+/**
+ * @brief Convert a signed 64-bit integer to a string.
+ *
+ * Converts the given signed 64-bit integer value to a null-terminated string using the
+ * specified @p base.
+ *
+ * @param value The 64-bit integer value to convert.
+ * @param str Pointer to a buffer to store the resulting string. Must be large enough to hold the
+ * result (at least 65 bytes for base 2).
+ * @param base Numerical base (radix) for conversion. Range: 2 to 36.
+ * @return Pointer to the resulting string (same as @p str).
+ */
+char* itoa_signed(int64_t value, char* str, int base);
+
+/**
+ * @brief Convert an unsigned 64-bit integer to a string.
+ *
+ * Converts the given unsigned 64-bit integer value to a null-terminated string using the
+ * specified @p base.
+ *
+ * @param value The unsigned 64-bit integer value to convert.
+ * @param str Pointer to a buffer to store the resulting string. Must be large enough to hold the
+ * result (at least 65 bytes for base 2).
+ * @param base Numerical base (radix) for conversion. Range: 2 to 36.
+ * @return Pointer to the resulting string (same as @p str).
+ */
+char* uitoa64(uint64_t value, char* str, int base);

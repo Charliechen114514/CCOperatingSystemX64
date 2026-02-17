@@ -25,6 +25,9 @@ static char g_format_buffer[32];
 
 /**
  * @brief Minimal vsnprintf implementation
+ *
+ * Supports: %c, %s, %d/%i, %u, %x, %lx, %p
+ * Width/flags: %Nx, %0Nx (where N is width)
  */
 static int format_string(char* buffer, size_t size, const char* format, va_list args) {
     size_t pos = 0;
@@ -41,6 +44,30 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
         if (*p == '\0') {
             buffer[pos++] = '%';
             break;
+        }
+
+        // Parse width and flags: %0Nx or %Nx
+        // E.g., %016x means pad with zeros to 16 chars
+        int width = 0;
+        int pad_with_zero = 0;
+
+        // Check for zero-padding flag
+        if (*p == '0') {
+            pad_with_zero = 1;
+            p++;
+        }
+
+        // Parse width digits
+        while (*p >= '0' && *p <= '9') {
+            width = width * 10 + (*p - '0');
+            p++;
+        }
+
+        // Length modifier: 'l' for long (64-bit on x86_64)
+        int is_long = 0;
+        if (*p == 'l') {
+            is_long = 1;
+            p++;
         }
 
         // Handle format specifiers
@@ -65,8 +92,8 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
             }
             case 'd':
             case 'i': {
-                int val = va_arg(args, int);
-                itoa(val, g_format_buffer, 10);
+                int64_t val = is_long ? va_arg(args, int64_t) : va_arg(args, int);
+                itoa_signed(val, g_format_buffer, 10);
                 char* s = g_format_buffer;
                 while (*s != '\0' && pos < size - 1) {
                     buffer[pos++] = *s++;
@@ -74,8 +101,8 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
                 break;
             }
             case 'u': {
-                unsigned int val = va_arg(args, unsigned int);
-                uitoa(val, g_format_buffer, 10);
+                uint64_t val = is_long ? va_arg(args, uint64_t) : va_arg(args, unsigned int);
+                uitoa64(val, g_format_buffer, 10);
                 char* s = g_format_buffer;
                 while (*s != '\0' && pos < size - 1) {
                     buffer[pos++] = *s++;
@@ -83,9 +110,28 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
                 break;
             }
             case 'x': {
-                unsigned int val = va_arg(args, unsigned int);
-                uitoa(val, g_format_buffer, 16);
+                uint64_t val = is_long ? va_arg(args, uint64_t) : va_arg(args, unsigned int);
+                uitoa64(val, g_format_buffer, 16);
+
+                // Handle width padding
+                int len = 0;
                 char* s = g_format_buffer;
+                while (*s != '\0') {
+                    len++;
+                    s++;
+                }
+
+                // Pad with spaces or zeros if needed
+                if (width > len) {
+                    char pad_char = pad_with_zero ? '0' : ' ';
+                    int pad_count = width - len;
+                    for (int i = 0; i < pad_count && pos < size - 1; i++) {
+                        buffer[pos++] = pad_char;
+                    }
+                }
+
+                // Output the number
+                s = g_format_buffer;
                 while (*s != '\0' && pos < size - 1) {
                     buffer[pos++] = *s++;
                 }
@@ -96,7 +142,7 @@ static int format_string(char* buffer, size_t size, const char* format, va_list 
                 buffer[pos++] = '0';
                 if (pos < size - 1)
                     buffer[pos++] = 'x';
-                uitoa((unsigned int)(uintptr_t)ptr, g_format_buffer, 16);
+                uitoa64((uint64_t)(uintptr_t)ptr, g_format_buffer, 16);
                 char* s = g_format_buffer;
                 while (*s != '\0' && pos < size - 1) {
                     buffer[pos++] = *s++;
