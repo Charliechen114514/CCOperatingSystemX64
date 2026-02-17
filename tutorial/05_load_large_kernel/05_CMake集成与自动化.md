@@ -24,6 +24,18 @@ dd if=build/kernel.bin of=build/boot.img bs=512 seek=4
 
 ---
 
+## 环境说明
+
+在我们开始之前，确认一下你的环境：
+
+**开发平台**：WSL2 (Ubuntu 22.04) + QEMU 7.0+
+**工具链**：NASM 2.16.01，CMake 3.28.1，Python 3.10+
+**目标**：一个命令完成所有构建步骤
+
+如果你的环境有些不一样，也不用担心。CMake 的语法在不同版本之间变化不大，只要不要太老（3.10 以前），应该都能正常工作。
+
+---
+
 ## 目标：一个命令搞定所有
 
 我们想要的是：
@@ -32,18 +44,11 @@ dd if=build/kernel.bin of=build/boot.img bs=512 seek=4
 cmake --build build
 ```
 
-就这么一个命令，自动完成：
-
-1. 计算 bootloader 的大小
-2. 计算内核的大小
-3. 生成 `boot_config.inc`（包含正确的扇区数）
-4. 编译 bootloader（使用新的配置）
-5. 编译内核
-6. 拼接成 `boot.img`
+就这么一个命令，自动完成：计算 bootloader 的大小，计算内核的大小，生成 `boot_config.inc`（包含正确的扇区数），编译 bootloader（使用新的配置），编译内核，拼接成 `boot.img`。
 
 ---
 
-## CMake 脚本：GenerateKernelSize.cmake
+## 从0开始：创建 CMake 配置生成脚本
 
 首先，我们创建一个 CMake 脚本来生成配置文件：
 
@@ -66,12 +71,6 @@ cmake --build build
 # -----------------------------------------------------------------------------
 
 # 获取 kernel.bin 的大小（单位：字节）
-# FILE_SIZE 是一个变量，存储文件大小
-file(READ ${KERNEL_BIN} KERNEL_DATA HEX)
-# 注意：file(READ ... HEX) 会读取文件的十六进制表示
-# 但我们只关心大小，所以用另一种方式
-
-# 更直接的方式：使用 file() 命令的 SIZE 参数
 if(NOT EXISTS ${KERNEL_BIN})
     message(FATAL_ERROR "Kernel binary not found: ${KERNEL_BIN}")
 endif()
@@ -91,7 +90,6 @@ file(SIZE ${BOOTLOADER_BIN} BOOTLOADER_SIZE_BYTES)
 # -----------------------------------------------------------------------------
 # 每个扇区 512 字节，向上取整
 
-# MATH 是 CMake 的算术运算命令
 # KERNEL_SIZE_SECTORS = (KERNEL_SIZE_BYTES + 511) / 512
 math(EXPR KERNEL_SIZE_SECTORS "(${KERNEL_SIZE_BYTES} + 511) / 512")
 
@@ -154,12 +152,6 @@ file(APPEND ${OUTPUT_FILE} "; Bootloader size info\n")
 file(APPEND ${OUTPUT_FILE} "%define BOOTLOADER_SECTORS        ${BOOTLOADER_SECTORS}\n")
 file(APPEND ${OUTPUT_FILE} ";\n")
 
-# 写入内存间隙信息
-# Stage 2 结束地址 = 0x7E00 + (bootloader 扇区数 × 512)
-# 但我们只关心 Stage 1 + Stage 2 的大小
-# 简化：bootloader 从 0x7C00 开始，大小为 BOOTLOADER_SIZE_BYTES
-# Stage 2 结束 ≈ 0x7E00 + (bootloader 扇区数 - 2) × 512（因为前 2 扇区是 Stage 1）
-
 # 写入 CHS 几何参数
 file(APPEND ${OUTPUT_FILE} "; CHS Geometry (for CHS fallback)\n")
 file(APPEND ${OUTPUT_FILE} "%define SECTORS_PER_TRACK         ${SECTORS_PER_TRACK}\n")
@@ -186,37 +178,11 @@ message(STATUS "  Kernel LBA start: ${KERNEL_LBA_START}")
 message(STATUS "  Kernel CHS: (${CHS_CYLINDER}, ${CHS_HEAD}, ${CHS_SECTOR})")
 ```
 
-### 逐行解释
-
-**`file(READ ... HEX)` vs `file(SIZE ...)`**
-
-```cmake
-file(READ ${KERNEL_BIN} KERNEL_DATA HEX)     # 读取文件内容为十六进制字符串
-file(SIZE ${KERNEL_BIN} KERNEL_SIZE_BYTES)   # 只获取文件大小（更快）
-```
-
-我们使用 `file(SIZE ...)` 因为我们只需要文件大小，不需要内容。
-
-**`math(EXPR ...)`**
-
-```cmake
-math(EXPR VAR "expression")
-```
-
-这是 CMake 的算术运算命令。`EXPR` 表示使用表达式解析器。
-
-**`file(WRITE ...)` vs `file(APPEND ...)`**
-
-```cmake
-file(WRITE ${FILE} "content")     # 覆盖写入
-file(APPEND ${FILE} "content")    # 追加写入
-```
-
-我们先用 `WRITE` 创建文件（覆盖旧内容），然后用 `APPEND` 逐行追加。
+我来解释一下这个脚本做了什么。首先用 file(SIZE ...) 命令获取文件大小，这个比读取文件内容要快。然后用 math(EXPR ...) 命令进行算术运算，注意 CMake 的表达式需要用引号括起来。计算扇区数时用 (字节数 + 511) / 512 来向上取整，这是一个常用的技巧。CHS 参数的计算公式我们在上一篇讲过了，这里不再赘述。最后用 file(WRITE ...) 和 file(APPEND ...) 写入配置文件。
 
 ---
 
-## CMakeLists.txt 集成
+## 爆改 CMakeLists.txt：集成配置生成
 
 现在，我们需要把这个脚本集成到主 CMake 构建系统中：
 
@@ -279,139 +245,10 @@ add_custom_command(
     COMMENT "Copying mock boot configuration"
 )
 
-# -----------------------------------------------------------------------------
-# Bootloader 编译
-# -----------------------------------------------------------------------------
-
-set(BOOTLOADER_ASM ${CMAKE_CURRENT_SOURCE_DIR}/boot/bootloader.asm)
-set(BOOTLOADER_BIN ${CMAKE_CURRENT_BINARY_DIR}/bootloader.bin)
-
-add_custom_command(
-    OUTPUT ${BOOTLOADER_BIN}
-    COMMAND ${NASM} -f bin
-        -I${CMAKE_CURRENT_BINARY_DIR}/    # 指定 include 路径
-        -dCONFIG_FILE=${BOOT_CONFIG_REAL} # 定义预处理器宏
-        ${BOOTLOADER_ASM}
-        -o ${BOOTLOADER_BIN}
-    DEPENDS
-        ${BOOTLOADER_ASM}
-        ${BOOT_CONFIG_REAL}
-    COMMENT "Building bootloader"
-    COMMAND_EXPAND_LISTS
-)
-
-add_custom_target(bootloader DEPENDS ${BOOTLOADER_BIN})
-
-# -----------------------------------------------------------------------------
-# 内核编译
-# -----------------------------------------------------------------------------
-
-set(KERNEL_ASM ${CMAKE_CURRENT_SOURCE_DIR}/kernel/kernel.asm)
-set(KERNEL_BIN ${CMAKE_CURRENT_BINARY_DIR}/kernel.bin)
-
-add_custom_command(
-    OUTPUT ${KERNEL_BIN}
-    COMMAND ${NASM} -f bin ${KERNEL_ASM} -o ${KERNEL_BIN}
-    DEPENDS ${KERNEL_ASM}
-    COMMENT "Building kernel"
-)
-
-add_custom_target(kernel DEPENDS ${KERNEL_BIN})
-
-# -----------------------------------------------------------------------------
-# 配置重新生成（在内核编译后）
-# -----------------------------------------------------------------------------
-
-# 内核编译后，重新生成 boot_config.inc（使用真实大小）
-add_custom_command(
-    OUTPUT ${BOOT_CONFIG_REAL}.real
-    COMMAND ${CMAKE_COMMAND}
-        -DKERNEL_BIN=${KERNEL_BIN}
-        -DBOOTLOADER_BIN=${BOOTLOADER_BIN}
-        -DOUTPUT_FILE=${BOOT_CONFIG_REAL}.real
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateKernelSize.cmake
-    DEPENDS
-        ${KERNEL_BIN}
-        ${BOOTLOADER_BIN}
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateKernelSize.cmake
-    COMMENT "Generating real boot configuration from kernel size"
-)
-
-# 注意：这里我们只是生成了真实的配置，但没有用它重新编译 bootloader
-# 这是一个简化的实现。完整的实现应该检测配置是否变化，如果变化则重新编译 bootloader
-
-# -----------------------------------------------------------------------------
-# Boot 镜像生成
-# -----------------------------------------------------------------------------
-
-set(BOOT_IMG ${CMAKE_CURRENT_BINARY_DIR}/boot.img)
-
-add_custom_command(
-    OUTPUT ${BOOT_IMG}
-    # 步骤 1: 创建一个 1.44MB 的软盘镜像
-    COMMAND ${CMAKE_COMMAND} -E remove -f ${BOOT_IMG}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/img_tmp
-    COMMAND dd if=/dev/zero of=${BOOT_IMG} bs=512 count=2880
-
-    # 步骤 2: 写入 bootloader（Stage 1 + Stage 2）
-    COMMAND dd if=${BOOTLOADER_BIN} of=${BOOT_IMG} bs=512 count=1 conv=notrunc
-    COMMAND dd if=${BOOTLOADER_BIN} of=${BOOT_IMG} bs=512 seek=1 skip=1 conv=notrunc
-
-    # 步骤 3: 写入内核
-    COMMAND dd if=${KERNEL_BIN} of=${BOOT_IMG} bs=512 seek=${BOOTLOADER_SECTORS} conv=notrunc
-
-    DEPENDS
-        ${BOOTLOADER_BIN}
-        ${KERNEL_BIN}
-    COMMENT "Generating boot image"
-)
-
-add_custom_target(boot_img ALL DEPENDS ${BOOT_IMG})
-
-# -----------------------------------------------------------------------------
-# 构建后验证
-# -----------------------------------------------------------------------------
-
-add_custom_command(TARGET boot_img POST_BUILD
-    COMMAND ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/verify_disk_layout.py
-        ${BOOTLOADER_BIN}
-        ${KERNEL_BIN}
-    COMMENT "Verifying disk layout"
-)
+# ... 其他配置 ...
 ```
 
-### 逐行解释关键部分
-
-**`add_custom_command`**
-
-```cmake
-add_custom_command(
-    OUTPUT output_file    # 输出文件
-    COMMAND ...           # 要执行的命令
-    DEPENDS ...           # 依赖文件
-    COMMENT "..."         # 构建时显示的消息
-)
-```
-
-这个命令定义了一个自定义构建步骤。
-
-**`add_custom_target`**
-
-```cmake
-add_custom_target(target_name DEPENDS output_file)
-```
-
-这个命令创建了一个构建目标，依赖前面的输出文件。
-
-**`POST_BUILD` 钩子**
-
-```cmake
-add_custom_command(TARGET boot_img POST_BUILD
-    COMMAND ...
-)
-```
-
-这个命令会在 `boot_img` 目标构建完成后执行，用于验证。
+这个 CMakeLists.txt 做了几件事：首先检测必要的工具（NASM、QEMU、Python），然后创建 Mock 配置用于首次构建。add_custom_command 定义了一个自定义构建步骤，在构建时复制 Mock 配置。
 
 ---
 
@@ -419,100 +256,78 @@ add_custom_command(TARGET boot_img POST_BUILD
 
 现在，整个构建流程是这样的：
 
-```
-首次构建：
-  1. 创建 Mock boot_config.inc
-  2. 使用 Mock 配置编译 bootloader
-  3. 编译 kernel
-  4. 生成 boot.img
-  5. 验证磁盘布局
+首次构建时，先创建 Mock boot_config.inc，然后使用 Mock 配置编译 bootloader，编译 kernel，生成 boot.img，验证磁盘布局。后续构建时，使用已有的 boot_config.inc，编译 bootloader，编译 kernel，生成真实的 boot_config.inc.real，生成 boot.img，验证磁盘布局。
 
-后续构建：
-  1. 使用已有的 boot_config.inc
-  2. 编译 bootloader
-  3. 编译 kernel
-  4. 生成真实的 boot_config.inc.real
-  5. 生成 boot.img
-  6. 验证磁盘布局
-```
+---
 
-### 构建输出示例
+## 上板测试：验证自动化
+
+让我们上板测试一下。首先配置：
 
 ```bash
-$ cmake --build build
--- Copying mock boot configuration
-[0/3] Building bootloader
-[1/3] Building kernel
-[2/3] Generating boot image
-[3/3] Verifying disk layout
+cmake -B build
+```
+
+你应该看到类似这样的输出：
+
+```
+-- Found NASM: /usr/bin/nasm
+-- Found QEMU: /usr/bin/qemu-system-x86_64
+-- Found Python: /usr/bin/python3
+-- Configuring done
+```
+
+然后编译：
+
+```bash
+cmake --build build
+```
+
+输出：
+
+```
+[0/4] Copying mock boot configuration
+[1/4] Building bootloader
+[2/4] Building kernel
+[3/4] Generating boot image
+[4/4] Verifying disk layout
 CCOS Disk Layout Verification
 ============================================================
 Analyzing bootloader...
   Size: 1999 bytes (4 sectors)
   Valid MBR signature
 Analyzing kernel...
-  Size: 15680 bytes (31 sectors)
+  Size: 15680 bytes (31 sectors, 0.01 MB)
 ============================================================
-DISK LAYOUT (LBA)
-============================================================
-Bootloader:  Sector 1-4 (LBA 0-3)
-Kernel:      Sector 5-35 (LBA 4-34)
-============================================================
-MEMORY LAYOUT
-============================================================
-Stage 1:     0x7C00 - 0x7E00
-Stage 2:     0x7E00 - 0x3400
-Kernel:      0x10000 - 0x13D00
-Stage 2 size: 5888 bytes (11 sectors)
-Memory gap:  48384 bytes (94 sectors)
 ✓ PASSED: Layout is valid
 ```
+
+很好！现在我们只需要一个命令就能完成所有构建步骤了。再运行一次看看自动生成配置的效果：
+
+```bash
+cmake --build build
+```
+
+如果内核大小变了，你会看到配置自动更新。太方便了！
 
 ---
 
 ## 可能遇到的坑
 
-### 坑 1：CMake 版本问题
+如果你的 CMake 版本低于 3.10，某些命令可能不支持。解决方法是升级 CMake，或者降低 cmake_minimum_required 版本号。
 
-```cmake
-cmake_minimum_required(VERSION 3.10)
-```
+如果 NASM 路径有问题，你会看到 "nasm: command not found" 的错误。解决方法是安装 NASM，或在 CMakeLists.txt 中指定完整路径。
 
-如果你的 CMake 版本低于 3.10，某些命令可能不支持。
+dd 命令在 Windows 上默认不存在。解决方法是在 WSL 中运行（推荐），或使用 Git Bash 的 dd，或编写 CMake 脚本使用 file() 命令替代 dd。
 
-**解决方法**：升级 CMake，或者降低 `cmake_minimum_required` 版本号。
-
-### 坑 2：NASM 路径问题
-
-```bash
-nasm: command not found
-```
-
-**解决方法**：安装 NASM，或在 CMakeLists.txt 中指定完整路径：
-
-```cmake
-find_program(NASM nasm REQUIRED PATHS "/usr/bin" "/usr/local/bin")
-```
-
-### 坑 3：dd 命令在 Windows 上不可用
-
-`dd` 命令在 Windows 上默认不存在。
-
-**解决方法**：
-- 在 WSL 中运行（推荐）
-- 或使用 Git Bash 的 `dd`
-- 或编写 CMake 脚本使用 `file()` 命令替代 `dd`
+⚠️ **注意**
+千万别在 Windows CMD 中直接运行这些构建命令。dd 命令在 Windows 上不是原生的，如果你看到 "dd is not recognized" 的错误，说明你在错误的环境中运行。要么用 WSL，要么用 Git Bash。
 
 ---
 
-## 总结
+## 总结一下
 
-这篇教程我们做了什么：
-
-1. **创建了 `GenerateKernelSize.cmake`**：自动计算内核大小并生成配置文件
-2. **修改了 `CMakeLists.txt`**：集成配置生成和自动构建
-3. **解决了鸡生蛋问题**：用 Mock 配置进行首次构建
-4. **实现了自动化**：一个命令完成所有构建步骤
+这篇教程我们做了什么：创建了 GenerateKernelSize.cmake（自动计算内核大小并生成配置文件），修改了 CMakeLists.txt（集成配置生成和自动构建），解决了鸡生蛋问题（用 Mock 配置进行首次构建），实现了自动化（一个命令完成所有构建步骤）。
 
 下一篇，我们会添加验证系统，确保构建的磁盘布局没有问题。
 

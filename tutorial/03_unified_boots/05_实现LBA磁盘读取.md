@@ -6,358 +6,61 @@
 
 ## LBA vs CHS
 
-### CHS（柱面-磁头-扇区）
+CHS 是老式硬盘的寻址方式，它用 Cylinder、Head、Sector 三个参数来定位一个扇区。这种方式很麻烦，因为需要把逻辑地址转换成物理地址，而且受到 8GB 的限制，因为最多只能表示 1024 个柱面、256 个磁头、63 个扇区，乘以 512 字节每扇区，就是 8GB。BIOS INT 13h AH=02h 一次最多读 128 个扇区，有的 BIOS 甚至只支持 64 个。
 
-CHS 是老式硬盘的寻址方式：
-- **C**ylinder（柱面）- 磁道号
-- **H**ead（磁头）- 磁头号
-- **S**ector（扇区）- 扇区号
-
-问题：
-- 需要转换逻辑地址到物理地址
-- 受到 8GB 限制（1024 柱面 × 256 磁头 × 63 扇区 × 512 字节）
-- BIOS INT 13h AH=02h 一次最多读 128 扇区（有的 BIOS 是 64）
-
-### LBA（逻辑块地址）
-
-LBA 直接用扇区编号寻址，从 0 开始：
-- LBA 0 = 第一个扇区
-- LBA 1 = 第二个扇区
-- ...
-
-优势：
-- 简单直接，不需要转换
-- 支持超大磁盘（48 位 LBA → 128PB）
-- INT 13h 扩展读（AH=42h）一次最多读 127 扇区
+LBA 就简单多了，它直接用扇区编号来寻址，从 0 开始。LBA 0 是第一个扇区，LBA 1 是第二个扇区，以此类推。这种方式不需要转换，支持超大磁盘，48 位 LBA 可以支持到 128PB。而且 INT 13h 扩展读取 AH=42h 一次最多可以读 127 个扇区。
 
 ---
 
 ## INT 13h 扩展读取
 
-BIOS 提供了 INT 13h AH=42h 扩展读取功能，支持 LBA 寻址。
+BIOS 提供了 INT 13h AH=42h 扩展读取功能，支持 LBA 寻址。在使用之前，我们需要检测 BIOS 是否支持 LBA。检测方法是调用 INT 13h AH=41h，BX 设置成 0x55AA 这个魔法值。如果 BIOS 支持这个功能，它会清除 CF 标志，并把 BX 设置成 0xAA55。然后我们要检查 CX 的第 0 位，如果这一位是 1，说明 LBA 扩展功能可用。
 
-### 检测 LBA 支持
-
-在使用 LBA 之前，我们需要检测 BIOS 是否支持：
-
-```asm
-; check_lba_support - Check if BIOS supports LBA extended reads
-; Input: none
-; Output: CF=0 if supported, CF=1 if not supported
-; Clobbers: AX, BX, CX
-bits 16
-check_lba_support:
-    pusha
-
-    mov dl, 0x80                    ; First hard drive
-
-    ; Check for LBA support using INT 13h AH=41h
-    mov ah, 0x41
-    mov bx, 0x55AA                  ; Magic value
-    int 0x13
-
-    ; Check if function is supported (CF=0 and BX=0xAA55)
-    jc .not_supported
-    cmp bx, 0xAA55
-    jne .not_supported
-
-    ; Check if LBA extensions are available (bit 0 of CX)
-    test cx, 0x01
-    jz .not_supported
-
-    ; LBA is supported!
-    popa
-    clc                             ; Clear carry = supported
-    ret
-
-.not_supported:
-    popa
-    stc                             ; Set carry = not supported
-    ret
-```
-
-**注意**：
-- `BX=0x55AA` 是魔法值，BIOS 会把它返回为 `0xAA55` 表示支持
-- `CF=0` 表示功能成功
-- `CX` 的 bit 0 表示是否支持 LBA
-
-### DAP 结构
-
-INT 13h AH=42h 使用一个叫 DAP（Disk Address Packet）的结构：
-
-```asm
-; Disk Address Packet (DAP) for LBA extended reads
-; Structure: 16 bytes total
-align 4
-dap_structure:
-    db 16                      ; Packet size (16 bytes)
-    db 0                       ; Reserved
-    dw 0                       ; Block count (filled at runtime)
-    dw 0                       ; Destination offset (filled at runtime)
-    dw 0                       ; Destination segment (filled at runtime)
-    dq 0                       ; Starting LBA (filled at runtime)
-```
-
-各字段说明：
-| 偏移 | 大小 | 说明                           |
-| ---- | ---- | ------------------------------ |
-| 0    | 1    | 数据包大小（必须是 16）        |
-| 1    | 1    | 保留（必须为 0）               |
-| 2-3  | 2    | 要传输的块数（1-127）          |
-| 4-5  | 2    | 目标缓冲区偏移                 |
-| 6-7  | 2    | 目标缓冲区段                   |
-| 8-15 | 8    | 起始 LBA（64 位，我们用低 32 位） |
+扩展读取使用一个叫 DAP 的结构体，全称是 Disk Address Packet。这个结构体有 16 字节，第一个字节是数据包大小，必须是 16。第二个字节是保留的，必须为 0。接下来两个字节是要传输的块数，1 到 127 个。然后是目标缓冲区地址，用 segment:offset 表示。最后 8 字节是起始 LBA 地址，64 位的，我们一般只用低 32 位。
 
 ---
 
 ## 实现 LBA 读取函数
 
-### 单次读取函数
+我们先实现单次读取函数 read_sectors_lba。这个函数的输入是 EAX 表示起始 LBA 地址，CX 表示要读取的扇区数，ES:BX 表示目标缓冲区。它首先验证扇区数，如果是 0 就错误返回，如果超过 127 就截断到 127。然后设置 DS 指向我们的代码段，因为 dap_structure 在代码段里。
 
-```asm
-; read_sectors_lba - Read sectors using LBA extended addressing
-; Input:  EAX = Starting LBA address
-;         CX  = Number of sectors to read
-;         ES:BX = Destination buffer
-; Output: CF=0 on success, CF=1 on error
-; Clobbers: AX, BX, CX, DX, SI
-bits 16
-read_sectors_lba:
-    pusha
+接下来我们填充 DAP 结构。先写块数到偏移 2 和 3，然后写目标缓冲区地址，偏移 4 是 offset，偏移 6 是 segment。然后写起始 LBA，偏移 8 到 11 是低 32 位，偏移 12 到 15 是高 32 位，我们设为 0。
 
-    ; Validate sector count (max 127 for compatibility)
-    cmp cx, 0
-    je .error
-    cmp cx, 127
-    jbe .count_ok
-    mov cx, 127                     ; Cap at 127 sectors
-.count_ok:
+填充完成后，我们调用 INT 13h AH=42h 执行 LBA 读取。DS:SI 指向 DAP 结构，DL 设置成 0x80 表示第一块硬盘。调用完成后恢复 DS 为 0，检查 CF 标志，如果设置了就返回错误。
 
-    ; Setup DS to point to our code segment (where dap_structure is)
-    push ax
-    mov ax, cs
-    mov ds, ax
-    pop ax
+然后我们实现多扇区读取函数 load_kernel_lba。这个函数会循环读取，每次最多读 127 个扇区。它首先设置目标地址为 KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET，然后初始化跟踪变量，DI 是剩余扇区数，SI 是当前 LBA。
 
-    ; Fill in DAP structure
-    mov byte [dap_structure + 2], cl    ; Block count (low byte)
-    mov byte [dap_structure + 3], 0     ; Block count (high byte)
-
-    ; Destination buffer
-    mov [dap_structure + 4], bx         ; Offset
-    mov word [dap_structure + 6], es    ; Segment
-
-    ; Starting LBA (64-bit, we use lower 32 bits)
-    mov dword [dap_structure + 8], eax  ; LBA (low 32-bit)
-    mov dword [dap_structure + 12], 0   ; LBA (high 32-bit) = 0
-
-    ; Perform LBA read (INT 13h AH=42h)
-    mov si, dap_structure               ; DS:SI points to DAP
-    mov dl, 0x80                        ; First hard drive
-    mov ah, 0x42                        ; Extended read
-    int 0x13
-
-    ; Restore DS to 0
-    push ax
-    xor ax, ax
-    mov ds, ax
-    pop ax
-
-    jc .error
-
-    ; Success
-    popa
-    clc
-    ret
-
-.error:
-    ; Restore DS before error return
-    push ax
-    xor ax, ax
-    mov ds, ax
-    pop ax
-    popa
-    stc
-    ret
-```
-
-### 多扇区读取函数
-
-内核可能很大，一次读取不够。我们需要循环读取：
-
-```asm
-; load_kernel_lba - Load kernel using LBA extended addressing
-; Input: none (uses KERNEL_LBA_START and KERNEL_SECTOR_COUNT from config)
-; Output: loads kernel to KERNEL_LOAD_SEGMENT:KERNEL_LOAD_OFFSET
-; Clobbers: AX, BX, CX, DX, SI, DI, BP
-; Returns: CF=0 on success, CF=1 on error
-bits 16
-load_kernel_lba:
-    pusha
-
-    ; Setup destination address
-    mov ax, KERNEL_LOAD_SEGMENT
-    mov es, ax
-    mov bx, KERNEL_LOAD_OFFSET      ; ES:BX = destination
-
-    ; Initialize tracking variables
-    mov di, KERNEL_SECTOR_COUNT     ; DI = remaining sectors to read
-    mov si, KERNEL_LBA_START        ; SI = current LBA (low word)
-
-    ; Print loading message (VGA + Serial)
-    pusha
-    mov si, msg_loading_lba
-    call print_bios
-    mov si, msg_loading_lba
-    call serial_write_string
-    mov ax, di
-    call print_decimal
-    push ax
-    mov al, ah
-    call serial_write_char_blocking
-    pop ax
-    call serial_write_decimal
-    mov si, msg_sectors
-    call print_bios
-    mov si, msg_sectors
-    call serial_write_string
-    popa
-
-.read_loop:
-    ; Check if all sectors read
-    cmp di, 0
-    je .read_complete
-
-    ; Calculate sectors to read this iteration (max 127)
-    mov cx, di
-    cmp cx, 127
-    jbe .sectors_ok
-    mov cx, 127
-.sectors_ok:
-
-    ; Save sector count
-    mov bp, cx
-
-    ; Convert SI to EAX (32-bit LBA)
-    xor eax, eax
-    mov ax, si
-
-    ; Perform LBA read
-    call read_sectors_lba
-    jc .read_error
-
-    ; Update tracking variables
-    sub di, bp                      ; Decrease remaining sectors
-    add si, bp                      ; Advance LBA
-
-    ; Advance buffer pointer (ES:BX += BP * 512)
-    push ax
-    push dx
-    mov ax, bp
-    xor dx, dx
-    mov cx, 512
-    mul cx                          ; DX:AX = bytes read
-    add bx, ax
-    pop dx
-    pop ax
-
-    jmp .read_loop                  ; Next iteration
-
-.read_complete:
-    popa
-    clc                             ; Clear carry = success
-    ret
-
-.read_error:
-    popa
-    stc                             ; Set carry = error
-    ret
-```
-
-**注意**：这里我们用 `SI` 存储当前 LBA，`DI` 存储剩余扇区数。每次循环最多读 127 个扇区（BIOS 限制）。
+打印加载消息后，进入读取循环。如果 DI 为 0 就完成了，否则计算本次要读的扇区数，最多 127 个。然后调用 read_sectors_lba，如果失败就返回错误。成功后更新跟踪变量，DI 减去已读扇区数，SI 加上已读扇区数。然后前进缓冲区指针，ES:BX 加上已读字节数。最后继续循环。
 
 ---
 
 ## 使用 LBA 加载内核
 
-在 Stage 2 主函数中调用：
-
-```asm
-stage2_main:
-    cli
-    xor ax, ax
-    mov ds, ax
-    mov es, ax
-    mov ss, ax
-    mov sp, 0x7E00
-
-    ; Print message (VGA + Serial)
-    mov si, msg_stage2
-    call print_bios
-    mov si, msg_stage2
-    call serial_write_string
-
-    ; ===== 使用 LBA 加载内核 =====
-    call load_kernel_auto    ; 这个函数会先尝试 LBA
-    jc kernel_error
-
-    ; ... 继续后面的代码 ...
-```
-
-`load_kernel_auto` 函数会先检测 LBA 支持，如果支持就用 LBA，否则回退到 CHS（下一篇教程会讲）。
+在 Stage 2 主函数中，我们调用 load_kernel_auto，这个函数会先尝试 LBA，如果失败就回退到 CHS。下一篇教程我们会详细讲回退机制。LBA 成功后，我们会打印一条消息告诉用户使用的模式和读取的扇区数，然后继续后续的启动流程。
 
 ---
 
 ## 验证 LBA 读取
 
-编译并运行：
+编译并运行，你应该能在串口输出中看到 "[MODE] Using LBA extended read" 和 "[LOAD] LBA: loading XX sectors" 这样的消息。如果看到这个，恭喜，LBA 读取成功了。如果没有看到，检查 BIOS 是否支持 LBA，QEMU 默认是支持的。如果检测失败，可能是检测函数有问题，或者 BIOS 真的不支持，那就只能用 CHS 了。
 
-```bash
-nasm -f bin bootloader.asm -o bootloader.bin
-qemu-system-x86_64 -drive format=raw,file=boot.img -serial stdio
-```
-
-你应该能在串口输出中看到：
-
-```
-[MODE] Using LBA extended read
-[LOAD] LBA: loading 31 sectors
-```
-
-如果看到这个，恭喜！LBA 读取成功了。
+读取的扇区数取决于你的内核大小。内核大小除以 512 向上取整就是扇区数。比如内核是 15680 字节，除以 512 是 30.625，向上取整就是 31 个扇区。你可以在 boot_config.inc 里看到这个值，它是 CMake 自动计算生成的。
 
 ---
 
 ## 常见问题
 
-### 问题 1：LBA 检测失败
+LBA 检测失败可能是因为检测函数写错了。检查一下 INT 13h AH=41h 的调用，BX 是否设置成 0x55AA，返回值是否检查了 BX 是否等于 0xAA55，CX 的第 0 位是否为 1。如果这些都对，那可能是 BIOS 真的不支持，那就只能用 CHS 了。
 
-QEMU 默认支持 LBA，如果检测失败，检查：
-1. `check_lba_support` 的返回值检查
-2. BIOS 是否真的支持（QEMU 肯定支持）
+读取的扇区数不对，可能是 DAP 结构的块数字段填充错误。检查一下 dap_structure + 2 和 dap_structure + 3 是否正确设置了块数，而且要限制在 127 以内。
 
-### 问题 2：读取的扇区数不对
-
-检查：
-1. DAP 结构的 `Block count` 字段是否正确
-2. 循环中的 `DI` 和 `BP` 是否正确更新
-
-### 问题 3：缓冲区指针计算错误
-
-检查：
-1. `ES:BX += BP * 512` 的计算是否正确
-2. 注意这里 `BX` 可能溢出，但我们的内核不大（< 64KB），所以没问题
+缓冲区指针计算错误，会导致后面的数据覆盖前面的数据。检查一下 ES:BX += BP * 512 的计算是否正确，BX 是 16 位的，如果内核超过 64KB 就会有问题，但我们的内核一般不会那么大。
 
 ---
 
 ## 下一步
 
-现在我们有了 LBA 读取，但万一 BIOS 不支持 LBA 怎么办？
-
-下一篇教程里，我们会加上 **CHS 回退机制**，确保在老机器上也能正常启动。
-
-记住：兼容性很重要，不是所有机器都那么新。
-
+现在我们有了 LBA 读取，但万一 BIOS 不支持 LBA 怎么办？下一篇教程里，我们会加上 CHS 回退机制，确保在老机器上也能正常启动。记住：兼容性很重要，不是所有机器都那么新。
 
 ---
 

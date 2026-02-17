@@ -2,158 +2,61 @@
 
 有了 `vga_put_char_at()` 这个"画笔"，我们就可以构建更高级的绘图功能了。
 
-说实话，每次画个矩形都要写一堆循环代码，真的很烦。而且同样的代码到处复制，维护起来简直是噩梦。
+说实话，每次画个矩形都要写一堆循环代码，真的很烦。而且同样的代码到处复制，维护起来简直是噩梦。你改一个参数，得记得改所有复制的地方，漏掉一个就会出现奇怪的显示 bug。我之前就因为这个问题浪费了好几个小时。
 
-所以我们要做一个 GUI 绘图库 —— 把常用的绘图功能封装成函数，随用随调。
+所以我们要做一个 GUI 绘图库 —— 把常用的绘图功能封装成函数，随用随调。这不仅让代码更整洁，还能减少 bug 的产生。
 
 ---
 
-## 我们要做什么？
+## 我们要做什么
 
-我们将实现以下功能：
+我们将实现一系列绘图函数，从最基础的基础图形开始，逐步构建到高级组件。
 
-| 功能 | 函数名 | 说明 |
-|------|--------|------|
-| 空心矩形 | `vga_draw_rect()` | 画一个矩形边框 |
-| 填充矩形 | `vga_draw_fill_rect()` | 用字符填充矩形区域 |
-| 水平线 | `vga_draw_hline()` | 画一条水平线 |
-| 垂直线 | `vga_draw_vline()` | 画一条垂直线 |
-| 面板 | `vga_draw_panel()` | 带标题的矩形边框 |
-| 居中文本 | `vga_draw_text_centered()` | 在区域内居中显示文本 |
-| 进度条 | `vga_draw_bar()` | 绘制进度条 |
+首先是基础图形：空心矩形、填充矩形、水平线、垂直线。这些是最小的"积木"，几乎所有复杂的图形都是由它们组合而成的。
+
+然后是高级组件：面板系统（带标题的矩形边框）、居中文本、进度条。这些组件在 UI 开发中非常常用，把它们封装成函数可以大大提高开发效率。
+
+为什么要分这么细？因为每个函数都有它的职责，而且这样设计更容易复用。比如面板函数内部就会调用矩形函数，矩形函数又调用 `vga_put_char_at()`。这种分层设计让代码结构更清晰，也更容易维护。
 
 ---
 
 ## 第一步 —— 创建 GUI Helper 目录
 
-我们先创建一个新的目录来存放 GUI 相关代码：
+在开始写代码之前，我们先创建一个新的目录来存放 GUI 相关代码。
 
-```bash
-# 创建 gui_helper 目录
-mkdir -p kernel/driver/vga/gui_helper
+创建一个 `kernel/driver/vga/gui_helper` 目录，然后在里面创建 `gui_helper.h` 头文件和 `gui_helper.c` 实现文件。
 
-# 创建头文件
-touch kernel/driver/vga/gui_helper/gui_helper.h
-
-# 创建实现文件
-touch kernel/driver/vga/gui_helper/gui_helper.c
-```
-
-为什么要单独开个目录？因为 GUI 功能可能会越来越多，单独管理更清晰。
+为什么要单独开个目录？因为 GUI 功能可能会越来越多，如果都堆在 vga 目录下会很乱。单独管理更清晰，而且如果以后要支持其他图形模式（比如 VGA 图形模式），可以单独开目录，不会互相干扰。
 
 ---
 
 ## 第二步 —— 编写头文件
 
-先写接口定义，这是我们的"设计图纸"：
+先写接口定义，这是我们的"设计图纸"。头文件里要定义所有函数的声明，以及面板结构体。
 
-```bash
-cat > kernel/driver/vga/gui_helper/gui_helper.h << 'EOF'
-/**
- * @file gui_helper.h
- * @author Charliechen114514
- * @brief VGA GUI Helper Functions - Common GUI drawing primitives
- * @version 0.1
- * @date 2026-02-16
- */
+我们先定义结构体 `vga_panel_t`。这个结构体保存了面板的所有信息：位置、尺寸、颜色和标题。x 和 y 是面板左上角的坐标，width 和 height 是面板的宽度和高度。border_color 是边框颜色，bg_color 是背景色（虽然我们暂时不用填充背景），text_color 是标题文字颜色，title 是指向标题字符串的指针。
 
-#pragma once
-#include "vga/vga.h"
+然后是函数声明。`vga_draw_rect()` 画一个空心矩形边框，`vga_draw_fill_rect()` 用指定字符填充一个矩形区域，`vga_draw_hline()` 和 `vga_draw_vline()` 分别画水平线和垂直线。这四个是基础图形函数。
 
-// Draw a rectangle border at specified position
-void vga_draw_rect(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                   vga_sz_t width, vga_sz_t height, vga_color_t color);
-
-// Draw a filled rectangle with specified color
-void vga_draw_fill_rect(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                        vga_sz_t width, vga_sz_t height,
-                        char fill_char, vga_color_t font, vga_color_t bg);
-
-// Draw a horizontal line
-void vga_draw_hline(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                    vga_sz_t length, char line_char, vga_color_t color);
-
-// Draw a vertical line
-void vga_draw_vline(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                    vga_sz_t length, char line_char, vga_color_t color);
-
-// Panel structure for organized GUI layout
-typedef struct {
-    vga_sz_t x;
-    vga_sz_t y;
-    vga_sz_t width;
-    vga_sz_t height;
-    vga_color_t border_color;
-    vga_color_t bg_color;
-    vga_color_t text_color;
-    const char* title;
-} vga_panel_t;
-
-// Draw a panel with border and optional title
-void vga_draw_panel(CCOS_VGA* vga, const vga_panel_t* panel);
-
-// Draw text centered in a rectangular area
-void vga_draw_text_centered(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                            vga_sz_t width, const char* text,
-                            vga_color_t font, vga_color_t bg);
-
-// Draw a horizontal bar (useful for progress bars)
-void vga_draw_bar(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                  vga_sz_t width, vga_sz_t filled,
-                  char fill_char, vga_color_t fill_color,
-                  vga_color_t empty_color);
-EOF
-```
+`vga_draw_panel()` 是高级组件，它画一个带标题的矩形边框。`vga_draw_text_centered()` 在指定区域内居中显示文本。`vga_draw_bar()` 画一个进度条，可以显示加载进度之类的信息。
 
 ---
 
-## 第三步 —— 实现基础图形函数
+## 第三步 —— 实现空心矩形
 
-现在我们来写实现代码。
+现在我们来写实现代码。先从最基础的空心矩形开始。
 
-### 空心矩形
+这个函数接收五个参数：VGA 实例、左上角坐标、宽度和高度、边框颜色。
 
-```bash
-cat > kernel/driver/vga/gui_helper/gui_helper.c << 'EOF_PART1'
-/**
- * @file gui_helper.c
- * @author Charliechen114514
- * @brief VGA GUI Helper Functions - Implementation
- * @version 0.1
- * @date 2026-02-16
- */
+函数的第一步是参数检查。如果 VGA 指针为空，或者宽度高度小于 2，直接返回。为什么是 2？因为一个矩形至少要有 2 个字符的宽度和高度，否则就没有"内部"可言了。你想画一个 1x1 的矩形，那只能是一个点，不是矩形。
 
-#include "gui_helper.h"
-#include "vga/vga_helpers.h"
+然后是画四个角。我们用 `+` 字符表示矩形的四个角，左上、右上、左下、右下各一个。
 
-// Draw a rectangle border at specified position
-void vga_draw_rect(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                   vga_sz_t width, vga_sz_t height, vga_color_t color) {
-    if (vga == NULL || width < 2 || height < 2)
-        return;
+接下来是画上下边框。用 `for` 循环遍历边框的每一点，用 `-` 字符填充。注意循环范围是从 1 到 `width - 2`，因为两个端点已经被角占据了。
 
-    // Draw corners
-    vga_put_char_at(vga, x, y, '+', color, VGA_COLOR_BLACK);
-    vga_put_char_at(vga, x + width - 1, y, '+', color, VGA_COLOR_BLACK);
-    vga_put_char_at(vga, x, y + height - 1, '+', color, VGA_COLOR_BLACK);
-    vga_put_char_at(vga, x + width - 1, y + height - 1, '+', color, VGA_COLOR_BLACK);
+最后是画左右边框。同样用 `for` 循环遍历，这次是垂直方向，用 `|` 字符填充。
 
-    // Draw horizontal borders
-    for (vga_sz_t i = 1; i < width - 1; i++) {
-        vga_put_char_at(vga, x + i, y, '-', color, VGA_COLOR_BLACK);
-        vga_put_char_at(vga, x + i, y + height - 1, '-', color, VGA_COLOR_BLACK);
-    }
-
-    // Draw vertical borders
-    for (vga_sz_t i = 1; i < height - 1; i++) {
-        vga_put_char_at(vga, x, y + i, '|', color, VGA_COLOR_BLACK);
-        vga_put_char_at(vga, x + width - 1, y + i, '|', color, VGA_COLOR_BLACK);
-    }
-}
-EOF_PART1
-```
-
-这个函数画一个这样的矩形：
+画出来的矩形是这样的：
 
 ```
 +----------+
@@ -162,118 +65,54 @@ EOF_PART1
 +----------+
 ```
 
-⚠️ **注意**
-- `width` 和 `height` 必须 ≥ 2，否则没有空间画边框
-- 四个角用 `+`，横边用 `-`，竖边用 `|`
+四个角是 `+`，横边是 `-`，竖边是 `|`。这是最经典的 ASCII 风格矩形边框。
 
-### 填充矩形
-
-```bash
-cat >> kernel/driver/vga/gui_helper/gui_helper.c << 'EOF_PART2'
-
-// Draw a filled rectangle with specified color
-void vga_draw_fill_rect(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                        vga_sz_t width, vga_sz_t height,
-                        char fill_char, vga_color_t font, vga_color_t bg) {
-    if (vga == NULL)
-        return;
-
-    for (vga_sz_t j = 0; j < height && (y + j) < vga->height; j++) {
-        for (vga_sz_t i = 0; i < width && (x + i) < vga->width; i++) {
-            vga_put_char_at(vga, x + i, y + j, fill_char, font, bg);
-        }
-    }
-}
-EOF_PART2
-```
-
-这个函数用指定字符填充一个矩形区域。
-
-注意循环中的边界检查：`(y + j) < vga->height` 和 `(x + i) < vga->width`。这确保即使矩形超过屏幕边界，也不会越界访问。
-
-### 水平线和垂直线
-
-```bash
-cat >> kernel/driver/vga/gui_helper/gui_helper.c << 'EOF_PART3'
-
-// Draw a horizontal line
-void vga_draw_hline(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                    vga_sz_t length, char line_char, vga_color_t color) {
-    if (vga == NULL)
-        return;
-
-    for (vga_sz_t i = 0; i < length && (x + i) < vga->width; i++) {
-        vga_put_char_at(vga, x + i, y, line_char, color, VGA_COLOR_BLACK);
-    }
-}
-
-// Draw a vertical line
-void vga_draw_vline(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                    vga_sz_t length, char line_char, vga_color_t color) {
-    if (vga == NULL)
-        return;
-
-    for (vga_sz_t i = 0; i < length && (y + i) < vga->height; i++) {
-        vga_put_char_at(vga, x, y + i, line_char, color, VGA_COLOR_BLACK);
-    }
-}
-EOF_PART3
-```
-
-这两个函数很简单，就是沿着水平或垂直方向画一串字符。
+⚠️ **边框宽度问题**
+之前我遇到过一个问题，就是边框宽度设为 1 的时候，循环 `for (vga_sz_t i = 1; i < width - 1; i++)` 的循环条件 `1 < 0` 永远不会满足，循环体不会执行。所以我们在函数开头检查了 `width >= 2`，确保不会出现这种情况。
 
 ---
 
-## 第四步 —— 实现面板系统
+## 第四步 —— 实现填充矩形
 
-面板是一个带标题的矩形边框，这是我们 UI 的基础组件。
+空心矩形画边框，填充矩形就是填充整个区域。这个函数在清除某个区域、绘制按钮背景等场景下很有用。
 
-```bash
-cat >> kernel/driver/vga/gui_helper/gui_helper.c << 'EOF_PART4'
+函数签名和画矩形类似，但多了两个参数：fill_char 是用来填充的字符（通常是空格），font 和 bg 是字符的前景色和背景色。
 
-// Draw a panel with border and optional title
-void vga_draw_panel(CCOS_VGA* vga, const vga_panel_t* panel) {
-    if (vga == NULL || panel == NULL)
-        return;
+函数实现很简单，就是一个双重循环，遍历矩形区域内的每一个点，调用 `vga_put_char_at()` 画上指定字符。
 
-    // Draw border
-    vga_draw_rect(vga, panel->x, panel->y, panel->width, panel->height,
-                  panel->border_color);
+但这里有个关键点：循环中的边界检查。我们在循环条件里加了 `(y + j) < vga->height` 和 `(x + i) < vga->width` 的检查。这确保即使矩形超过屏幕边界，也不会越界访问显存。
 
-    // Draw title if provided
-    if (panel->title != NULL) {
-        // Calculate title length (manually, since we don't have strlen)
-        vga_sz_t title_len = 0;
-        const char* p = panel->title;
-        while (*p != '\0') {
-            title_len++;
-            p++;
-        }
+为什么要这样检查？因为如果矩形超过屏幕边界，而我们不做检查，`vga_put_char_at()` 虽然会拦截，但调用它的开销也不小。而且如果代码逻辑有漏洞，可能会出现奇怪的行为。所以在循环里检查更安全。
 
-        if (title_len > 0 && title_len < panel->width - 2) {
-            // Calculate centered position
-            vga_sz_t title_x = panel->x + (panel->width - title_len) / 2;
+---
 
-            // Draw title with brackets
-            vga_put_char_at(vga, panel->x, panel->y, ' ',
-                           panel->border_color, VGA_COLOR_BLACK);
-            vga_put_char_at(vga, panel->x + 1, panel->y, '[',
-                           panel->border_color, VGA_COLOR_BLACK);
+## 第五步 —— 实现线条函数
 
-            for (vga_sz_t i = 0; i < title_len && (title_x + i + 2) < (panel->x + panel->width - 1); i++) {
-                vga_put_char_at(vga, title_x + i + 2, panel->y, panel->title[i],
-                               panel->text_color, VGA_COLOR_BLACK);
-            }
+水平和垂直线其实是很简单的函数，但因为它们经常被单独使用（比如画分隔线、进度条底线），所以我们把它们单独封装出来。
 
-            vga_put_char_at(vga, title_x + title_len + 2, panel->y, ']',
-                           panel->border_color, VGA_COLOR_BLACK);
-        }
-    }
-}
-EOF_PART4
-```
+水平线函数就是在指定 Y 坐标上，从 X 坐标开始画 `length` 个字符。垂直线函数就是在指定 X 坐标上，从 Y 坐标开始画 `length` 个字符。
 
-面板效果如下：
+这两个函数的实现都很直接，就是一个单循环，调用 `vga_put_char_at()` 画字符。唯一需要注意的是边界检查，确保不会画到屏幕外面去。
+
+---
+
+## 第六步 —— 实现面板系统
+
+面板是一个带标题的矩形边框，这是我们 UI 的基础组件。你可以用它来显示信息框、对话框、状态面板等等。
+
+面板的数据结构我们已经在头文件中定义了。实现函数首先检查 VGA 指针和面板指针是否为空，然后调用 `vga_draw_rect()` 画出边框。
+
+接下来是处理标题。如果面板有标题（title 不为 NULL），我们需要把它画在顶部边框中央。
+
+但这里有个问题：标准 C 库的 `strlen()` 函数在我们的 freestanding 环境下不可用。所以我们得手动计算标题长度。方法很简单，遍历字符串直到遇到 `\0`，计数器加一。
+
+计算好长度后，我们检查标题是否太长。如果标题长度超过面板宽度减 2（因为要留出两个字符放 `[` 和 `]`），就不显示标题。这是为了防止标题覆盖边框，显示效果会很难看。
+
+然后计算标题的起始位置。为了让标题居中，我们用 `(panel->width - title_len) / 2` 计算出左边应该留多少空格。但实际上我们要考虑方括号的位置，所以实际计算会有一些偏移。
+
+画标题的时候，我们先把左上角的角字符替换成空格，然后画左方括号 `[`。接着遍历标题字符串的每个字符，画在方括号后面。最后画右方括号 `]`。
+
+面板效果是这样的：
 
 ```
 [  Title  ]
@@ -283,215 +122,85 @@ EOF_PART4
 +----------+
 ```
 
-标题会显示在顶部边框中央，用方括号包裹。
+标题会显示在顶部边框中央，用方括号包裹，看起来很专业。
 
-⚠️ **标题宽度不能超过面板宽度减 2**
-因为要留出两个字符放 `[` 和 `]`，所以标题长度必须 ≤ `width - 2`。
+⚠️ **标题宽度问题**
+之前我踩过一个坑，就是标题刚好等于面板宽度减 2 的时候，右方括号会超出边界。后来我加了一个额外的检查，确保 `title_x + title_len + 2` 小于面板宽度，才画右方括号。这样即使标题很长，也不会破坏边框。
 
 ---
 
-## 第五步 —— 实现布局工具
+## 第七步 —— 实现居中文本
 
-### 居中文本
+居中文本在很多场景下都很有用，比如在按钮上居中显示文字、在状态栏显示提示信息等等。
 
-```bash
-cat >> kernel/driver/vga/gui_helper/gui_helper.c << 'EOF_PART5'
+这个函数的实现和面板标题居中类似。首先手动计算文本长度，然后计算起始位置让文本居中。起始位置的计算公式是 `x + (width - text_len) / 2`，这样文本就会在指定区域内居中显示。
 
-// Draw text centered in a rectangular area
-void vga_draw_text_centered(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                            vga_sz_t width, const char* text,
-                            vga_color_t font, vga_color_t bg) {
-    if (vga == NULL || text == NULL)
-        return;
+然后遍历字符串的每个字符，画在计算好的位置上。同样要确保不会画到屏幕外面去。
 
-    // Calculate text length
-    vga_sz_t text_len = 0;
-    const char* p = text;
-    while (*p != '\0') {
-        text_len++;
-        p++;
-    }
+---
 
-    // Calculate start position for centering
-    vga_sz_t start_x = x;
-    if (text_len < width) {
-        start_x = x + (width - text_len) / 2;
-    }
+## 第八步 —— 实现进度条
 
-    // Draw each character
-    for (vga_sz_t i = 0; i < text_len && (start_x + i) < vga->width; i++) {
-        vga_put_char_at(vga, start_x + i, y, text[i], font, bg);
-    }
-}
-EOF_PART5
-```
+进度条是用来显示进度的，比如加载进度、拷贝进度等等。虽然现在我们的内核还用不上，但以后肯定会用到的。
 
-居中算法很简单：`start_x = x + (width - text_len) / 2`
+这个函数的参数有些特殊。`filled` 表示进度条的填充长度，不是百分比。比如 `width` 是 40，`filled` 是 20，就表示进度条填充了一半。
 
-如果文本长度超过区域宽度，就从左边界开始画（不截断）。
+函数实现是一个循环，遍历进度条的每一个位置。如果当前位置小于 `filled`，就用填充颜色画字符，否则用空颜色画字符。这样就能显示出"填满"和"未填满"的区别。
 
-### 进度条
-
-```bash
-cat >> kernel/driver/vga/gui_helper/gui_helper.c << 'EOF_PART6'
-
-// Draw a horizontal bar (useful for progress bars)
-void vga_draw_bar(CCOS_VGA* vga, vga_sz_t x, vga_sz_t y,
-                  vga_sz_t width, vga_sz_t filled,
-                  char fill_char, vga_color_t fill_color,
-                  vga_color_t empty_color) {
-    if (vga == NULL)
-        return;
-
-    for (vga_sz_t i = 0; i < width; i++) {
-        vga_color_t color = (i < filled) ? fill_color : empty_color;
-        vga_put_char_at(vga, x + i, y, fill_char, color, VGA_COLOR_BLACK);
-    }
-}
-EOF_PART6
-```
-
-进度条效果：
+进度条效果是这样的：
 
 ```
 filled = 10, width = 20:
 ==========          (一半填充，一半空)
 ```
 
----
-
-## 第六步 —— 更新构建配置
-
-### 修改 CMakeLists.txt
-
-添加新文件到构建系统：
-
-```cmake
-# GUI Helper
-target_sources(kernel PRIVATE
-    kernel/driver/vga/gui_helper/gui_helper.c
-    # ... 其他文件
-)
-
-# 确保头文件路径正确
-target_include_directories(kernel PRIVATE
-    kernel/driver/vga
-    kernel/driver/vga/gui_helper
-    # ... 其他路径
-)
-```
-
-### 验证编译
-
-```bash
-# 清理并重新构建
-rm -rf build/
-cmake -DCMAKE_BUILD_TYPE=Debug -B build
-cmake --build build
-```
+填充部分用一种颜色（通常是绿色），未填充部分用另一种颜色（通常是灰色），一眼就能看出进度。
 
 ---
 
-## 第七步 —— 测试 GUI 函数
+## 第九步 —— 更新构建配置
 
-让我们写个测试程序，看看这些函数的效果：
+新文件写好了，现在要告诉构建系统把它们编译进去。
 
-```c
-// kernel_main.c 或专门的测试文件
-#include "driver/vga/vga.h"
-#include "driver/vga/gui_helper/gui_helper.h"
+在 CMakeLists.txt 中，把 `gui_helper.c` 添加到 `target_sources` 里。同时把 `kernel/driver/vga/gui_helper` 添加到 `target_include_directories` 里，这样编译器才能找到头文件。
 
-void test_gui_functions(void) {
-    CCOS_VGA* vga = vga_instance();
-    vga_clear(vga, VGA_COLOR_BLACK);
-
-    // 测试 1: 画一个矩形
-    vga_draw_rect(vga, 5, 5, 30, 10, VGA_COLOR_BRIGHT_CYAN);
-
-    // 测试 2: 画一个填充矩形
-    vga_draw_fill_rect(vga, 40, 5, 20, 5, '#', VGA_COLOR_BRIGHT_GREEN, VGA_COLOR_BLACK);
-
-    // 测试 3: 画一个面板
-    vga_panel_t panel = {
-        .x = 10, .y = 18,
-        .width = 40, .height = 5,
-        .border_color = VGA_COLOR_YELLOW,
-        .bg_color = VGA_COLOR_BLACK,
-        .text_color = VGA_COLOR_WHITE,
-        .title = "Test Panel"
-    };
-    vga_draw_panel(vga, &panel);
-
-    // 测试 4: 居中文本
-    vga_draw_text_centered(vga, 10, 20, 40, "Centered Text",
-                          VGA_COLOR_BRIGHT_MAGENTA, VGA_COLOR_BLACK);
-
-    // 测试 5: 进度条
-    vga_draw_bar(vga, 10, 23, 40, 30, '=', VGA_COLOR_BRIGHT_GREEN, VGA_COLOR_DARK_GREY);
-
-    // 测试 6: 水平线和垂直线
-    vga_draw_hline(vga, 55, 5, 20, '-', VGA_COLOR_RED);
-    vga_draw_vline(vga, 65, 7, 10, '|', VGA_COLOR_RED);
-
-    // 延迟以便观察
-    vga_delay(50000000);
-}
-```
-
-### 运行测试
-
-```bash
-# 重新构建
-cmake --build build
-
-# VGA 模式运行
-cmake --build build --target vga-run
-```
-
-在 VNC 中查看，你应该能看到各种图形元素：
-
-```
-     +------------------------------+   ####################
-     |                              |   Centered Text
-     |                              |   [Test Panel]
-     +------------------------------+   ========================
-```
+然后清理并重新构建，确保没有编译错误。如果一切正常，你应该能看到 gui_helper.c 被编译进去了，最后生成 kernel.elf。
 
 ---
 
-## 常见问题
+## 第十步 —— 测试 GUI 函数
 
-### 问题 1：面板标题不显示
+代码写完了，编译也通过了，现在该测试一下是不是真的能工作。
 
-**原因**：标题长度超过面板宽度
+写一个测试函数，依次调用每个 GUI 函数，看看效果。画一个矩形，再画一个填充矩形。画一个面板，显示 "Test Panel" 标题。在面板下方画一些居中文本。最后画一个进度条，填充一半。
 
-**解决**：
+重新构建并运行，打开 VNC 查看输出。如果你能看到各种图形元素正确显示，恭喜！GUI 绘图库工作正常。
+
+如果显示有问题，先别慌。检查一下坐标是否超出屏幕边界、颜色编码是否正确、结构体成员是否都正确设置了。大多数问题都是这些低级错误导致的。
+
+---
+
+## 踩坑案例：面板标题的定位问题
+
+说到面板标题，我有个真实案例想分享。
+
+一开始我实现面板标题的时候，计算位置是这样的：
+
 ```c
-// 确保标题长度足够小
-.title = "Short"  // 不要太长
+vga_sz_t title_x = panel->x + (panel->width - title_len) / 2;
 ```
 
-### 问题 2：矩形显示不全
+看起来没问题对吧？但实际上这个计算没有考虑方括号的位置。结果标题确实是居中了，但加上方括号之后就偏了。
 
-**原因**：矩形超出屏幕边界
+后来我改成这样：
 
-**解决**：
 ```c
-// 确保矩形在屏幕内
-// 最大宽度: 80 - x
-// 最大高度: 25 - y
+vga_sz_t title_x = panel->x + 1 + (panel->width - 2 - title_len) / 2;
 ```
 
-### 问题 3：颜色显示错误
+`panel->width - 2` 是去掉两个方括号的位置，`panel->x + 1` 是跳过左边的空格。这样标题就能在方括号内居中了。
 
-**原因**：忘记设置 `bg_color` 参数
-
-**检查**：
-```c
-// 正确
-vga_put_char_at(vga, x, y, c, VGA_COLOR_WHITE, VGA_COLOR_BLACK);
-//                                                  ^前景  ^背景
-```
+这些细节看起来很小，但直接影响显示效果。UI 开发就是这样，差一个像素都能让整个界面看起来别扭。
 
 ---
 
@@ -499,19 +208,9 @@ vga_put_char_at(vga, x, y, c, VGA_COLOR_WHITE, VGA_COLOR_BLACK);
 
 现在我们有了一个功能完整的 GUI 绘图库！
 
-| 类别 | 函数 | 用途 |
-|------|------|------|
-| 基础图形 | `vga_draw_rect()` | 空心矩形 |
-| | `vga_draw_fill_rect()` | 填充矩形 |
-| | `vga_draw_hline()` | 水平线 |
-| | `vga_draw_vline()` | 垂直线 |
-| 高级组件 | `vga_draw_panel()` | 带标题的面板 |
-| | `vga_draw_text_centered()` | 居中文本 |
-| | `vga_draw_bar()` | 进度条 |
+基础图形包括空心矩形、填充矩形、水平线、垂直线。高级组件包括带标题的面板、居中文本、进度条。这些函数将成为我们构建精美启动界面的"积木"。
 
-这些函数将成为我们构建精美启动界面的"积木"。
-
-下一章，我们将用这些"积木"组装出一个令人惊艳的启动欢迎界面！
+下一章，我们将用这些"积木"组装出一个令人惊艳的启动欢迎界面！星空、Logo、动画边框，所有这些元素都将通过我们刚刚实现的绘图库来展现。
 
 准备好了吗？让我们开始创作！
 

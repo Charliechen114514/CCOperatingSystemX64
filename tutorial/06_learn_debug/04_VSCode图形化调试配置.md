@@ -6,22 +6,19 @@
 
 ## 第一步：创建 launch.json
 
-### 目标
+### 我们要做什么
 
-让 VSCode 能够通过 F5 键启动调试，支持：
-- 断点设置
-- 变量监视
-- 单步执行
-- 调用栈查看
+让 VSCode 能够通过 F5 键启动调试，支持断点设置、变量监视、单步执行、调用栈查看。这些功能在现代 IDE 里都是天经地义的，但在内核调试环境里，我们需要手动配置。
 
 ### 创建 .vscode 目录
 
 ```bash
-# 在项目根目录执行
 mkdir -p .vscode
 ```
 
 ### 创建 launch.json
+
+在 `.vscode` 目录下创建 `launch.json`：
 
 ```json
 {
@@ -38,16 +35,13 @@ mkdir -p .vscode
             "miDebuggerServerAddress": "localhost:1234",
             "setupCommands": [
                 {
-                    "text": "-gdb-set architecture i386:x86-64",
-                    "description": "设置 x86-64 架构"
+                    "text": "-gdb-set architecture i386:x86-64"
                 },
                 {
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "description": "使用 Intel 汇编语法"
+                    "text": "-gdb-set disassembly-flavor intel"
                 },
                 {
-                    "text": "-gdb-set pagination off",
-                    "description": "关闭分页"
+                    "text": "-gdb-set pagination off"
                 }
             ]
         }
@@ -55,47 +49,36 @@ mkdir -p .vscode
 }
 ```
 
-### 解释配置项
+这个配置文件定义了 VSCode 如何连接到 GDB。让我们拆开来看每个字段的含义。
 
-| 配置项 | 说明 |
-|--------|------|
-| `name` | 在调试面板显示的名称 |
-| `type` | 调试类型，`cppdbg` 表示 C/C++ |
-| `request` | `launch` 表示启动调试 |
-| `program` | 要调试的程序（带符号的 ELF 文件） |
-| `miDebuggerPath` | GDB 的路径 |
-| `miDebuggerServerAddress` | GDB 服务器地址（QEMU 监听的端口） |
-| `setupCommands` | GDB 启动时执行的命令 |
+`type: "cppdbg"` 表示这是 C/C++ 调试类型，会使用 cpptools 扩展。`request: "launch"` 表示启动调试（而不是 attach 到已有进程）。`program` 指向带符号的 ELF 文件，这是关键，我们调试的是 `kernel.elf` 而不是 `kernel.bin`。
 
-⚠️ **注意**：`program` 指向 `kernel.elf` 而不是 `kernel.bin`，因为我们需要符号信息。
+`miDebuggerPath` 是 GDB 的路径，`miDebuggerServerAddress` 告诉 VSCode QEMU 的 GDB 服务器监听在 localhost:1234。
+
+`setupCommands` 是 GDB 启动时执行的命令。我们设置架构为 x86-64，使用 Intel 汇编语法（比 AT&T 语法更易读），关闭分页输出（让 GDB 输出不被分页打断）。
 
 ---
 
-## 第二步：launch_qemu_for_vscode_debug.sh
+## 第二步：智能调试脚本
 
-VSCode 的调试配置需要 QEMU 已经在运行，并且监听 1234 端口。我们来写一个更智能的脚本：
+### 设计目标
 
-### 脚本功能
+VSCode 的调试配置需要 QEMU 已经在运行。但每次都手动启动 QEMU 很麻烦，而且调试结束后还得手动 kill 进程。我们想要一个更智能的脚本：
 
-这个脚本要比之前的 `debug.sh` 更智能：
+1. 自动清理并重新构建（Debug 模式）
+2. 监控 GDB 连接状态
+3. GDB 断开时自动停止 QEMU
+4. 支持 VNC 显示
+5. 串口输出到文件供监控
 
-1. **自动清理并重新构建**（Debug 模式）
-2. **监控 GDB 连接状态**
-3. **GDB 断开时自动停止 QEMU**
-4. **支持 VNC 显示**
-5. **串口输出到文件供监控**
+这个脚本会比之前的 `debug.sh` 更强大。
 
-### 创建脚本
+### 脚本头部和帮助信息
 
 ```bash
 #!/bin/bash
-# CCOS QEMU Launch Script for VSCode Debug
-# 用于启动 QEMU 调试服务器供 VSCode attach 调试
-# 当 GDB 断开连接时自动停止 QEMU
-
 set -e
 
-# 获取脚本所在目录的父目录（项目根目录）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -104,16 +87,13 @@ KERNEL_ELF="$BUILD_DIR/kernel.elf"
 BOOT_IMG="$BUILD_DIR/boot.img"
 PID_FILE="$SCRIPT_DIR/.qemu_debug.pid"
 SERIAL_LOG="$SCRIPT_DIR/.qemu_serial.log"
+```
 
-# 颜色输出
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-GRAY='\033[0;90m'
-NC='\033[0m' # No Color
+这些路径变量的作用和 `debug.sh` 类似，但多了 `PID_FILE` 和 `SERIAL_LOG`。`PID_FILE` 保存 QEMU 进程的 PID，方便后续清理。`SERIAL_LOG` 是串口输出文件，我们可以用 `tail -f` 实时查看。
 
-# 显示帮助信息
+帮助函数让脚本支持多种用法：
+
+```bash
 show_help() {
     echo "CCOS QEMU 调试服务器启动脚本"
     echo ""
@@ -128,8 +108,13 @@ show_help() {
     echo "  2. 在 VSCode 中按 F5 启动调试"
     echo "  3. 停止 VSCode 调试时，QEMU 会自动停止"
 }
+```
 
-# 检查构建文件是否存在
+### 检查函数
+
+我们有两个检查函数，一个检查文件是否存在，一个检查工具是否安装。
+
+```bash
 check_files() {
     if [ ! -f "$KERNEL_ELF" ]; then
         echo -e "${RED}错误: $KERNEL_ELF 不存在${NC}"
@@ -143,7 +128,6 @@ check_files() {
     fi
 }
 
-# 检查是否已安装必要的工具
 check_tools() {
     if ! command -v qemu-system-x86_64 &> /dev/null; then
         echo -e "${RED}错误: 未安装 qemu-system-x86_64${NC}"
@@ -155,8 +139,15 @@ check_tools() {
         exit 1
     fi
 }
+```
 
-# 停止 QEMU 进程
+`lsof` 是用来查看端口占用的工具，我们的 GDB 连接检测需要它。如果系统没有 `lsof`，脚本会报错退出。
+
+### 停止 QEMU 函数
+
+这个函数负责清理 QEMU 进程：
+
+```bash
 stop_qemu() {
     local stopped=false
 
@@ -183,8 +174,15 @@ stop_qemu() {
         fi
         rm -f "$PID_FILE"
     fi
+```
 
-    # 尝试查找并停止任何监听 1234 端口的 QEMU 进程
+首先读取 PID 文件，检查进程是否还在运行。如果在运行，先发送 TERM 信号（`kill` 默认发送 TERM），然后等待进程结束。如果 5 秒后还在运行，就用 KILL 信号（`kill -9`）强制杀死。
+
+这个"先礼后兵"的策略是个好习惯。TERM 信号给进程一个清理资源的机会，KILL 信号是立即终止。
+
+然后检查端口 1234 是否有其他 QEMU 进程：
+
+```bash
     QEMU_PID=$(lsof -ti:1234 2>/dev/null || true)
     if [ -n "$QEMU_PID" ]; then
         if ps -p "$QEMU_PID" -o comm= 2>/dev/null | grep -q qemu-system; then
@@ -197,67 +195,46 @@ stop_qemu() {
             stopped=true
         fi
     fi
+```
 
-    if [ "$stopped" = true ]; then
-        echo -e "${GREEN}清理完成${NC}"
-    else
-        echo -e "${YELLOW}没有发现运行中的 QEMU 调试服务器${NC}"
-    fi
-}
+`lsof -ti:1234` 返回占用 1234 端口的进程 PID。我们检查一下这确实是 QEMU 进程，然后停止它。这样可以清理那些没有 PID 文件的"孤儿" QEMU 进程。
 
-# 显示 QEMU 状态
-show_status() {
-    local running=false
+### GDB 连接监控
 
-    if [ -f "$PID_FILE" ]; then
-        PID=$(cat "$PID_FILE")
-        if ps -p "$PID" > /dev/null 2>&1; then
-            echo -e "${GREEN}QEMU 正在运行 (PID: $PID)${NC}"
-            echo -e "${BLUE}监听端口: localhost:1234${NC}"
-            echo -e "${BLUE}符号文件: $KERNEL_ELF${NC}"
-            running=true
-        else
-            echo -e "${YELLOW}PID 文件存在但进程不在运行，清理中...${NC}"
-            rm -f "$PID_FILE"
-        fi
-    fi
+这是脚本的核心创新点：
 
-    if [ "$running" = false ]; then
-        # 检查端口 1234 是否被占用
-        PORT_PID=$(lsof -ti:1234 2>/dev/null || true)
-        if [ -n "$PORT_PID" ]; then
-            if ps -p "$PORT_PID" -o comm= 2>/dev/null | grep -q qemu-system; then
-                echo -e "${GREEN}QEMU 正在运行 (PID: $PORT_PID)${NC}"
-                echo -e "${YELLOW}注意: 未由本脚本管理${NC}"
-            else
-                echo -e "${YELLOW}端口 1234 被其他进程占用 (PID: $PORT_PID)${NC}"
-            fi
-        else
-            echo -e "${GRAY}QEMU 调试服务器未运行${NC}"
-        fi
-    fi
-}
-
-# 监控 GDB 连接状态，当 GDB 断开时自动停止 QEMU
+```bash
 monitor_gdb_connection() {
     local qemu_pid=$1
+    local tail_pid=""
 
     echo -e "${GRAY}[监控] 正在监控 GDB 连接状态...${NC}"
 
-    # 等待 QEMU 完全启动
     sleep 0.5
 
     local gdb_connected=false
+    local last_connected_time=0
+    local connection_count=0
+
+    > "$SERIAL_LOG"
 
     while true; do
         # 检查 QEMU 是否还在运行
         if ! ps -p "$qemu_pid" > /dev/null 2>&1; then
+            if [ -n "$tail_pid" ]; then
+                kill "$tail_pid" 2>/dev/null || true
+            fi
             echo -e "\n${GRAY}[监控] QEMU 已停止${NC}"
             rm -f "$PID_FILE"
             break
         fi
+```
 
-        # 检查端口 1234 是否有 ESTABLISHED 连接
+监控函数是一个无限循环，不断检查 QEMU 和 GDB 的状态。如果 QEMU 停止了，就退出监控。
+
+接下来检查 GDB 连接：
+
+```bash
         local has_connection=false
 
         if command -v ss &> /dev/null; then
@@ -265,37 +242,54 @@ monitor_gdb_connection() {
                 has_connection=true
             fi
         else
-            # 回退到 lsof
             if lsof -ti:1234 -sTCP:ESTABLISHED 2>/dev/null | grep -q .; then
                 has_connection=true
             fi
         fi
+```
+
+我们使用 `ss` 或 `lsof` 检查端口 1234 是否有 ESTABLISHED 状态的连接。`ss` 是现代 Linux 系统的标准工具，输出更简洁。如果 `ss` 不可用，回退到 `lsof`。
+
+连接状态检测逻辑：
+
+```bash
+        local current_time=$(date +%s)
 
         if $has_connection; then
             if [ "$gdb_connected" = false ]; then
                 gdb_connected=true
-                echo -e "\n${GREEN}[监控] GDB 已连接${NC}"
+                connection_count=$((connection_count + 1))
+                echo -e "\n${GREEN}[监控] GDB 已连接 (${connection_count})${NC}"
+                tail -f "$SERIAL_LOG" 2>/dev/null &
+                tail_pid=$!
             fi
+            last_connected_time=$current_time
         else
             if [ "$gdb_connected" = true ]; then
-                # GDB 断开了
-                sleep 2  # 等待 2 秒确认是真的断开了
-                if ! lsof -ti:1234 -sTCP:ESTABLISHED 2>/dev/null | grep -q .; then
-                    echo -e "\n${YELLOW}[监控] 检测到 GDB 已断开连接${NC}"
-                    echo -e "${YELLOW}[监控] 正在自动停止 QEMU...${NC}"
-                    kill "$qemu_pid" 2>/dev/null || true
-                    # 等待 QEMU 退出
-                    local count=0
-                    while ps -p "$qemu_pid" > /dev/null 2>&1 && [ $count -lt 20 ]; do
-                        sleep 0.25
-                        count=$((count + 1))
-                    done
-                    if ps -p "$qemu_pid" > /dev/null 2>&1; then
-                        kill -9 "$qemu_pid" 2>/dev/null || true
+                if [ $((current_time - last_connected_time)) -ge 2 ]; then
+                    if [ -n "$tail_pid" ]; then
+                        kill "$tail_pid" 2>/dev/null || true
+                        tail_pid=""
                     fi
-                    rm -f "$PID_FILE"
-                    echo -e "${GREEN}[监控] QEMU 已自动停止${NC}"
-                    break
+                    echo -e "\n${YELLOW}[监控] 检测到 GDB 已断开连接${NC}"
+
+                    sleep 1
+                    if ! lsof -ti:1234 -sTCP:ESTABLISHED 2>/dev/null | grep -q .; then
+                        echo -e "${YELLOW}[监控] 正在自动停止 QEMU...${NC}"
+                        kill "$qemu_pid" 2>/dev/null || true
+                        # 等待 QEMU 退出
+                        local count=0
+                        while ps -p "$qemu_pid" > /dev/null 2>&1 && [ $count -lt 20 ]; do
+                            sleep 0.25
+                            count=$((count + 1))
+                        done
+                        if ps -p "$qemu_pid" > /dev/null 2>&1; then
+                            kill -9 "$qemu_pid" 2>/dev/null || true
+                        fi
+                        rm -f "$PID_FILE"
+                        echo -e "${GREEN}[监控] QEMU 已自动停止${NC}"
+                        break
+                    fi
                 fi
             fi
         fi
@@ -303,8 +297,15 @@ monitor_gdb_connection() {
         sleep 0.5
     done
 }
+```
 
-# 启动 QEMU
+当检测到 GDB 连接时，我们启动一个 `tail -f` 进程实时显示串口日志。当检测到 GDB 断开时，等待 2 秒确认是真的断开了（而不是正在重连），然后自动停止 QEMU。
+
+这个设计让调试体验非常流畅。你在 VSCode 里按 F5 开始调试，按 Shift+F5 停止调试，QEMU 会自动管理。不用手动 kill 进程，也不用担心忘记关 QEMU。
+
+### 自动构建和启动
+
+```bash
 start_qemu() {
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}CCOS QEMU 调试服务器启动脚本${NC}"
@@ -325,8 +326,13 @@ start_qemu() {
     }
 
     echo -e "${GREEN}CMake构建完成！${NC}"
+```
 
-    # 检查文件和工具
+脚本启动时会自动清理并重新构建，确保你调试的是最新代码。这一点真的很重要，我之前就遇到过改了代码但忘记重新构建，然后一直在调试旧代码的尴尬情况。
+
+然后启动 QEMU：
+
+```bash
     check_files
     check_tools
 
@@ -342,19 +348,6 @@ start_qemu() {
         fi
     fi
 
-    # 清理可能的孤立进程
-    local orphan_pid=$(lsof -ti:1234 2>/dev/null || true)
-    if [ -n "$orphan_pid" ]; then
-        if ps -p "$orphan_pid" -o comm= 2>/dev/null | grep -q qemu-system; then
-            echo -e "${YELLOW}清理孤立的 QEMU 进程 (PID: $orphan_pid)...${NC}"
-            kill "$orphan_pid" 2>/dev/null || true
-            sleep 0.5
-        fi
-    fi
-
-    echo -e "${BLUE}正在启动 QEMU 调试模式...${NC}"
-
-    # 启动 QEMU（在后台运行）
     qemu-system-x86_64 \
         -drive format=raw,file="$BOOT_IMG",if=ide \
         -vga std -display vnc=:0 \
@@ -362,53 +355,25 @@ start_qemu() {
         -s \
         -S \
         > /dev/null 2>&1 &
+```
 
-    QEMU_PID=$!
+QEMU 的参数有点不一样：`-vga std -display vnc=:0` 启用 VGA 输出并通过 VNC 协议显示（可以用 vncviewer 连接）。`-serial file:"$SERIAL_LOG"` 把串口输出重定向到文件。
 
-    # 保存 PID
-    echo "$QEMU_PID" > "$PID_FILE"
+最后启动监控函数：
 
-    echo -e "${GREEN}QEMU 已启动 (PID: $QEMU_PID)${NC}"
-    echo -e "${BLUE}等待 QEMU 完全启动...${NC}"
-    sleep 1
-
-    # 验证 QEMU 是否还在运行
-    if ! ps -p "$QEMU_PID" > /dev/null 2>&1; then
-        echo -e "${RED}错误: QEMU 启动失败${NC}"
-        rm -f "$PID_FILE"
-        exit 1
-    fi
-
-    # 验证端口是否在监听
-    if ! lsof -ti:1234 -sTCP:LISTEN > /dev/null 2>&1; then
-        echo -e "${RED}错误: QEMU 未监听端口 1234${NC}"
-        stop_qemu
-        exit 1
-    fi
-
-    echo
-    echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}QEMU GDB Server 已就绪${NC}"
-    echo -e "${GREEN}========================================${NC}"
-    echo -e "${BLUE}监听端口: ${YELLOW}localhost:1234${NC}"
-    echo -e "${BLUE}符号文件: ${YELLOW}$KERNEL_ELF${NC}"
-    echo
-    echo -e "${GREEN}现在可以在 VSCode 中启动调试了！${NC}"
-    echo -e "${YELLOW}停止调试时 QEMU 会自动停止${NC}"
-    echo
-    echo -e "${GRAY}按 Ctrl+C 可手动停止监控（QEMU 会继续运行）${NC}"
-    echo -e "${GRAY}如需完全停止，运行: $0 --stop${NC}"
-    echo
-
-    # 启动监控（后台运行）
+```bash
     monitor_gdb_connection "$QEMU_PID" &
     MONITOR_PID=$!
 
-    # 等待监控进程或用户中断
     wait $MONITOR_PID 2>/dev/null || true
 }
+```
 
-# 处理命令行参数
+我们把监控函数放在后台运行，然后用 `wait` 等待它结束。这样当 GDB 断开、QEMU 停止后，脚本才会退出。
+
+### 命令行参数处理
+
+```bash
 case "${1:-}" in
     --stop|-s)
         stop_qemu
@@ -431,19 +396,7 @@ case "${1:-}" in
 esac
 ```
 
-### 赋予执行权限
-
-```bash
-chmod +x scripts/launch_qemu_for_vscode_debug.sh
-```
-
-### 脚本创新点
-
-这个脚本最厉害的地方是 **GDB 断开检测**：
-
-1. 使用 `lsof` 或 `ss` 检查端口 1234 的 TCP 连接状态
-2. 当检测到 GDB 断开后，自动停止 QEMU
-3. 这样你在 VSCode 中按 Shift+F5 停止调试时，QEMU 也会自动清理
+`"${1:-}"` 是 bash 的参数默认值语法。如果 `$1` 为空，就使用空字符串作为默认值。这样脚本默认执行启动操作，也可以通过 `--stop`、`--status`、`--help` 参数执行其他操作。
 
 ---
 
@@ -451,46 +404,34 @@ chmod +x scripts/launch_qemu_for_vscode_debug.sh
 
 ### 为什么需要 clangd
 
-VSCode 默认的 C/C++ 扩展（cpptools）对 freestanding 环境支持不太好。clangd 是更好的选择：
-- 更好的代码补全
-- 更准确的跳转
-- 静态分析
+VSCode 默认的 C/C++ 扩展（cpptools）对 freestanding 环境支持不太好。它会尝试加载标准库头文件，但我们的内核环境没有标准库。clangd 是更好的选择：代码补全更准确、跳转更可靠、静态分析更强大。
 
 ### 创建 .clangd
 
-```yaml
-# ==============================================================================
-# clangd 配置文件 - CCOS x64 Freestanding Kernel
-# ==============================================================================
-#
+在项目根目录创建 `.clangd`：
 
+```yaml
 CompileFlags:
-  # 添加/覆盖编译标志
   Add:
-    # 目标架构设置
     - -m64
     - -march=x86-64
     - -mtune=generic
     - -DNDEBUG=1
-
-    # 警告选项
     - -Wall
     - -Wextra
     - -Wpedantic
 
-  # 移除可能与 freestanding 冲突的标志
   Remove:
     - -msse
     - -msse2
+```
 
-# ==============================================================================
-# 诊断选项
-# ==============================================================================
+这里我们添加 x86-64 的编译标志，开启各种警告，然后移除 SSE 相关的标志。内核环境通常不需要 SSE，移除这些标志可以避免 clangd 报错。
+
+```yaml
 Diagnostics:
-  # 未使用的头文件警告
   UnusedIncludes: Strict
 
-  # ClangTidy 检查配置
   ClangTidy:
     Add:
       - bugprone-*
@@ -503,7 +444,6 @@ Diagnostics:
       - cert-*
 
     Remove:
-      # 禁用不适合 freestanding 的检查
       - modernize-use-auto
       - modernize-avoid-c-arrays
       - cppcoreguidelines-avoid-c-arrays
@@ -512,34 +452,21 @@ Diagnostics:
       - google-*
       - fuchsia-*
       - llvm-*
+```
 
-# ==============================================================================
-# 索引选项
-# ==============================================================================
+Diagnostics 配置 clangd 的诊断行为。`UnusedIncludes: Strict` 会把未使用的头文件标记为警告。ClangTidy 是静态分析工具，这里我们启用了一些有用的检查，禁用了一些不适合 freestanding 环境的检查。
+
+```yaml
 Index:
-  # 后台索引
   Background: Build
-
-  # 不索引标准库（freestanding 环境）
   StandardLibrary: No
 
-# ==============================================================================
-# 补全选项
-# ==============================================================================
 Completion:
-  # 所有作用域的补全
   AllScopes: Yes
 
-# ==============================================================================
-# 悬浮信息
-# ==============================================================================
 Hover:
-  # 显示 AKA (All Known) 信息
   ShowAKA: Yes
 
-# ==============================================================================
-# Inlay Hints（内联提示）
-# ==============================================================================
 InlayHints:
   Enabled: Yes
   ParameterNames: Yes
@@ -548,25 +475,25 @@ InlayHints:
   BlockEnd: Yes
 ```
 
+Index 配置告诉 clangd 不要索引标准库（因为我们的环境没有）。Completion 和 Hover 配置让代码补全和悬浮信息更友好。InlayHints 是内联提示，会在代码中显示类型信息。
+
 ### 安装 clangd 扩展
 
-在 VSCode 中安装：
-1. **llvm-vs-code-extensions.vscode-clangd** - clangd 语言服务器
-
-⚠️ **注意**：安装 clangd 后，建议禁用 cpptools 的 IntelliSense：
+在 VSCode 中安装 **llvm-vs-code-extensions.vscode-clangd**。安装后建议禁用 cpptools 的 IntelliSense，在 `.vscode/settings.json` 中添加：
 
 ```json
-// .vscode/settings.json
 {
     "C_Cpp.intelliSenseEngine": "disabled"
 }
 ```
 
+这样 clangd 就会接管 C/C++ 语言服务，提供更好的开发体验。
+
 ---
 
-## 第四步：验证 VSCode 调试
+## 第四步：验证调试功能
 
-### 启动 QEMU
+### 启动调试
 
 在一个终端运行：
 
@@ -574,123 +501,31 @@ InlayHints:
 ./scripts/launch_qemu_for_vscode_debug.sh
 ```
 
-你应该看到：
+你应该看到 QEMU 自动构建和启动，然后等待 VSCode 连接。
 
-```
-========================================
-CCOS QEMU 调试服务器启动脚本
-========================================
+在 VSCode 中打开 `kernel_main.c`，按 F9 设置断点，按 F5 启动调试。程序应该在断点处停下来，左边显示变量面板，顶部显示调试工具栏。
 
-为确保调试的是最新的文件，正在清理build目录:build中
-清理完成，使用CMake重新构建中...
-...
-CMake构建完成！
+### 调试快捷键
 
-正在启动 QEMU 调试模式...
-QEMU 已启动 (PID: 12345)
-
-========================================
-QEMU GDB Server 已就绪
-========================================
-监听端口: localhost:1234
-符号文件: /path/to/build/kernel.elf
-
-现在可以在 VSCode 中启动调试了！
-停止调试时 QEMU 会自动停止
-
-按 Ctrl+C 可手动停止监控（QEMU 会继续运行）
-```
-
-### 在 VSCode 中启动调试
-
-1. 打开 `kernel_main.c`
-2. 在你想要停下来的地方按 **F9** 设置断点
-3. 按 **F5** 启动调试
-
-你应该看到：
-- 程序在断点处停下来
-- 左边显示变量和监视面板
-- 顶部显示调试工具栏
-- 终端显示 GDB 输出
-
-### 调试操作
-
-| 操作 | 快捷键 | 说明 |
-|------|--------|------|
-| 继续执行 | F5 | 继续执行到下一个断点 |
-| 单步跳过 | F10 | 下一行（不进入函数） |
-| 单步进入 | F11 | 单步（进入函数） |
-| 单步跳出 | Shift+F11 | 跳出当前函数 |
-| 重启调试 | Ctrl+Shift+F5 | 重启调试 |
-| 停止调试 | Shift+F5 | 停止调试 |
+| 快捷键 | 功能 |
+|--------|------|
+| F5 | 继续执行到下一个断点 |
+| F10 | 单步跳过（不进入函数） |
+| F11 | 单步进入（进入函数） |
+| Shift+F11 | 单步跳出（跳出当前函数） |
+| Shift+F5 | 停止调试 |
 
 ### 验证自动停止
 
-1. 在调试过程中，按 **Shift+F5** 停止调试
-2. 观察启动 QEMU 的终端
-
-你应该看到：
-
-```
-[监控] 检测到 GDB 已断开连接
-[监控] 正在自动停止 QEMU...
-[监控] QEMU 已自动停止
-```
-
-脚本会自动清理 QEMU 进程，你不需要手动 kill。
-
----
-
-## 常见问题
-
-### VSCode 找不到 cpptools
-
-安装 **ms-vscode.cpptools** 扩展。
-
-### clangd 报告找不到头文件
-
-检查 `compile_commands.json` 是否存在：
-
-```bash
-ls build/compile_commands.json
-```
-
-如果不存在，在 `CMakeLists.txt` 中添加：
-
-```cmake
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-```
-
-### GDB 连接失败
-
-确保 QEMU 已经在运行：
-
-```bash
-./scripts/launch_qemu_for_vscode_debug.sh --status
-```
-
-### 符号文件不匹配
-
-重新构建项目：
-
-```bash
-./scripts/launch_qemu_for_vscode_debug.sh
-```
-
-脚本会自动清理并重新构建。
+调试过程中按 Shift+F5 停止调试，观察启动 QEMU 的终端。你应该能看到监控函数检测到 GDB 断开，然后自动停止 QEMU。这个自动化真的很方便。
 
 ---
 
 ## 总结
 
-现在我们有了完整的 VSCode 调体验：
+我们配置了完整的 VSCode 图形化调试环境：launch.json 让 VSCode 能连接到 GDB，智能脚本自动管理 QEMU 生命周期，clangd 提供更好的代码体验。
 
-- ✅ launch.json 配置完成
-- ✅ launch_qemu_for_vscode_debug.sh 自动管理 QEMU 生命周期
-- ✅ clangd 配置完成
-- ✅ 可以在 VSCode 中图形化调试
-
-体验比命令行好了很多。最后一篇文章我们会总结整个调试流程，并介绍一些高级技巧。
+现在调试体验比命令行好了很多。最后一篇文章我们会总结整个调试流程，并介绍一些高级技巧。
 
 → [下一篇：完整调试验证与总结](./05_完整调试验证与总结.md)
 

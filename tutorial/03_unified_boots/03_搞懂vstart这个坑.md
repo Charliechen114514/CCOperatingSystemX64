@@ -6,281 +6,79 @@
 
 ## 问题现象
 
-当你把 Stage 1 和 Stage 2 合并到一个文件后，你可能会遇到一些奇怪的问题：
+当你把 Stage 1 和 Stage 2 合并到一个文件后，你可能会遇到一些奇怪的问题。最常见的情况是 GDT 指针错误。比如你在代码里写了 gdt_ptr 结构，里面存储了 GDT 的基址和限制，但当你用 lgdt [gdt_ptr] 加载 GDT 时，系统直接崩溃，或者三 GDT 的位置完全不对。
 
-```asm
-; Stage 2 代码
-section .stage2 vstart=0x7E00
-    bits 16
+这通常是因为你没有正确使用 vstart。如果你把 vstart=0x7E00 写成 org 0x7E00，或者干脆不写任何地址设置，那么 gdt_start 这个标签的值就会是错的。在 .stage2 段里，gdt_start 的实际运行时地址应该是 0x7E00 加上它在段内的偏移，但如果 vstart 没有正确设置，NASM 可能会给出一个完全不同的值。
 
-gdt_start:
-    dq 0x0000000000000000
-gdt_code:
-    dq 0x00CF9A000000FFFF
-gdt_data:
-    dq 0x00CF92000000FFFF
-gdt_code64:
-    dq 0x00AF9A000000FFFF
-gdt_data64:
-    dq 0x00CF92000000FFFF
-gdt_end:
-
-gdt_ptr:
-    dw 5 * 8 - 1          ; 这里的值应该是对的
-    dd gdt_start           ; 但这里可能就错了！
-```
-
-如果你把 `vstart=0x7E00` 写成 `org 0x7E00` 或者干脆不写，`gdt_start` 的值就会是错的。
-
-然后你的系统会在 `lgdt [gdt_ptr]` 这一行崩溃，或者直接三 GDT 的位置出错。
+更糟糕的是，这种错误很难排查。因为你的代码在其他地方看起来都没问题，GDT 的内容也是对的，但指针指向了错误的地址，导致 CPU 去读取了一个错误的内存位置作为 GDT，然后立刻触发异常。
 
 ---
 
-## org vs vstart - 到底有什么区别？
+## org vs vstart 到底有什么区别
 
-这是关键问题。我们先来看 NASM 文档的定义：
+这是关键问题，很多人在这里搞混了。我们先来说 org，它是 NASM 里的一个指令，用来设置程序计数器的起始地址。org 主要影响两个特殊的符号，$ 表示当前地址计数器，$$ 表示当前 section 的起始地址。但 org 不会影响标签的值，也就是说，你在代码里定义的那些标签名字，它们的值不会因为 org 而改变。
 
-### org
+vstart 就不一样了，它是 section 的一个属性，用来设置标签的虚拟起始地址。当你在 section 声明里加上 vstart=0x7E00 时，NASM 会把这个 section 里定义的所有标签值都加上 0x7E00 这个偏移。这样标签的值就是正确的运行时地址了。
 
-`org` 设置的是**程序计数器**的起始地址。它影响：
-- `$` - 当前地址计数器
-- `$$` - 当前 section 的起始地址
-
-但 `org` **不影响标签的值**。
-
-### vstart
-
-`vstart` 设置的是**标签的虚拟起始地址**。它影响：
-- 此 section 中所有定义的标签值
+用更简单的话来说，org 告诉 NASM 当前 section 在文件里的位置应该怎么理解，而 vstart 告诉 NASM 当前 section 里的标签应该对应什么内存地址。在 bin 格式下，这两者的区别尤其重要，因为 bin 格式是纯二进制输出，没有重定位信息，所有地址必须在编译时确定。
 
 ---
 
-## 实例说明
+## 一个具体的例子
 
-让我们用例子来说明：
+让我们用一个例子来说明这个问题。假设我们有这样一段代码，.mbr 段用 org 0x7c00，.stage2 段用 vstart=0x7E00。在 .stage2 段里，我们定义了 GDT 和 gdt_ptr。gdt_ptr 里面有一个 dd gdt_start，这里 gdt_start 的值会是多少呢？
 
-### 情况 1：使用 vstart（正确）
+如果 vstart=0x7E00 正确设置了，gdt_start 的值会是 0x7E00 加上它在 .stage2 段里的偏移。如果 GDT 从 .stage2 的第三个字节开始，那么 gdt_start 就是 0x7E03，这个值是对的，因为 GDT 实际上会被加载到 0x7E03 这个地址。
 
-```asm
-section .mbr
-    org 0x7c00
-start:
-    jmp stage2
-
-; ... 一些代码 ...
-
-times 510-($-$$) db 0
-dw 0xaa55
-
-section .stage2 vstart=0x7E00
-    bits 16
-stage2:
-    ; GDT 定义
-gdt_start:
-    dq 0
-gdt_code:
-    dq 0x00CF9A000000FFFF
-gdt_end:
-
-gdt_ptr:
-    dw gdt_end - gdt_start - 1
-    dd gdt_start    ; 这个值会是 0x7E03（正确的！）
-```
-
-在这种情况下：
-- `gdt_start` 的值 = 0x7E00 + 在 .stage2 section 中的偏移
-- 如果 GDT 从 .stage2 的第 3 个字节开始，`gdt_start` = 0x7E03
-
-### 情况 2：不使用 vstart（错误）
-
-```asm
-section .mbr
-    org 0x7c00
-start:
-    jmp stage2
-
-; ... 一些代码 ...
-
-times 510-($-$$) db 0
-dw 0xaa55
-
-section .stage2
-    bits 16
-stage2:
-    ; GDT 定义
-gdt_start:
-    dq 0
-gdt_code:
-    dq 0x00CF9A000000FFFF
-gdt_end:
-
-gdt_ptr:
-    dw gdt_end - gdt_start - 1
-    dd gdt_start    ; 这个值会是 0x0203（错误的！）
-```
-
-在这种情况下：
-- `gdt_start` 的值 = 文件偏移（没有加上 0x7E00）
-- 如果 GDT 从文件的 0x203 偏移开始，`gdt_start` = 0x0203
-- 但代码实际上会被加载到 0x7E00，所以 GDT 实际在 0x7E03
-- 结果：GDT 指针指向错误的地址 → 系统崩溃
+但如果我们把 vstart=0x7E00 改成 org 0x7E00，或者干脆不写任何地址设置，那么 gdt_start 的值就会变成文件偏移。.stage2 段从文件的 0x200 偏移开始，GDT 从第 3 个字节开始，所以 gdt_start 会是 0x203。这个值是错的，因为代码实际上会被加载到 0x7E00，GDT 实际在 0x7E03，但我们的指针指向了 0x00203，这会导致系统崩溃。
 
 ---
 
-## 为什么会有这个问题？
+## 为什么会有这个问题
 
-这是因为 NASM 默认使用**文件偏移**作为标签值，而不是**运行时地址**。
+这是因为 NASM 默认使用文件偏移作为标签值，而不是运行时地址。在单文件编译时，文件偏移 0x0000 对应运行时地址 0x7C00，这是 MBR 段的位置。文件偏移 0x0200 对应运行时地址 0x7E00，这是 Stage 2 段的位置。但 NASM 不知道这些映射关系，除非你用 vstart 告诉它。
 
-在单文件编译时：
-- 文件偏移 0x0000 → 运行时地址 0x7C00（MBR 段）
-- 文件偏移 0x0200 → 运行时地址 0x7E00（Stage 2 段）
-
-NASM 不知道这些映射关系，除非你用 `vstart` 告诉它。
+你可能会想，为什么 NASM 不能自动处理这个问题？因为 NASM 是一个通用的汇编器，它不知道你的代码会被加载到哪个地址。在 ELF 或 PE 这种格式里，有重定位信息，链接器可以在运行时修正地址。但在 bin 格式里，没有重定位信息，所有地址必须在编译时确定，所以你需要手动告诉 NASM 这些映射关系。
 
 ---
 
 ## 跨 Section 引用的坑
 
-还有一个更隐蔽的坑：**跨 section 的引用**。
+还有一个更隐蔽的坑，就是跨 section 的引用。假设你在 .mbr 段里跳转到 .stage2 段的一个标签，或者你在 .stage2 段里访问一个放在新 section 里的数据。这些情况下，如果 vstart 没有正确设置，地址就会是错的。
 
-```asm
-section .mbr
-    org 0x7c00
-    bits 16
-start:
-    jmp stage2_entry
-    ; ...
-
-section .stage2 vstart=0x7E00
-    bits 16
-stage2_entry:
-    ; ...
-
-section .data    ; 新的 section！
-msg:
-    db "Hello", 0
-```
-
-如果你把数据放在一个新的 section 里，而又没有正确设置 `vstart`，`msg` 的地址就会是错的。
-
-**解决方案**：把数据放在同一个 section 里：
-
-```asm
-section .stage2 vstart=0x7E00
-    bits 16
-stage2_entry:
-    mov si, msg
-    call print_bios
-
-msg:
-    db "Hello", 0    ; 在同一 section，地址正确
-```
+比如你把数据放在一个新的 .data section 里，而没有给这个 section 设置 vstart。那么当你访问这个数据时，用的地址会是文件偏移而不是运行时地址。最简单的解决方法是：把数据放在使用它的同一个 section 里，这样地址计算就不会有问题。
 
 ---
 
-## 验证你的 vstart 是否正确
+## 如何验证 vstart 是否正确
 
-你可以用反汇编来验证：
-
-```bash
-# 反汇编 Stage 2 部分
-ndisasm -b 16 -o 0x7E00 -e 0x200 bootloader.bin | head -50
-```
-
-`-e 0x200` 参数告诉 ndisasm 从文件偏移 0x200 开始反汇编（这是 Stage 2 的位置）。
-
-`-o 0x7E00` 参数告诉 ndisasm 把地址显示为 0x7E00 开始。
-
-你应该能看到类似这样的输出：
-
-```
-00007E00  EB 03              jmp short 0x7E05
-00007E02  90                nop
-00007E03  00 00              add [bx+si], al
-...
-```
-
-如果你看到的是 0x0200 而不是 0x7E00，那说明你的 `vstart` 没起作用。
+你可以用反汇编来验证。ndisasm 可以反汇编二进制文件，-o 参数指定起始地址，-e 参数指定从文件的哪个偏移开始。比如 ndisasm -b 16 -o 0x7E00 -e 0x200 bootloader.bin 会从文件偏移 0x200 开始反汇编，并把地址显示为从 0x7E00 开始。如果你看到的输出里地址确实是 0x7E00 起头，那就说明 vstart 生效了。如果你看到的是 0x0200 起头，那就说明 vstart 没起作用。
 
 ---
 
 ## bits 模式的陷阱
 
-还有一个容易忽略的点：`bits` 指令。
+还有一个容易忽略的点，就是 bits 指令。每个 section 开始时最好显式声明 bits 模式，bits 16、bits 32 或 bits 64。因为 bits 只影响指令编码，不影响标签值，但如果你省略了它，NASM 可能会用错误的模式生成指令，导致你的代码无法正常运行。
 
-```asm
-section .stage2 vstart=0x7E00
-    bits 16    ; 不要省略这个！
-stage2_main:
-    ; ...
-
-; 后面可能有 32 位代码
-bits 32
-pm_entry:
-    ; ...
-```
-
-`bits` 指令只影响**指令编码**，不影响标签值。但如果你省略了它，NASM 可能会用错误的模式生成指令，导致你的代码无法正常运行。
-
-**最佳实践**：在每个 section 开始时显式声明 `bits` 模式。
+比如你在 .stage2 段里写了保护模式的代码，但忘了写 bits 32，NASM 可能会用 16 位模式生成指令，这样生成的机器码就是错的。或者在 64 位段里忘了写 bits 64，可能会遇到指令编码错误或者寄存器使用错误。
 
 ---
 
 ## 常见错误和解决方法
 
-### 错误 1：GDT 指针错误
+最常见的问题是 GDT 指针错误，现象是 lgdt [gdt_ptr] 崩溃。这通常是因为 gdt_ptr 里的地址计算错误，解决方法是确保使用 vstart=0x7E00。
 
-**现象**：`lgdt [gdt_ptr]` 崩溃
+另一个常见问题是跳转目标错误，jmp 0x7E00 后代码乱飞。这可能是 Stage 2 的地址偏移不对，检查 vstart 和文件偏移的对应关系。
 
-**原因**：`gdt_ptr` 里的地址计算错误
-
-**解决**：确保使用 `vstart=0x7E00`
-
-### 错误 2：跳转目标错误
-
-**现象**：`jmp 0x7E00` 后代码乱飞
-
-**原因**：Stage 2 的地址偏移不对
-
-**解决**：检查 `vstart` 和文件偏移的对应关系
-
-### 错误 3：数据访问错误
-
-**现象**：访问字符串或数组时读到垃圾数据
-
-**原因**：数据放在了错误的 section，没有正确的 `vstart`
-
-**解决**：把数据放在使用它的同一个 section 里
+还有一个问题是数据访问错误，访问字符串或数组时读到垃圾数据。这通常是因为数据放在了错误的 section，没有正确的 vstart。解决方法是把数据放在使用它的同一个 section 里。
 
 ---
 
 ## 总结
 
-记住这几个要点：
+记住这几个要点：vstart 告诉 NASM 标签的运行时地址，org 设置程序计数器但不影响标签值。把数据放在正确的 section，显式声明 bits 模式，用反汇编验证。这些做好了，vstart 这个坑就算迈过去了。
 
-1. **vstart 告诉 NASM 标签的运行时地址**
-   - `section .stage2 vstart=0x7E00` → 标签值 = 0x7E00 + 偏移
-
-2. **org 设置程序计数器，不影响标签值**
-   - `org 0x7c00` 主要用于 `$` 和 `$$`
-
-3. **把数据放在正确的 section**
-   - 不要随意创建新的 section
-
-4. **显式声明 bits 模式**
-   - 每个 section 开始时写上 `bits 16/32/64`
-
-5. **用反汇编验证**
-   - `ndisasm -b 16 -o 0x7E00 -e 0x200 bootloader.bin`
-
----
-
-## 下一步
-
-现在我们搞懂了 `vstart`，可以继续完善我们的 bootloader 了。
-
-下一篇教程里，我们会加上**串口输出**，这样调试起来就方便多了。相信我，当你第一次通过串口看到 bootloader 的输出时，你会感谢自己做了这个功能。
-
+下一篇教程里，我们会加上串口输出，这样调试起来就方便多了。相信我，当你第一次通过串口看到 bootloader 的输出时，你会感谢自己做了这个功能。
 
 ---
 

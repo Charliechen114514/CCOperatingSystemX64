@@ -2,12 +2,7 @@
 
 ## 前言：两个文件不如一个文件
 
-如果你跟着前面的教程做下来，现在应该有：
-- `boot/boot.asm` (Stage 1)
-- `boot/boot2.asm` (Stage 2)
-- `kernel/kernel.asm`
-
-每次编译要这样：
+如果你跟着前面的教程做下来，现在应该有三个文件：`boot/boot.asm`（Stage 1）、`boot/boot2.asm`（Stage 2）、`kernel/kernel.asm`。每次编译要这样：
 
 ```makefile
 $(BOOT_BIN): $(BOOT_ASM)
@@ -24,31 +19,17 @@ dd if=$(BOOT_BIN) of=$(BOOT_IMG) bs=512 count=1
 dd if=$(BOOT2_BIN) of=$(BOOT_IMG) bs=512 seek=1
 ```
 
-说实话，这样挺麻烦的。而且 `boot2.asm` 的代码越来越长，维护两个文件容易出错。
+说实话，这样挺麻烦的。而且 `boot2.asm` 的代码越来越长，维护两个文件容易出错。如果改了一个地方忘了改另一个，或者两个文件的布局不一致，就会出问题。
 
-### 为什么不合并？
+你可能会问："为什么不一开始就合并？"原因是这样的：学习曲线上分开更容易理解 Stage 1 和 Stage 2 的区别，调试时可以单独测试每个部分，而且很多 OS 教程都是这样教的。但现在我们已经理解了整个过程，是时候合并了。
 
-你可能会问："为什么不一开始就合并？"
-
-原因是：
-1. **学习曲线**：分开更容易理解 Stage 1 和 Stage 2 的区别
-2. **调试方便**：可以单独测试每个部分
-3. **历史原因**：很多 OS 教程都是这样教的
-
-### 为什么要合并？
-
-现在合并的好处：
-1. **单一文件**：所有 bootloader 代码在一个地方
-2. **简化构建**：编译一次，而不是两次
-3. **更好的组织**：用 section 清晰分隔不同阶段
+合并的好处很明显：单一文件让所有 bootloader 代码在一个地方，编译一次而不是两次，用 section 清晰分隔不同阶段，维护起来更方便。
 
 ---
 
-## 第一步：理解 section 指令
+## section 指令：代码怎么分组
 
-NASM 的 `section` 指令告诉汇编器把代码放到哪个段。
-
-### 基本用法
+NASM 的 `section` 指令告诉汇编器把代码放到哪个段。基本用法是这样的：
 
 ```nasm
 section .mbr
@@ -63,20 +44,15 @@ stage2_start:
     ; Stage 2 代码
 ```
 
-### org vs vstart
+`org` 设置段的加载地址，`vstart` 设置段内的虚拟起始地址。这两个参数有点微妙，理解它们很重要。
 
-- `org`：设置段的加载地址
-- `vstart`：设置段内的虚拟起始地址
-
-对于我们的 bootloader：
-- `section .mbr org 0x7C00` → 代码加载到 0x7C00
-- `section .stage2 vstart=0x7E00` → 代码在文件中从下一个边界开始，但标签从 0x7E00 开始计算
+对于我们的 bootloader，`section .mbr org 0x7C00` 意味着代码会被加载到 0x7C00，而 `section .stage2 vstart=0x7E00` 意味着代码在文件中从下一个边界开始，但标签从 0x7E00 开始计算。这个区别很重要——`org` 影响代码在内存中的位置，`vstart` 只影响标签的值。
 
 ---
 
-## 第二步：创建统一的 bootloader.asm
+## 创建统一的 bootloader.asm
 
-我们把 `boot.asm` 和 `boot2.asm` 合并：
+我们把 `boot.asm` 和 `boot2.asm` 合并成一个文件。首先是文件头部和一些说明：
 
 ```nasm
 ; ==============================================================================
@@ -86,7 +62,17 @@ stage2_start:
 ; - Stage 1 (0x7C00): Loads the rest of bootloader from disk to 0x7E00
 ; - Stage 2 (0x7E00): Switches to 64-bit long mode and loads kernel
 ; ==============================================================================
+```
 
+这些注释很重要，因为几个月后你可能忘了这个文件的结构，或者别人来看你的代码时需要快速理解。
+
+---
+
+## Stage 1：MBR 部分
+
+首先是 Stage 1 的定义：
+
+```nasm
 ; ==============================================================================
 ; Stage 1: MBR (0x7C00)
 ; ==============================================================================
@@ -103,7 +89,13 @@ start:
     mov ss, ax
     mov sp, 0x7c00
     sti
+```
 
+`start` 是整个 bootloader 的入口点，BIOS 加载 MBR 后会跳到这里。我们首先关中断，设置所有段寄存器为 0，设置栈指针到 0x7C00（就是我们的代码上方），然后重新开中断。这是标准的 16 位启动代码。
+
+然后是清屏和打印消息：
+
+```nasm
     ; 清屏
     mov ah, 0x00
     mov al, 0x03
@@ -112,17 +104,25 @@ start:
     ; 打印消息
     mov si, msg_stage1
     call print_string
+```
 
+`int 0x10, ah=0x00, al=0x03` 是 BIOS 的视频中断，设置 80x25 文本模式。这会清屏并把光标移到左上角。然后我们打印 Stage 1 的消息。
+
+接下来是加载 Stage 2：
+
+```nasm
     ; 加载 Stage 2
     call load_stage2
 
     ; 跳转到 Stage 2
     jmp 0x7E00
+```
 
-.hang:
-    hlt
-    jmp .hang
+`load_stage2` 是一个函数，我们稍后定义。加载完成后，我们跳转到 0x7E00，这是 Stage 2 的加载地址。
 
+然后是 Stage 1 的函数定义：
+
+```nasm
 ; ============================================================================
 ; Stage 1 函数
 ; ============================================================================
@@ -139,7 +139,13 @@ print_string:
 .done:
     popa
     ret
+```
 
+`print_string` 函数打印一个以 null 结尾的字符串。`lodsb` 从 DS:SI 读取一个字节到 AL，SI 自动加 1。`int 0x10, ah=0x0E` 是 BIOS 的 teletype 输出功能，打印 AL 中的字符。
+
+`load_stage2` 函数更复杂一些：
+
+```nasm
 load_stage2:
     pusha
 
@@ -163,7 +169,41 @@ load_stage2:
 
     popa
     ret
+```
 
+我们首先尝试 LBA 扩展读取，如果失败就回退到 CHS。LBA（Logical Block Addressing）是现代磁盘的寻址方式，用连续的扇区号来访问磁盘。CHS（Cylinder-Head-Sector）是古老的寻址方式，用柱面、磁头、扇区三元组来访问磁盘。
+
+LBA 支持检查是这样的：
+
+```nasm
+check_lba_support:
+    pusha
+    mov dl, 0x80
+    mov ah, 0x41
+    mov bx, 0x55AA
+    int 0x13
+
+    jc .not_support
+    cmp bx, 0xAA55
+    jne .not_support
+    test cx, 0x01
+    jz .not_support
+
+    popa
+    clc
+    ret
+
+.not_support:
+    popa
+    stc
+    ret
+```
+
+`int 0x13, ah=0x41` 是 BIOS 的扩展磁盘驱动功能检查。如果支持 LBA，BX 会返回 0xAA55，CX 的 bit 0 会被设置。我们检查这些标志来确定 LBA 是否可用。
+
+CHS 回退代码：
+
+```nasm
 .try_chs:
     mov ax, 0x7E0
     mov es, ax
@@ -190,29 +230,13 @@ disk_error:
 .hang:
     hlt
     jmp .hang
+```
 
-check_lba_support:
-    pusha
-    mov dl, 0x80
-    mov ah, 0x41
-    mov bx, 0x55AA
-    int 0x13
+CHS 读取用 `int 0x13, ah=0x02`，参数是 CH=柱面、CL=扇区、DH=磁头、DL=驱动器（0x80 是第一个硬盘）。我们读取 2 个扇区（AL=0x02）从柱面 0、磁头 0、扇区 2 开始。这是因为扇区 0 是 MBR（我们的 Stage 1），扇区 1 开始是 Stage 2。
 
-    jc .not_support
-    cmp bx, 0xAA55
-    jne .not_support
-    test cx, 0x01
-    jz .not_support
+Stage 1 的数据部分：
 
-    popa
-    clc
-    ret
-
-.not_support:
-    popa
-    stc
-    ret
-
+```nasm
 ; ============================================================================
 ; Stage 1 数据
 ; ============================================================================
@@ -237,8 +261,17 @@ times 510-($-$$) db 0
 
 ; MBR 签名
 dw 0xAA55
+```
 
+DAP（Disk Address Packet）是 LBA 读取使用的参数包。`times 510-($-$$) db 0` 填充 0 到 510 字节，`$` 是当前地址，`$$` 是 section 开始地址。`dw 0xAA55` 是 MBR 签名，BIOS 检查这个值来确认这是一个有效的启动扇区。
 
+---
+
+## Stage 2：0x7E00 部分
+
+Stage 2 在一个新的 section 中：
+
+```nasm
 ; ==============================================================================
 ; Stage 2: Starts at offset 512 in file, loads at 0x7E00
 ; ==============================================================================
@@ -248,7 +281,13 @@ section .stage2 vstart=0x7E00
 stage2_entry:
     jmp short stage2_main
     nop
+```
 
+`jmp short` 和 `nop` 是为了对齐，和之前的 boot2.asm 保持一致。GDT 从 0x7E04 开始。
+
+Stage 2 的 GDT 定义：
+
+```nasm
 ; ============================================================================
 ; GDT
 ; ============================================================================
@@ -267,7 +306,13 @@ gdt_end:
 gdt_ptr:
     dw 5 * 8 - 1
     dd 0x00007E03
+```
 
+这些描述符在之前的文档中已经详细解释过了，这里不再赘述。
+
+Stage 2 主函数：
+
+```nasm
 ; ============================================================================
 ; Stage 2 主函数
 ; ============================================================================
@@ -303,100 +348,19 @@ stage2_main:
     db 0xEA
     dd pm_entry
     dw 0x08
+```
 
-.hang:
-    hlt
-    jmp .hang
+这部分和之前的 boot2.asm 基本一样，只是现在在同一个文件里。
 
-load_error:
-    mov si, msg_load_error
-    call print_string
-    jmp .hang
+Stage 2 的其他函数（print_string、load_kernel、setup_page_tables）和数据（msg_stage2、msg_loading 等）也类似，这里不重复了。
 
-print_string:
-    pusha
-.loop:
-    lodsb
-    test al, al
-    jz .done
-    mov ah, 0x0E
-    int 0x10
-    jmp .loop
-.done:
-    popa
-    ret
+---
 
-load_kernel:
-    pusha
+## 32 位和 64 位部分
 
-    mov si, msg_loading
-    call print_string
+文件的后半部分是 32 位和 64 位代码：
 
-    mov ax, 0x1000
-    mov es, ax
-    xor bx, bx
-
-    mov ah, 0x02
-    mov al, 0x01
-    mov ch, 0x00
-    mov cl, 0x04
-    mov dh, 0x00
-    mov dl, 0x80
-    int 0x13
-
-    jc .error
-    cmp al, 0x01
-    jne .error
-
-    popa
-    clc
-    ret
-
-.error:
-    popa
-    stc
-    ret
-
-setup_page_tables:
-    pusha
-
-    mov edi, 0x9000
-    mov ecx, 4096 / 4
-    xor eax, eax
-    rep stosd
-
-    mov edi, 0xA000
-    mov ecx, 4096 / 4
-    xor eax, eax
-    rep stosd
-
-    mov edi, 0xB000
-    mov ecx, 4096 / 4
-    xor eax, eax
-    rep stosd
-
-    mov dword [0x9000], 0x0000A003
-    mov dword [0x9FF8], 0x0000A003
-    mov dword [0xA000], 0x0000B003
-    mov dword [0xB000], 0x00000083
-    mov dword [0xB004], 0x00000000
-
-    popa
-    ret
-
-; ============================================================================
-; Stage 2 数据
-; ============================================================================
-msg_stage2:
-    db "[2] Stage 2: Running...", 0x0D, 0x0A, 0
-
-msg_loading:
-    db "[LOAD] Loading kernel...", 0x0D, 0x0A, 0
-
-msg_load_error:
-    db "[E] Failed to load kernel", 0x0D, 0x0A, 0
-
-
+```nasm
 ; ==============================================================================
 ; 32-bit Protected Mode
 ; ==============================================================================
@@ -481,11 +445,13 @@ msg_long_mode:
     db "[OK] Entered Long Mode!", 0x0D, 0x0A, 0
 ```
 
+这些代码和之前分开的文件完全一样，只是在同一个文件里而已。
+
 ---
 
-## 第三步：理解合并后的布局
+## 合并后的布局
 
-### 文件布局
+理解合并后的文件布局很重要：
 
 ```
 偏移       内容              加载地址
@@ -494,7 +460,9 @@ msg_long_mode:
 0x200      .stage2 section  0x7E00    (Stage 2)
 ```
 
-### 编译
+`.mbr section` 的代码会被加载到 0x7C00（因为 `org 0x7C00`），`.stage2 section` 的代码会被加载到 0x7E00（因为 Stage 1 把它读到了那里）。`vstart=0x7E00` 确保标签从 0x7E00 开始计算，而不是从文件偏移。
+
+编译命令很简单：
 
 ```bash
 $ nasm -f bin boot/bootloader.asm -o build/bootloader.bin
@@ -503,63 +471,11 @@ $ ls -lh build/bootloader.bin
 -rw-r--r-- 1 user user 1.4K Feb 17 00:20 build/bootloader.bin
 ```
 
-### 更新磁盘镜像
-
-```bash
-# 新方式：一次合并
-$ dd if=build/bootloader.bin of=build/boot.img bs=512 count=1 conv=notrunc
-
-# 添加内核
-$ dd if=build/kernel.bin of=build/boot.img bs=512 seek=1 conv=notrunc
-```
-
-等等，这不对！bootloader.bin 包含了 Stage 1 和 Stage 2，所以内核应该从 seek=2 开始（而不是 seek=3）。
-
-让我重新规划一下布局：
-
-```
-扇区    内容              说明
-──────────────────────────────────────
-Sector 0  Stage 1 (512B)   bootloader.bin 前 512 字节
-Sector 1  Stage 2 (512B)   bootloader.bin 后面的字节
-Sector 2  Stage 2 (续)     如果 Stage 2 超过 512 字节
-Sector 3  Kernel          kernel.bin
-```
-
-但这样有问题：bootloader.bin 是一个整体，不好分开。
-
-### 更好的方案
-
-修改编译方式：
-
-```bash
-# 编译 bootloader
-$ nasm -f bin boot/bootloader.asm -o build/bootloader.bin
-
-# 计算大小（假设是 1400 字节 = 2.73 扇区）
-$ ls -l build/bootloader.bin
--rw-r--r-- 1 user user 1400 Feb 17 00:20 build/bootloader.bin
-
-# 计算内核扇区偏移：3（MBR=0, Stage2=1-2）
-```
-
-但这样还是要处理 Stage 2 跨扇区的问题。
-
-### 最终方案
-
-其实很简单 —— bootloader 已经包含了 Stage 1 和 Stage 2，只需要一个 `dd` 命令：
-
-```bash
-# bootloader 前三个扇区（MBR + Stage 2）
-$ dd if=build/bootloader.bin of=build/boot.img bs=512 count=3 conv=notrunc
-
-# 内核从扇区 3 开始
-$ dd if=build/kernel.bin of=build/boot.img bs=512 seek=3 conv=notrunc
-```
-
 ---
 
-## 第四步：更新 Makefile
+## 更新 Makefile
+
+现在我们只有一个 bootloader 文件，Makefile 需要相应更新：
 
 ```makefile
 # ==============================================================================
@@ -600,26 +516,18 @@ $(BOOT_IMG): $(BOOTLOADER_BIN) $(KERNEL_BIN)
 	@echo "========================================="
 	@echo "Creating boot image..."
 	@echo "========================================="
-	# 写入 bootloader (前 3 个扇区)
 	dd if=$(BOOTLOADER_BIN) of=$@ bs=512 count=3 conv=notrunc 2>/dev/null
-	# 写入内核 (从扇区 3 开始)
 	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=3 conv=notrunc 2>/dev/null
 	@echo "Boot image created: $@"
 	@ls -lh $@
 	@echo "========================================="
+```
 
-$(BOOTLOADER_BIN): $(BOOTLOADER_ASM) | prepare
-	@echo "Assembling bootloader..."
-	$(AS) $(ASFLAGS) $< -o $@
-	@echo "Bootloader size: $$(wc -c < $@) bytes"
+注意到我们不再分开编译 `boot.bin` 和 `boot2.bin`，而是直接编译 `bootloader.bin`。而且 `count=3` 因为我们知道 bootloader 大约 3 个扇区（实际大小需要在运行时检查）。
 
-$(KERNEL_BIN): $(KERNEL_ASM) | prepare
-	@echo "Assembling kernel..."
-	$(AS) $(ASFLAGS) $< -o $@
+大小检查也需要更新：
 
-prepare:
-	@mkdir -p $(BUILD_DIR)
-
+```makefile
 check-size: $(BOOTLOADER_BIN) $(KERNEL_BIN)
 	@echo "========================================="
 	@echo "File size check:"
@@ -631,23 +539,15 @@ check-size: $(BOOTLOADER_BIN) $(KERNEL_BIN)
 	@echo "========================================="
 	@test $$(wc -c < $(BOOTLOADER_BIN)) -le 1536 || (echo "ERROR: Bootloader too large!" && exit 1)
 	@test $$(wc -c < $(KERNEL_BIN)) -le 512 || (echo "ERROR: Kernel too large!" && exit 1)
-
-run: $(BOOT_IMG)
-	$(QEMU) -drive format=raw,file=$(BOOT_IMG) -nographic
-
-debug: $(BOOT_IMG)
-	@echo "Starting QEMU with GDB server..."
-	$(QEMU) -drive format=raw,file=$(BOOT_IMG) -s -S -nographic
-
-clean:
-	@echo "Cleaning..."
-	rm -rf $(BUILD_DIR)
-	@echo "Done."
 ```
+
+1536 字节是 3 个扇区，这是我们对 bootloader 大小的限制。如果超过了，内核会被推后，我们就要相应调整 `seek` 参数。
 
 ---
 
-## 第五步：测试
+## 测试合并后的 bootloader
+
+让我们来编译和测试：
 
 ```bash
 $ make clean
@@ -666,7 +566,7 @@ nasm -f bin kernel/kernel.asm -o build/kernel.bin
 File size check:
 =========================================
 Bootloader:  1405 / 1536 bytes [OK]
-Kernel:        20 / 512 bytes  [OK]
+Kernel:        20 / 512 bytes [OK]
 =========================================
 Creating boot image...
 =========================================
@@ -683,21 +583,20 @@ qemu-system-x86_64 -drive format=raw,file=build/boot.img -nographic
 [OK] Entered Long Mode!
 ```
 
-成功！
+成功！合并后的 bootloader 工作正常。
 
 ---
 
-## 第六步：代码组织技巧
+## 代码组织技巧
 
-### 使用注释分隔
+维护一个大文件不容易，这里有一些技巧让代码更易读。
+
+首先是使用注释分隔不同部分：
 
 ```nasm
 ; ==============================================================================
 ; Stage 1: MBR (0x7C00)
 ; ==============================================================================
-section .mbr
-    org 0x7c00
-    bits 16
 
 ; ==============================================================================
 ; Stage 1 Functions
@@ -706,30 +605,11 @@ section .mbr
 ; ==============================================================================
 ; Stage 1 Data
 ; ==============================================================================
-
-
-; ==============================================================================
-; Stage 2: 0x7E00
-; ==============================================================================
-section .stage2 vstart=0x7E00
-    bits 16
-
-; ==============================================================================
-; Stage 2 Functions
-; ==============================================================================
-
-; ==============================================================================
-; 32-bit Code
-; ==============================================================================
-bits 32
-
-; ==============================================================================
-; 64-bit Code
-; ==============================================================================
-bits 64
 ```
 
-### 标签命名约定
+这些分隔线让你快速找到代码的某个部分，而不需要滚动几百行。
+
+其次是标签命名约定。保持一致的命名风格很重要：
 
 ```nasm
 ; Stage 1
@@ -751,40 +631,31 @@ long_mode:              ; 入口
 kernel_halt:            ; 停机循环
 ```
 
+`_entry` 后缀表示入口点，`_main` 后缀表示主函数，函数名用小写下划线分隔，数据标签用 `msg_` 前缀。
+
 ---
 
-## 踩坑预警
+## 一些容易踩的坑
 
-⚠️ **注意**：section 边界
+合并文件时有一些细节需要注意。
 
-`section .mbr` 和 `section .stage2` 之间不要放任何代码，否则会被放到错误的段。
+section 边界很重要。`section .mbr` 和 `section .stage2` 之间不要放任何代码，否则会被放到错误的 section。NASM 会把代码放到"当前"的 section，所以切换 section 时要小心。
 
-⚠️ **注意**：vstart 参数
+`vstart` 参数要正确。`section .stage2 vstart=0x7E00` 确保标签从 0x7E00 开始计算，而不是从文件偏移。如果忘记 `vstart`，标签的值会是文件偏移，跳转会出错。
 
-`section .stage2 vstart=0x7E00` 确保标签从 0x7E00 开始计算，而不是从文件偏移。
+`bits` 切换不要忘记。每个 section 开头要设置正确的 `bits`：Stage 1 和 Stage 2 是 16 位，保护模式代码是 32 位，长模式代码是 64 位。如果 `bits` 设置错了，NASM 会生成错误的指令编码。
 
-⚠️ **注意**：bits 切换
-
-不要忘记在进入新 section 后设置正确的 `bits`！
-
-⚠️ **注意**：MBR 签名
-
-MBR 签名（0xAA55）必须在偏移 510-511，确保你的填充计算正确！
+MBR 签名必须在偏移 510-511。`times 510-($-$$) db 0` 填充到 510 字节，`dw 0xAA55` 写入签名。确保你的填充计算正确，`$-$$` 是当前 section 的大小。我第一次做的时候把 `$$` 写成了 `$`，结果填充了 510 个 0，但签名被写到错误的位置，BIOS 无法识别。
 
 ---
 
 ## 总结
 
-到这里，我们：
+到这里，我们把 `boot.asm` 和 `boot2.asm` 合并成了 `bootloader.asm`，理解了 section 和 org/vstart 的区别，更新了 Makefile 以适应新的结构，验证了合并后的代码正常工作。现在我们只有一个 bootloader 文件，维护起来方便多了。
 
-1. ✅ 把 boot.asm 和 boot2.asm 合并成 bootloader.asm
-2. ✅ 理解了 section 和 org/vstart 的区别
-3. ✅ 更新了 Makefile 以适应新的结构
-4. ✅ 验证了合并后的代码正常工作
+说实话，合并的过程虽然有点麻烦，但长远来看是值得的。单一的 bootloader 文件让你更容易理解整个启动流程，而不是在两个文件之间跳来跳去。而且编译一次比编译两次省事，makefile 也更简单。
 
-现在我们只有一个 bootloader 文件，维护起来方便多了！
-
-下一步，我们会解决一个实际问题：当前只能加载 512 字节的内核，这太少了。我们需要支持大内核加载。
+下一步，我们会解决一个实际问题：当前只能加载 512 字节的内核，这太少了。我们需要支持大内核加载，这样才能写真正的操作系统功能。
 
 **下篇预告**：《支持大内核加载》—— 从 512 字节到无限可能。
 
