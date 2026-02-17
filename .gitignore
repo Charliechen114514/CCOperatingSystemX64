@@ -26,3 +26,6 @@ serial.log
 
 # 调试文件
 *.debug
+
+# 一些Claude辅助文件
+SUMMON_HELP.md

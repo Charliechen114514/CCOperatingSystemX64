@@ -2,22 +2,22 @@
 
 # 🖥️ CCOperatingSystemX64
 
-### **从零构建的 64 位 x86_64 操作系统**，项目从CCOperateSystem（笔者的X86操作系统）派生！
+### **从零构建的 64 位 x86_64 操作系统**
+
+> 项目从CCOperateSystem（笔者的X86操作系统）派生！
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Progress](https://img.shields.io/badge/progress-80%_for_base_stage-blue)]()
+[![Progress](https://img.shields.io/badge/progress-90%_for_base_stage-blue)]()
 [![Platform](https://img.shields.io/badge/platform-x86__64-orange)]()
-
----
 
 **升级到X64，全新的[CCOperateSystem](https://github.com/Charliechen114514/CCOperateSystem)**
 
-</div>
-
 ---
 
-## 🌟 项目简介
+</div>
+
+## 📖 项目简介
 
 **CCOperatingSystemX64** 是一个完全从零开始的 x86_64 架构操作系统开发项目。项目旨在通过实践深入理解计算机系统底层原理，包括：
 
@@ -25,6 +25,16 @@
 - 🚀 **64位长模式** - 完整的 x86_64 长模式切换与页表设置
 - 🏗️ **CMake 构建系统** - 现代化的构建与调试流程
 - 🐛 **QEMU 集成调试** - 支持 GDB 远程调试与 VNC 图形界面
+
+### 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| **双阶段 Bootloader** | 支持 LBA 与 CHS 双模式磁盘读取 |
+| **64位长模式** | 完整的 x86_64 长模式切换与页表设置 |
+| **CMake 构建系统** | 现代化的构建与调试流程 |
+| **VSCode 调试** | 一键启动 GDB 远程调试 |
+| **模块化设计** | 清晰的代码组织，易于学习 |
 
 ---
 
@@ -51,165 +61,136 @@ cd CCOperatingSystemX64
 cmake -B build
 cmake --build build
 
-# 运行（文本模式）
-cmake --build build --target run
-
 # 运行（VGA 图形模式 - 推荐）
 cmake --build build --target vga-run
 
-# 构建并运行（一步到位）
+# 一键构建并运行
 cmake -B build && cmake --build build --target build-and-vga-run
 ```
 
-### 调试模式
+### 调试
 
-#### VSCode 调试 (推荐)
+按 `F5` 即可启动 VSCode 调试，支持断点、变量监视、调用栈查看等功能。
 
-项目已配置完整的 VSCode 调试支持，只需按 `F5` 即可启动调试：
-
-- **断点调试**: 支持在 C/汇编代码中设置断点
-- **变量监视**: 实时查看变量值和内存内容
-- **调用栈**: 查看完整的函数调用链
-- **单步执行**: 逐行或逐汇编指令调试
-
-配置文件位于 `.vscode/launch.json`，自动处理：
-- QEMU 调试端口 (1234)
-- GDB 多语言支持 (C/Assembly)
-- 符号文件自动加载
-
-#### GDB 命令行调试
-
-```bash
-# 启动 QEMU 调试服务器
-cmake --build build --target debug
-
-# 在另一个终端连接 GDB
-gdb build/kernel.elf -ex 'target remote :1234'
-```
+详见 [调试教程](document/debug_tutorial/)
 
 ---
 
-### ✅ 已完成功能
+## ✨ 功能一览
 
-#### Bootloader (v2.0)
-- **Stage 1 (MBR)**: BIOS 加载、欢迎信息、Stage 2 加载
-- **Stage 2**: LBA 扩展读取、CHS 兼容模式、动态磁盘读取、64位长模式切换、页表设置
-- **错误处理**: 完善的错误码与调试输出
+### 系统基础
 
-#### 内核基础
-- 64位长模式执行环境
-- 独立内核入口点
-- BSS 段自动清零
-- 基础控制台输出
+| 模块 | 功能 |
+|------|------|
+| **Bootloader** | 双阶段加载、LBA/CHS 兼容、64位长模式切换 |
+| **内核入口** | 独立入口点、BSS 段清零、栈帧设置 |
+| **串口驱动** | COM1 配置、ANSI 颜色、同步输出 |
 
-#### 串口驱动 🆕
-- **串口初始化**: 支持 COM1 端口配置
-- **同步输出**: sync_serial_puts() 非阻塞输出
-- **ANSI 颜色**: 支持终端颜色转义序列
-- **日志集成**: 与日志系统无缝集成
+### 显示系统
 
-#### VGA 图形驱动 🆕
-- **VGA 文本模式**: 80x25 字符显示支持
-- **颜色支持**: 16 色 VGA 调色板
-- **光标控制**: 硬件光标位置管理
-- **滚动功能**: 屏幕内容向上滚动
-- **格式化输出**: 支持 printf 风格的文本输出
+| 模块 | 功能 |
+|------|------|
+| **VGA 文本模式** | 80x25 显示、16 色支持、硬件/软件光标 |
+| **格式化输出** | printf 风格输出、多后端支持 |
+| **欢迎界面** | ASCII 艺术 logo、模块化设计 |
 
-#### 日志系统 🆕
-- **分级日志**: TRACE/DEBUG/INFO/WARN/ERROR 五级日志
-- **多后端支持**: 串口/VGA 双后端输出
-- **可配置**: 运行时日志级别过滤
-- **kprintf**: 内核 printf 风格格式化输出
+### 内存与数据结构
 
-#### 欢迎界面 🆕
-- **模块化设计**: 支持串口/VGA 双欢迎界面
-- **自动检测**: 根据编译目标选择显示方式
-- **美观输出**: 支持 ASCII 艺术 logo
+| 模块 | 功能 |
+|------|------|
+| **字符串库** | 完整字符串操作 (strlen/strcpy/strcmp/strtok 等) |
+| **内存操作** | memset/memcpy/memmove/memcmp |
+| **双向链表** | Linux kernel 风格链表操作 |
+| **位图操作** | 位图管理、位查找、位图运算 |
+| **数学工具** | 对齐、幂运算、除法变体、位操作宏 |
 
-#### 基础库函数 🆕
-- **字符串操作**: strlen, strcpy, strcmp, strchr, strstr, strtok 等完整字符串库
-- **内存操作**: memset, memcpy, memmove, memcmp
-- **数值转换**: strtol, strtoll, strtoul, atoi, itoa, uitoa
-- **字符处理**: isspace, isdigit, tolower
+### 中断与设备驱动
 
-#### 嵌入式链表 (kernel/list) 🆕
-Linux kernel 风格双向链表，提供完整的链表操作接口：
-- **基础操作**: 头部/尾部插入、删除节点、替换节点、判断空链表
-- **链表拼接**: list_splice、list_splice_tail、list_cut_position
-- **条目获取**: list_entry、list_first_entry、list_last_entry
-- **遍历宏**: list_for_each、list_for_each_safe、list_for_each_entry、list_for_each_entry_reverse 等
+| 模块 | 功能 |
+|------|------|
+| **中断框架** | IDT、异常处理、IRQ 描述符系统 |
+| **PIC 控制器** | 8259A 初始化、IRQ 重映射、EOI 处理 |
+| **PIT 定时器** | 可编程间隔定时器驱动 |
+| **键盘驱动** | PS/2 控制器、扫描码解析、环形缓冲区 |
+| **串口中断** | RX/TX 中断、串口 Shell |
+| **RTC 时钟** | CMOS RTC、周期性中断、闹钟功能 |
 
-#### 位图操作 (kernel/bitmap) 🆕
-完整的位图管理功能，用于物理内存管理等场景：
-- **基础位操作**: bitmap_set、bitmap_clear、bitmap_test、bitmap_flip
-- **批量操作**: bitmap_set_range、bitmap_clear_range
-- **位查找**: bitmap_find_first_zero、bitmap_find_first_set、bitmap_find_next_zero、bitmap_find_next_set
-- **位图运算**: bitmap_and、bitmap_or、bitmap_xor、bitmap_complement、bitmap_equal
-- **调试支持**: bitmap_to_string
+### 开发工具
 
-#### 数学函数 (kernel/math) 🆕
-基础数学工具与位运算辅助函数：
-- **基础数学**: abs、labs、max、min、clamp
-- **对齐操作**: align_up、align_down、is_aligned
-- **幂运算**: is_power_of_2、round_up_to_power_of_2、round_down_to_power_of_2
-- **除法变体**: div_round_up、div_round_down、div_round_nearest
-- **位操作宏**: BIT、BIT_MASK、BIT_WORD
-
-#### 断言系统 🆕
-- **运行时断言**: assert(cond) 宏
-- **静态断言**: static_assert 编译时检查
-- **断言后端**: 可配置的断言失败处理
-
-#### 开发工具 🆕
-- **VSCode 调试配置**: 一键启动调试环境
-- **clangd 支持**: 完整的 LSP 代码补全
-- **格式化配置**: 统一的代码风格
-- **CMake 集成**: 现代化构建流程
-
-#### 栈回溯支持 🆕
-- **栈帧遍历**: 基于 x86_64 帧指针 (RBP) 约定的栈遍历
-- **符号解析**: 地址到符号名的自动映射与偏移量计算
-- **符号表生成**: Python 脚本从 ELF 文件自动提取符号
-- **美观输出**: 表格化栈回溯显示，集成日志系统
-- **安全验证**: 栈帧对齐检查、边界验证、循环检测
-
-#### 中断处理框架 🆕
-- **IDT (中断描述符表)**: 256 个中断描述符，完整的中断服务程序 (ISR) 框架
-- **异常处理**: 除零异常 (#DE)、调试异常 (#DB)、断点异常 (#BP)、缺页异常 (#PF)、双重故障 (#DF)
-- **PIC 可编程控制器**: 8259A PIC 初始化、IRQ 重映射 (IRQ 0-15 → 32-47)、中断屏蔽管理、EOI 处理
-- **PIT 定时器中断**: 8254 可编程间隔定时器驱动，支持定时中断
+| 模块 | 功能 |
+|------|------|
+| **日志系统** | 五级日志、多后端输出、可配置过滤 |
+| **断言系统** | 运行时/静态断言、可配置后端 |
+| **栈回溯** | 符号解析、表格化输出、安全验证 |
+| **Shell 系统** | 多后端支持、命令注册、内置命令 |
 
 ---
 
-## 📚 文档
+## 📚 学习路径
 
-- [Bootloader 开发文档](document/01_bootloader/)
-- [内核加载文档](document/02_load_asm_kernel/)
-- [大内核支持文档](document/05_load_large_kernel/)
-- [构建指南](document/build.md)
-- [调试教程](document/debug_tutorial/)
+### 教程 (Tutorial)
+
+每章教程都配有对应代码，从零开始构建操作系统：
+
+| 章节 | 内容 |
+|------|------|
+| [01 Bootloader](tutorial/01_bootloader/) | BIOS 加载与 MBR 引导 |
+| [02 加载汇编内核](tutorial/02_load_asm_kernel/) | 简单内核加载 |
+| [03 统一引导](tutorial/03_unified_boots/) | 多内核支持 |
+| [04 CMake 联合构建](tutorial/04_cmake_union/) | 现代化构建系统 |
+| [05 大内核支持](tutorial/05_load_large_kernel/) | 超过扇区限制的内核 |
+| [06 调试入门](tutorial/06_learn_debug/) | GDB 基础调试 |
+| [07 VGA + VSCode 调试](tutorial/07_vga_with_vscode_debug/) | 图形模式与完整调试 |
+| [08 字符串工具](tutorial/08_string_utils/) | C 标准库实现 |
+| [09 内存与串口](tutorial/09_memory_serial/) | 内存操作与串口通信 |
+| [10 格式化日志](tutorial/10_base_with_format_log/) | printf 与日志系统 |
+| [11 链表与位图](tutorial/11_list_math_bitmaps_as_base_finished/) | 数据结构基础 |
+| [12 栈回溯](tutorial/12_stacktrace_supports/) | 符号解析与调试 |
+| [13 中断基础](tutorial/13_interrupt_base/) | IDT/PIT/键盘驱动 |
+| [14 更多中断设备](tutorial/14_more_intr_devices/) | 串口中断/RTC/Shell |
+
+### 文档 (Document)
+
+深入理解各模块设计与实现细节：
+
+| 文档 | 说明 |
+|------|------|
+| [Bootloader 设计](document/01_bootloader/) | 引导程序原理与实现 |
+| [内核加载](document/02_load_asm_kernel/) | 内核加载流程 |
+| [大内核支持](document/05_load_large_kernel/) | 超大内核加载方案 |
+| [构建指南](document/build.md) | CMake 构建系统详解 |
+| [调试教程](document/debug_tutorial/) | 调试技巧与工具使用 |
+| [开发经验](document/experience/) | 开发过程中的经验总结 |
 
 ---
 
-## 🎯 下一步计划
+## 🎯 进度与规划
 
-请到这里来——详见 [PROGRESS.md](PROGRESS.md)
+当前项目已完成基础中断与设备驱动阶段，详见 [PROGRESS.md](PROGRESS.md)
 
 ---
 
 ## 🛠️ 技术栈
 
-- **汇编**: NASM (x86_64)
-- **C 语言**: GCC (freestanding)
-- **构建**: CMake 4.2+
-- **调试**: QEMU + GDB
-- **版本控制**: Git
+| 类别 | 技术 |
+|------|------|
+| **汇编** | NASM (x86_64) |
+| **C 语言** | GCC (freestanding) |
+| **构建** | CMake 4.2+ |
+| **调试** | QEMU + GDB |
+| **版本控制** | Git |
+
+---
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
 
 ---
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+本项目采用 [MIT 许可证](LICENSE)
 
 ---
 
