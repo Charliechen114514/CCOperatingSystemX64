@@ -13,6 +13,17 @@ add_custom_command(
     VERBATIM
 )
 
+# 中断汇编存根文件
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/interrupt_asm.o
+    COMMAND ${NASM} -f elf64
+        ${CMAKE_CURRENT_SOURCE_DIR}/interrupt/interrupt.asm
+        -o ${CMAKE_BINARY_DIR}/interrupt_asm.o
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/interrupt/interrupt.asm
+    COMMENT "Building interrupt assembly stubs"
+    VERBATIM
+)
+
 # C内核主文件
 # 使用 OBJECT 库类型便于未来扩展
 add_library(kernel_main OBJECT
@@ -70,6 +81,9 @@ add_subdirectory(welcomes)
 # 添加 stacktrace 栈回溯模块
 add_subdirectory(stacktrace)
 
+# 添加 interrupt 中断子系统模块
+add_subdirectory(interrupt)
+
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
 # the object files that reference their symbols
@@ -85,6 +99,8 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_main.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_init.c.o
+        # interrupt assembly stubs
+        ${CMAKE_BINARY_DIR}/interrupt_asm.o
         # klogs object files
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf_backends.c.o
@@ -93,6 +109,9 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/welcome.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/vga_welcomes.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/welcomes/CMakeFiles/welcomes.dir/serial_welcome.c.o
+        # interrupt object files
+        ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/idt.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/interrupt.c.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)
@@ -106,6 +125,7 @@ add_custom_command(
         --end-group
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
+        ${CMAKE_BINARY_DIR}/interrupt_asm.o
         kernel_main
         assert
         base
@@ -116,6 +136,7 @@ add_custom_command(
         klogs
         welcomes
         stacktrace
+        interrupt
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

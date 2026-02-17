@@ -4,6 +4,7 @@
 #include "klogs/kprintf.h"
 #include "klogs/kprintf_config.h"
 #include "welcomes/welcome.h"
+#include "interrupt/interrupt.h"
 
 static void driver_subsystem_inits(void) {
     // Initialize serial port first for early debug output
@@ -24,5 +25,9 @@ void kernel_init(void) {
     /* One must Ensure the backends have been bootified, else sucks! */
     bootAllWelcomes();
     klog_trace("Boot Welcomes Done!\n");
+
+    // Initialize interrupt subsystem (must be after klog_init for logging)
+    interrupt_init();
+
     klog_info("kernel init finished!\n");
 }

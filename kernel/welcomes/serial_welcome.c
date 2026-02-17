@@ -11,7 +11,6 @@
 #include "ccos_config.h"
 #include "driver/serial/serial.h"
 #include "driver/serial/serial_color.h"
-#include "stacktrace/stacktrace.h"
 
 // ==================== COOL SERIAL WELCOME SCREEN ====================
 
@@ -204,10 +203,4 @@ void serial_display_welcome(void) {
 
     // Final reset
     sync_serial_puts(serial_color_ansi(SERIAL_COLOR_RESET));
-
-    // Test dump_stack functionality
-    sync_serial_puts("\r\n");
-    sync_serial_puts_color("  Testing dump_stack()...", SERIAL_COLOR_BRIGHT_YELLOW);
-    sync_serial_puts("\r\n");
-    dump_stack(10);
 }

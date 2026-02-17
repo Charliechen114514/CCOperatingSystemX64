@@ -10,6 +10,56 @@ const char _symbol_string_table[] =
     "halt_loop\0"
     "kernel_main\0"
     "kernel_init\0"
+    "isr0\0"
+    "isr1\0"
+    "isr2\0"
+    "isr3\0"
+    "isr4\0"
+    "isr5\0"
+    "isr6\0"
+    "isr7\0"
+    "isr8\0"
+    "isr9\0"
+    "isr10\0"
+    "isr11\0"
+    "isr12\0"
+    "isr13\0"
+    "isr14\0"
+    "isr15\0"
+    "isr16\0"
+    "isr17\0"
+    "isr18\0"
+    "isr19\0"
+    "isr20\0"
+    "isr21\0"
+    "isr22\0"
+    "isr23\0"
+    "isr24\0"
+    "isr25\0"
+    "isr26\0"
+    "isr27\0"
+    "isr28\0"
+    "isr29\0"
+    "isr30\0"
+    "isr31\0"
+    "irq0\0"
+    "irq1\0"
+    "irq2\0"
+    "irq3\0"
+    "irq4\0"
+    "irq5\0"
+    "irq6\0"
+    "irq7\0"
+    "irq8\0"
+    "irq9\0"
+    "irq10\0"
+    "irq11\0"
+    "irq12\0"
+    "irq13\0"
+    "irq14\0"
+    "irq15\0"
+    "interrupt_common\0"
+    "idt_load\0"
     "format_string\0"
     "kvprintf\0"
     "kprintf\0"
@@ -29,6 +79,17 @@ const char _symbol_string_table[] =
     "bootAllWelcomes\0"
     "vga_display_welcome\0"
     "serial_display_welcome\0"
+    "idt_init\0"
+    "idt_set_gate\0"
+    "idt_register_handler\0"
+    "idt_get_exception_name\0"
+    "interrupt_handler\0"
+    "timer_handler\0"
+    "interrupt_init\0"
+    "memset\0"
+    "memcpy\0"
+    "memmove\0"
+    "memcmp\0"
     "isspace\0"
     "isdigit\0"
     "strtol\0"
@@ -75,19 +136,16 @@ const char _symbol_string_table[] =
     "serial_color_for_log_level\0"
     "inb\0"
     "outb\0"
-    "dump_stack\0"
-    "dump_stack_full\0"
-    "get_symbol_table\0"
-    "find_symbol\0"
-    "format_symbol\0"
-    "_symbol_text_end\0"
-    "_symbol_text_start\0"
-    "_symbol_table_end\0"
-    "_symbol_table_start\0"
-    "_symbol_string_table\0"
-    "g_symbol_table\0"
+    "pic_init\0"
+    "pic_send_eoi\0"
+    "pic_disable_irq\0"
+    "pic_enable_irq\0"
+    "pic_is_irq_masked\0"
+    "pic_disable_all\0"
+    "pic_enable_all\0"
     "g_serial_backend_ops\0"
     "CCOS_LOGO\0"
+    "exception_names\0"
     "g_ansi_colors\0"
     "_GLOBAL_OFFSET_TABLE_\0"
     "buffer.0\0"
@@ -97,9 +155,11 @@ const char _symbol_string_table[] =
     "buffer\0"
     "g_default_backend\0"
     "g_backend_registry\0"
+    "custom_handlers\0"
+    "idt\0"
+    "timer_ticks\0"
     "save.0\0"
     "internal_vga_instance\0"
-    "g_symbols_initialized\0"
     "__bss_end\0"
 ;
 
@@ -109,99 +169,159 @@ const symbol_entry_t _symbol_table_start[] = {
     { 0x10000, &_symbol_string_table[0] },
     { 0x1003d, &_symbol_string_table[13] },
     { 0x10050, &_symbol_string_table[23] },
-    { 0x100c0, &_symbol_string_table[35] },
-    { 0x101e0, &_symbol_string_table[47] },
-    { 0x10d40, &_symbol_string_table[61] },
-    { 0x10de0, &_symbol_string_table[70] },
-    { 0x10ea0, &_symbol_string_table[78] },
-    { 0x10ed0, &_symbol_string_table[93] },
-    { 0x10f00, &_symbol_string_table[108] },
-    { 0x10f90, &_symbol_string_table[124] },
-    { 0x111d0, &_symbol_string_table[133] },
-    { 0x11370, &_symbol_string_table[143] },
-    { 0x113f0, &_symbol_string_table[164] },
-    { 0x11420, &_symbol_string_table[189] },
-    { 0x11450, &_symbol_string_table[214] },
-    { 0x115d0, &_symbol_string_table[236] },
-    { 0x115e0, &_symbol_string_table[252] },
-    { 0x11650, &_symbol_string_table[267] },
-    { 0x11680, &_symbol_string_table[292] },
-    { 0x116b0, &_symbol_string_table[320] },
-    { 0x11730, &_symbol_string_table[336] },
-    { 0x11b70, &_symbol_string_table[356] },
-    { 0x12580, &_symbol_string_table[379] },
-    { 0x125e0, &_symbol_string_table[387] },
-    { 0x125f0, &_symbol_string_table[395] },
-    { 0x127f0, &_symbol_string_table[402] },
-    { 0x12820, &_symbol_string_table[410] },
-    { 0x129e0, &_symbol_string_table[418] },
-    { 0x12a10, &_symbol_string_table[423] },
-    { 0x12a60, &_symbol_string_table[435] },
-    { 0x12b70, &_symbol_string_table[440] },
-    { 0x12c30, &_symbol_string_table[446] },
-    { 0x12d30, &_symbol_string_table[458] },
-    { 0x12e00, &_symbol_string_table[466] },
-    { 0x12e30, &_symbol_string_table[473] },
-    { 0x12e70, &_symbol_string_table[481] },
-    { 0x12ea0, &_symbol_string_table[488] },
-    { 0x12ee0, &_symbol_string_table[496] },
-    { 0x12f30, &_symbol_string_table[503] },
-    { 0x12f70, &_symbol_string_table[511] },
-    { 0x13020, &_symbol_string_table[522] },
-    { 0x13090, &_symbol_string_table[534] },
-    { 0x130d0, &_symbol_string_table[541] },
-    { 0x13100, &_symbol_string_table[549] },
-    { 0x13180, &_symbol_string_table[556] },
-    { 0x131e0, &_symbol_string_table[564] },
-    { 0x13240, &_symbol_string_table[571] },
-    { 0x132c0, &_symbol_string_table[579] },
-    { 0x133d0, &_symbol_string_table[588] },
-    { 0x13400, &_symbol_string_table[595] },
-    { 0x13420, &_symbol_string_table[603] },
-    { 0x13550, &_symbol_string_table[640] },
-    { 0x13580, &_symbol_string_table[653] },
-    { 0x135c0, &_symbol_string_table[669] },
-    { 0x13660, &_symbol_string_table[679] },
-    { 0x13680, &_symbol_string_table[694] },
-    { 0x136b0, &_symbol_string_table[709] },
-    { 0x13810, &_symbol_string_table[726] },
-    { 0x13980, &_symbol_string_table[744] },
-    { 0x13c40, &_symbol_string_table[755] },
-    { 0x13ce0, &_symbol_string_table[772] },
-    { 0x13d20, &_symbol_string_table[782] },
-    { 0x13d60, &_symbol_string_table[798] },
-    { 0x13de0, &_symbol_string_table[810] },
-    { 0x13e70, &_symbol_string_table[827] },
-    { 0x13eb0, &_symbol_string_table[845] },
-    { 0x13f40, &_symbol_string_table[872] },
-    { 0x13f50, &_symbol_string_table[876] },
-    { 0x13f60, &_symbol_string_table[881] },
-    { 0x142b0, &_symbol_string_table[892] },
-    { 0x142e0, &_symbol_string_table[908] },
-    { 0x14390, &_symbol_string_table[925] },
-    { 0x14550, &_symbol_string_table[937] },
-    { 0x153a0, &_symbol_string_table[951] },
-    { 0x153a8, &_symbol_string_table[968] },
-    { 0x153b0, &_symbol_string_table[987] },
-    { 0x153c0, &_symbol_string_table[1005] },
-    { 0x159e0, &_symbol_string_table[1025] },
-    { 0x16800, &_symbol_string_table[1046] },
-    { 0x16820, &_symbol_string_table[1061] },
-    { 0x16840, &_symbol_string_table[1082] },
-    { 0x16880, &_symbol_string_table[1082] },
-    { 0x168c0, &_symbol_string_table[1092] },
-    { 0x16960, &_symbol_string_table[1106] },
-    { 0x16980, &_symbol_string_table[1128] },
-    { 0x16980, &_symbol_string_table[1137] },
-    { 0x16b80, &_symbol_string_table[1149] },
-    { 0x16ba0, &_symbol_string_table[1165] },
-    { 0x16bc0, &_symbol_string_table[1177] },
-    { 0x16dc0, &_symbol_string_table[1184] },
-    { 0x16de0, &_symbol_string_table[1202] },
-    { 0x16e60, &_symbol_string_table[1221] },
-    { 0x16e70, &_symbol_string_table[1228] },
-    { 0x16e88, &_symbol_string_table[1250] },
-    { 0x16e89, &_symbol_string_table[1272] },
+    { 0x100b0, &_symbol_string_table[35] },
+    { 0x101d0, &_symbol_string_table[47] },
+    { 0x101db, &_symbol_string_table[52] },
+    { 0x101e6, &_symbol_string_table[57] },
+    { 0x101f1, &_symbol_string_table[62] },
+    { 0x101fc, &_symbol_string_table[67] },
+    { 0x10207, &_symbol_string_table[72] },
+    { 0x10212, &_symbol_string_table[77] },
+    { 0x1021d, &_symbol_string_table[82] },
+    { 0x10228, &_symbol_string_table[87] },
+    { 0x10231, &_symbol_string_table[92] },
+    { 0x1023c, &_symbol_string_table[97] },
+    { 0x10245, &_symbol_string_table[103] },
+    { 0x1024e, &_symbol_string_table[109] },
+    { 0x10257, &_symbol_string_table[115] },
+    { 0x10260, &_symbol_string_table[121] },
+    { 0x10269, &_symbol_string_table[127] },
+    { 0x10274, &_symbol_string_table[133] },
+    { 0x1027f, &_symbol_string_table[139] },
+    { 0x1028a, &_symbol_string_table[145] },
+    { 0x10295, &_symbol_string_table[151] },
+    { 0x102a0, &_symbol_string_table[157] },
+    { 0x102ab, &_symbol_string_table[163] },
+    { 0x102b6, &_symbol_string_table[169] },
+    { 0x102c1, &_symbol_string_table[175] },
+    { 0x102cc, &_symbol_string_table[181] },
+    { 0x102d7, &_symbol_string_table[187] },
+    { 0x102e2, &_symbol_string_table[193] },
+    { 0x102ed, &_symbol_string_table[199] },
+    { 0x102f8, &_symbol_string_table[205] },
+    { 0x10303, &_symbol_string_table[211] },
+    { 0x1030e, &_symbol_string_table[217] },
+    { 0x10319, &_symbol_string_table[223] },
+    { 0x10324, &_symbol_string_table[229] },
+    { 0x1032c, &_symbol_string_table[234] },
+    { 0x10334, &_symbol_string_table[239] },
+    { 0x1033c, &_symbol_string_table[244] },
+    { 0x10344, &_symbol_string_table[249] },
+    { 0x1034c, &_symbol_string_table[254] },
+    { 0x10354, &_symbol_string_table[259] },
+    { 0x1035c, &_symbol_string_table[264] },
+    { 0x10364, &_symbol_string_table[269] },
+    { 0x1036c, &_symbol_string_table[274] },
+    { 0x10374, &_symbol_string_table[279] },
+    { 0x1037c, &_symbol_string_table[285] },
+    { 0x10384, &_symbol_string_table[291] },
+    { 0x1038c, &_symbol_string_table[297] },
+    { 0x10394, &_symbol_string_table[303] },
+    { 0x1039c, &_symbol_string_table[309] },
+    { 0x103a4, &_symbol_string_table[315] },
+    { 0x1046e, &_symbol_string_table[332] },
+    { 0x10480, &_symbol_string_table[341] },
+    { 0x10fd0, &_symbol_string_table[355] },
+    { 0x11070, &_symbol_string_table[364] },
+    { 0x11140, &_symbol_string_table[372] },
+    { 0x11170, &_symbol_string_table[387] },
+    { 0x111a0, &_symbol_string_table[402] },
+    { 0x11230, &_symbol_string_table[418] },
+    { 0x11470, &_symbol_string_table[427] },
+    { 0x11620, &_symbol_string_table[437] },
+    { 0x116a0, &_symbol_string_table[458] },
+    { 0x116d0, &_symbol_string_table[483] },
+    { 0x11700, &_symbol_string_table[508] },
+    { 0x11880, &_symbol_string_table[530] },
+    { 0x11890, &_symbol_string_table[546] },
+    { 0x11900, &_symbol_string_table[561] },
+    { 0x11930, &_symbol_string_table[586] },
+    { 0x11960, &_symbol_string_table[614] },
+    { 0x119e0, &_symbol_string_table[630] },
+    { 0x11e10, &_symbol_string_table[650] },
+    { 0x12790, &_symbol_string_table[673] },
+    { 0x135f0, &_symbol_string_table[682] },
+    { 0x13670, &_symbol_string_table[695] },
+    { 0x136a0, &_symbol_string_table[716] },
+    { 0x136e0, &_symbol_string_table[739] },
+    { 0x13940, &_symbol_string_table[757] },
+    { 0x13980, &_symbol_string_table[771] },
+    { 0x13aa0, &_symbol_string_table[786] },
+    { 0x13be0, &_symbol_string_table[793] },
+    { 0x13cd0, &_symbol_string_table[800] },
+    { 0x13e10, &_symbol_string_table[808] },
+    { 0x13e80, &_symbol_string_table[815] },
+    { 0x13ed0, &_symbol_string_table[823] },
+    { 0x13ee0, &_symbol_string_table[831] },
+    { 0x140c0, &_symbol_string_table[838] },
+    { 0x140f0, &_symbol_string_table[846] },
+    { 0x142a0, &_symbol_string_table[854] },
+    { 0x142e0, &_symbol_string_table[859] },
+    { 0x14320, &_symbol_string_table[871] },
+    { 0x14430, &_symbol_string_table[876] },
+    { 0x144f0, &_symbol_string_table[882] },
+    { 0x145f0, &_symbol_string_table[894] },
+    { 0x146c0, &_symbol_string_table[902] },
+    { 0x146f0, &_symbol_string_table[909] },
+    { 0x14730, &_symbol_string_table[917] },
+    { 0x14760, &_symbol_string_table[924] },
+    { 0x147a0, &_symbol_string_table[932] },
+    { 0x147f0, &_symbol_string_table[939] },
+    { 0x14830, &_symbol_string_table[947] },
+    { 0x148e0, &_symbol_string_table[958] },
+    { 0x14950, &_symbol_string_table[970] },
+    { 0x14990, &_symbol_string_table[977] },
+    { 0x149c0, &_symbol_string_table[985] },
+    { 0x14a40, &_symbol_string_table[992] },
+    { 0x14aa0, &_symbol_string_table[1000] },
+    { 0x14b00, &_symbol_string_table[1007] },
+    { 0x14b80, &_symbol_string_table[1015] },
+    { 0x14c90, &_symbol_string_table[1024] },
+    { 0x14cc0, &_symbol_string_table[1031] },
+    { 0x14ce0, &_symbol_string_table[1039] },
+    { 0x14e10, &_symbol_string_table[1076] },
+    { 0x14e40, &_symbol_string_table[1089] },
+    { 0x14e80, &_symbol_string_table[1105] },
+    { 0x14f20, &_symbol_string_table[1115] },
+    { 0x14f40, &_symbol_string_table[1130] },
+    { 0x14f70, &_symbol_string_table[1145] },
+    { 0x150b0, &_symbol_string_table[1162] },
+    { 0x15200, &_symbol_string_table[1180] },
+    { 0x15490, &_symbol_string_table[1191] },
+    { 0x15530, &_symbol_string_table[1208] },
+    { 0x15560, &_symbol_string_table[1218] },
+    { 0x155a0, &_symbol_string_table[1234] },
+    { 0x15630, &_symbol_string_table[1246] },
+    { 0x156c0, &_symbol_string_table[1263] },
+    { 0x15700, &_symbol_string_table[1281] },
+    { 0x15790, &_symbol_string_table[1308] },
+    { 0x157a0, &_symbol_string_table[1312] },
+    { 0x157b0, &_symbol_string_table[1317] },
+    { 0x15890, &_symbol_string_table[1326] },
+    { 0x158f0, &_symbol_string_table[1339] },
+    { 0x15960, &_symbol_string_table[1355] },
+    { 0x159d0, &_symbol_string_table[1370] },
+    { 0x15a30, &_symbol_string_table[1388] },
+    { 0x15a80, &_symbol_string_table[1404] },
+    { 0x16500, &_symbol_string_table[1419] },
+    { 0x16520, &_symbol_string_table[1440] },
+    { 0x16560, &_symbol_string_table[1440] },
+    { 0x165a0, &_symbol_string_table[1450] },
+    { 0x166a0, &_symbol_string_table[1466] },
+    { 0x168a8, &_symbol_string_table[1480] },
+    { 0x168c0, &_symbol_string_table[1502] },
+    { 0x168c0, &_symbol_string_table[1511] },
+    { 0x16ac0, &_symbol_string_table[1523] },
+    { 0x16ae0, &_symbol_string_table[1539] },
+    { 0x16b00, &_symbol_string_table[1551] },
+    { 0x16d00, &_symbol_string_table[1558] },
+    { 0x16d20, &_symbol_string_table[1576] },
+    { 0x16da0, &_symbol_string_table[1595] },
+    { 0x175a0, &_symbol_string_table[1611] },
+    { 0x185a0, &_symbol_string_table[1615] },
+    { 0x185a8, &_symbol_string_table[1627] },
+    { 0x185b0, &_symbol_string_table[1634] },
+    { 0x185c8, &_symbol_string_table[1656] },
     { 0, NULL }
 };
 
@@ -212,4 +332,4 @@ const symbol_entry_t _symbol_table_end[] = {
 
 /* Text section bounds */
 const uintptr_t _symbol_text_start = 0x10000;
-const uintptr_t _symbol_text_end = 0x15187;
+const uintptr_t _symbol_text_end = 0x15ac4;

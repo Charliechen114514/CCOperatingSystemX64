@@ -194,9 +194,18 @@ add_custom_target(run
 
 # VGA运行目标（图形界面 - VNC backend）
 add_custom_target(vga-run
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -vga std -display vnc=:0 
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -vga std -display vnc=:0
     DEPENDS boot_img
     COMMENT "Running CCOS in QEMU with VGA graphics (VNC backend, connect with: vncviewer localhost:5900)"
+    VERBATIM
+)
+
+# QEMU Monitor 运行目标（支持 QEMU Monitor 命令）
+# Monitor 通过 telnet localhost:4444 访问，与串口分离
+add_custom_target(qemu-monitor-run
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -monitor telnet:127.0.0.1:4444,server,nowait
+    DEPENDS boot_img
+    COMMENT "Running CCOS with Monitor on telnet port 4444 (connect with: telnet localhost 4444)"
     VERBATIM
 )
 
@@ -223,6 +232,21 @@ add_custom_target(build-and-vga-run
     COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
     COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -vga std -display vnc=:0
     COMMENT "Build and run CCOS in QEMU with VGA graphics (VNC backend)"
+    VERBATIM
+)
+
+add_custom_target(build-and-qemu-monitor-run
+    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
+    COMMAND ${CMAKE_COMMAND} -E echo "Building CCOS..."
+    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
+    COMMAND ${CMAKE_COMMAND} --build . --target boot_img
+    COMMAND ${CMAKE_COMMAND} -E echo ""
+    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
+    COMMAND ${CMAKE_COMMAND} -E echo "Starting QEMU with Monitor on telnet:4444..."
+    COMMAND ${CMAKE_COMMAND} -E echo "Connect to Monitor: telnet localhost 4444"
+    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
+    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -monitor telnet:127.0.0.1:4444,server,nowait
+    COMMENT "Build and run CCOS with Monitor on telnet port 4444"
     VERBATIM
 )
 

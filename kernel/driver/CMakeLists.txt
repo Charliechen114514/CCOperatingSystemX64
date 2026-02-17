@@ -10,6 +10,7 @@ add_library(driver STATIC
     serial/serial.c
     serial/serial_color.c
     io/io.c
+    pic/pic.c
 )
 
 target_include_directories(driver PUBLIC
