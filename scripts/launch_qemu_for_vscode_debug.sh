@@ -261,7 +261,7 @@ start_qemu() {
         exit 1
     }
 
-    cmake --build ${BUILD_DIR} || {
+    cmake --build ${BUILD_DIR} -j${nproc} || {
         echo -e "${RED}错误: CMake 构建失败${NC}"
         exit 1
     }

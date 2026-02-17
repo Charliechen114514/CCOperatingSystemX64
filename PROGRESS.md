@@ -30,39 +30,39 @@
 ### 优先级 0：基础库的支持和预备
 
 #### 0.1 基础库目录结构
-- [ ] 创建 `kernel/base/list.h` - 嵌入式链表（通常仅头文件）
-- [x] 创建 `kernel/base/bitmap/bitmap.h` / `kernel/base/bitmap/bitmap.c` - 位图操作
-- [ ] 创建 `kernel/base/math.h` / `kernel/base/math.c` - 数学函数
+- [x] 创建 `kernel/list/list.h` / `kernel/list/list.c` - 嵌入式链表（Linux kernel 风格双向链表）
+- [x] 创建 `kernel/bitmap/bitmap.h` / `kernel/bitmap/bitmap.c` - 位图操作
+- [x] 创建 `kernel/math/math.h` / `kernel/math/math.c` - 数学函数
 
-#### 0.4 嵌入式链表 (list.h)
+#### 0.4 嵌入式链表 (list.h/list.c)
 
 **双向链表**（Linux kernel 风格）
-- [ ] `struct list_head` 结构定义
-- [ ] `LIST_HEAD(name)` - 静态初始化宏
-- [ ] `INIT_LIST_HEAD(ptr)` - 动态初始化宏
-- [ ] `list_add(new, head)` - 头部插入
-- [ ] `list_add_tail(new, head)` - 尾部插入
-- [ ] `list_del(entry)` - 删除节点
-- [ ] `list_del_init(entry)` - 删除并重新初始化
-- [ ] `list_replace(old, new)` - 替换节点
-- [ ] `list_replace_init(old, new)` - 替换并初始化旧节点
-- [ ] `list_is_empty(head)` - 判断是否为空
-- [ ] `list_is_last(entry, head)` - 判断是否为最后一个
-- [ ] `list_splice(list, head)` - 拼接两个链表
-- [ ] `list_splice_tail(list, head)` - 尾部拼接
-- [ ] `list_splice_init(list, head)` - 拼接并初始化原链表
-- [ ] `list_cut_position(list, head, entry)` - 切割链表
-- [ ] `list_entry(ptr, type, member)` - 从链表指针获取结构体
-- [ ] `list_first_entry(ptr, type, member)` - 获取第一个条目
-- [ ] `list_last_entry(ptr, type, member)` - 获取最后一个条目
-- [ ] `list_next_entry(pos, member)` - 获取下一个条目
-- [ ] `list_prev_entry(pos, member)` - 获取前一个条目
-- [ ] `list_for_each(pos, head)` - 遍历链表
-- [ ] `list_for_each_safe(pos, n, head)` - 安全遍历（支持删除）
-- [ ] `list_for_each_entry(pos, head, member)` - 遍历条目
-- [ ] `list_for_each_entry_safe(pos, n, head, member)` - 安全遍历条目
-- [ ] `list_for_each_entry_reverse(pos, head, member)` - 反向遍历
-- [ ] `list_for_each_prev(pos, head)` - 反向遍历节点
+- [x] `struct list_head` 结构定义
+- [x] `LIST_HEAD(name)` - 静态初始化宏
+- [x] `INIT_LIST_HEAD(ptr)` - 动态初始化宏
+- [x] `list_add(new, head)` - 头部插入
+- [x] `list_add_tail(new, head)` - 尾部插入
+- [x] `list_del(entry)` - 删除节点
+- [x] `list_del_init(entry)` - 删除并重新初始化
+- [x] `list_replace(old, new)` - 替换节点
+- [x] `list_replace_init(old, new)` - 替换并初始化旧节点
+- [x] `list_is_empty(head)` - 判断是否为空
+- [x] `list_is_last(entry, head)` - 判断是否为最后一个
+- [x] `list_splice(list, head)` - 拼接两个链表
+- [x] `list_splice_tail(list, head)` - 尾部拼接
+- [x] `list_splice_init(list, head)` - 拼接并初始化原链表
+- [x] `list_cut_position(list, head, entry)` - 切割链表
+- [x] `list_entry(ptr, type, member)` - 从链表指针获取结构体
+- [x] `list_first_entry(ptr, type, member)` - 获取第一个条目
+- [x] `list_last_entry(ptr, type, member)` - 获取最后一个条目
+- [x] `list_next_entry(pos, member)` - 获取下一个条目
+- [x] `list_prev_entry(pos, member)` - 获取前一个条目
+- [x] `list_for_each(pos, head)` - 遍历链表
+- [x] `list_for_each_safe(pos, n, head)` - 安全遍历（支持删除）
+- [x] `list_for_each_entry(pos, head, member)` - 遍历条目
+- [x] `list_for_each_entry_safe(pos, n, head, member)` - 安全遍历条目
+- [x] `list_for_each_entry_reverse(pos, head, member)` - 反向遍历
+- [x] `list_for_each_prev(pos, head)` - 反向遍历节点
 
 #### 0.5 位图操作 (bitmap.h/bitmap.c)
 
@@ -124,7 +124,6 @@
 - [x] `BIT_WORD(nr)` - 计算位所在的字索引
 
 **调试输出**
-- [ ] `dump_hex(buffer, length)` - 十六进制转储
 - [ ] `dump_mem(addr, length)` - 内存转储
 - [ ] `dump_stack()` - 栈回溯（需要栈帧信息）
 

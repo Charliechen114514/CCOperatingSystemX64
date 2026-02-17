@@ -66,6 +66,7 @@ set(TEST_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/kernel/base
     ${CMAKE_SOURCE_DIR}/kernel/math
     ${CMAKE_SOURCE_DIR}/kernel/bitmap
+    ${CMAKE_SOURCE_DIR}/kernel/list
 )
 
 # ============================================================================
@@ -209,6 +210,25 @@ set_tests_properties(test_bitmap PROPERTIES
     TIMEOUT 10
 )
 
+# ----------------------------------------------------------------------------
+# Test: List Functions
+# ----------------------------------------------------------------------------
+add_executable(test_list
+    test_list.c
+    ${CMAKE_SOURCE_DIR}/kernel/list/list.c
+    assert_stub.c  # Host-side stub for ccos_assert_impl
+)
+
+target_include_directories(test_list PRIVATE ${TEST_INCLUDE_DIRS})
+target_compile_options(test_list PRIVATE ${TEST_C_FLAGS})
+
+add_test(NAME test_list COMMAND test_list)
+
+set_tests_properties(test_list PROPERTIES
+    LABELS "runtime"
+    TIMEOUT 10
+)
+
 # ============================================================================
 # Test Integration with Main Build
 # ============================================================================
@@ -221,7 +241,7 @@ add_custom_target(check
         --output-on-failure
         --label-regex "(static|runtime)"
         $<IF:$<CONFIG:Debug>,--extra-verbose,>
-    DEPENDS test_types test_static_assert test_string test_memory test_math test_bits test_bitmap
+    DEPENDS test_types test_static_assert test_string test_memory test_math test_bits test_bitmap test_list
     COMMENT "Running static tests..."
     VERBATIM
 )
