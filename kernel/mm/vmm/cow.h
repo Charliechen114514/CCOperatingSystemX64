@@ -11,27 +11,11 @@
 
 #include "defines/types.h"
 #include "mm/vmm/page.h"
+#include "mm/vmm/vmm_constants.h"  /* For COW_FLAG_MASK, COW_MAX_REFCOUNT */
+#include "mm/vmm/vmm_config.h"     /* For COW_HASH_SIZE */
 
 /* Forward declaration */
 struct interrupt_frame;
-
-/* ============================================================================
- * COW Constants
- * ============================================================================ */
-
-/**
- * COW flag - stored in PTE available bit 9
- * When set, this page is shared and should trigger COW on write.
- */
-#define COW_FLAG_MASK    (1ULL << 9)
-
-/**
- * Maximum reference count for a COW page
- */
-#define COW_MAX_REFCOUNT  0xFFFF
-
-/* Default hash table size for COW tracking */
-#define COW_HASH_SIZE  256
 
 /* ============================================================================
  * COW Data Structures

@@ -11,12 +11,10 @@
 
 #include "defines/types.h"
 #include "interrupt/idt.h"
-#include "interrupt/idt_constants.h"  /* For IDT_PF */
+#include "interrupt/idt_constants.h" /* For IDT_PF */
+#include "mm/vmm/vmm_constants.h"    /* For PF_ERR_* constants */
 
-/* Forward declaration for vmm_result_t to avoid circular dependency
- * Note: This is defined in vmm.h, but we need it here for function signatures.
- * We use a conditional to avoid redefinition errors.
- */
+/* vmm_result_t is defined in vmm.h, include it if needed */
 #ifndef VMM_RESULT_T_DEFINED
 #define VMM_RESULT_T_DEFINED
 typedef enum {
@@ -31,20 +29,6 @@ typedef enum {
 #endif
 
 /* ==============================================================================
- * Page Fault Error Code Bits
- * ==============================================================================
- *
- * The page fault error code is pushed by the CPU when a #PF occurs.
- * It provides information about the cause of the fault.
- */
-
-#define PF_ERR_PRESENT   (1 << 0)  /* Bit 0: P=0 if page not present, P=1 if protection fault */
-#define PF_ERR_WRITE     (1 << 1)  /* Bit 1: W=1 if write operation, W=0 if read */
-#define PF_ERR_USER      (1 << 2)  /* Bit 2: U=1 if user mode, U=0 if supervisor mode */
-#define PF_ERR_RESERVED  (1 << 3)  /* Bit 3: Reserved bit set in page table */
-#define PF_ERR_INSTR     (1 << 4)  /* Bit 4: I=1 if instruction fetch, I=0 if data access */
-
-/* ==============================================================================
  * Page Fault Information Structure
  * ============================================================================== */
 
@@ -55,13 +39,13 @@ typedef enum {
  * including the faulting address and the cause of the fault.
  */
 typedef struct {
-    virtual_addr_t fault_addr;      /* CR2: Faulting virtual address */
-    uint64_t error_code;            /* Raw error code from CPU */
-    bool present;                   /* Was the page present? */
-    bool write;                     /* Was it a write operation? */
-    bool user;                      /* Did it occur in user mode? */
-    bool reserved_bit;              /* Was a reserved bit set? */
-    bool instruction_fetch;         /* Was it an instruction fetch? */
+    virtual_addr_t fault_addr; /* CR2: Faulting virtual address */
+    uint64_t error_code;       /* Raw error code from CPU */
+    bool present;              /* Was the page present? */
+    bool write;                /* Was it a write operation? */
+    bool user;                 /* Did it occur in user mode? */
+    bool reserved_bit;         /* Was a reserved bit set? */
+    bool instruction_fetch;    /* Was it an instruction fetch? */
 } page_fault_info_t;
 
 /* ==============================================================================
@@ -69,12 +53,12 @@ typedef struct {
  * ============================================================================== */
 
 typedef enum {
-    PF_SUCCESS,              /* Fault was handled successfully */
-    PF_NOT_OUR_FAULT,        /* Not a fault we should handle */
-    PF_OOM,                  /* Out of memory */
-    PF_ACCESS_DENIED,        /* Access violation */
-    PF_INVALID_ADDRESS,      /* Invalid address */
-    PF_KERNEL_PANIC,         /* Kernel should panic */
+    PF_SUCCESS,         /* Fault was handled successfully */
+    PF_NOT_OUR_FAULT,   /* Not a fault we should handle */
+    PF_OOM,             /* Out of memory */
+    PF_ACCESS_DENIED,   /* Access violation */
+    PF_INVALID_ADDRESS, /* Invalid address */
+    PF_KERNEL_PANIC,    /* Kernel should panic */
 } pf_result_t;
 
 /* ==============================================================================

@@ -12,40 +12,7 @@
 #include "defines/types.h"
 #include "mm/pframe/pframe.h"
 #include "mm/vmm/page.h"
-
-/* ==============================================================================
- * Virtual Memory Address Space Layout
- * ==============================================================================
- *
- * x86_64 Canonical Address Space:
- * - 0x0000000000000000 - 0x00007FFFFFFFFFFF : User Space (128 TB)
- * - Non-canonical hole
- * - 0xFFFF800000000000 - 0xFFFFFFFFFFFFFFFF : Kernel Space (128 TB)
- *
- * Kernel Layout (higher half):
- */
-
-/* Direct physical map region */
-#define KERNEL_VIRT_BASE        0xFFFF800000000000ULL
-#define KERNEL_VIRT_END         0xFFFF800001000000ULL  /* 256MB direct map */
-
-/* Kernel code/data regions */
-#define KERNEL_TEXT_BASE        0xFFFFFFFF80000000ULL
-#define KERNEL_TEXT_SIZE        (2 * 1024 * 1024)     /* 2MB */
-#define KERNEL_DATA_BASE        (KERNEL_TEXT_BASE + KERNEL_TEXT_SIZE)
-#define KERNEL_DATA_SIZE        (2 * 1024 * 1024)     /* 2MB */
-
-/* Kernel heap region (for future kmalloc implementation) */
-#define KERNEL_HEAP_BASE        0xFFFFFFFF81000000ULL
-#define KERNEL_HEAP_SIZE        (128 * 1024 * 1024)   /* 128MB */
-#define KERNEL_HEAP_MAX         (KERNEL_HEAP_BASE + KERNEL_HEAP_SIZE)
-
-/* Physical map offset for direct mapping */
-#define PHYS_MAP_OFFSET         KERNEL_VIRT_BASE
-
-/* User space boundaries */
-#define USER_BASE               0x0000000000400000ULL  /* 4MB (skip NULL page) */
-#define USER_END                0x00007FFFFFFFFFFFULL  /* 128TB user limit */
+#include "mm/vmm/vmm_config.h"  /* For memory layout configuration */
 
 /* ============================================================================
  * Address Conversion Macros

@@ -10,12 +10,7 @@
 #pragma once
 
 #include "defines/types.h"
-
-/* ==============================================================================
- * Page Size Constants
- * ============================================================================== */
-#define PAGE_SIZE       4096    /* 4KB page size for x86_64 */
-#define PAGE_SHIFT      12      /* log2(PAGE_SIZE) */
+#include "mm/page_config.h"     /* For PAGE_SIZE, PAGE_SHIFT */
 
 /* ==============================================================================
  * Memory Constraints

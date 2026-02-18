@@ -100,7 +100,7 @@ add_subdirectory(interrupt)
 option(ENABLE_RTC_DEMO "Enable RTC driver demo" OFF)
 option(ENABLE_VMM_DEMO "Enable VMM demo" OFF)
 option(ENABLE_HEAP_DEMO "Enable Heap allocator demo" OFF)
-option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" ON)
+option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
 if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO)

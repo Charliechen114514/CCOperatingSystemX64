@@ -11,15 +11,6 @@
 #include "defines/types.h"
 
 /* ==============================================================================
- * Constants
- * ============================================================================== */
-
-#define HEAP_ALIGN       16          /* 16-byte alignment */
-#define HEAP_MIN_ALLOC   16          /* Minimum allocation size */
-#define HEAP_MIN_BLOCK   32          /* Minimum block size (header + data) */
-#define HEAP_INIT_PAGES  16          /* Initial heap size (64KB) */
-
-/* ==============================================================================
  * Result Codes
  * ============================================================================== */
 
@@ -37,15 +28,15 @@ typedef enum {
  * ============================================================================== */
 
 typedef struct {
-    uint64_t total_bytes;      /* Total heap bytes managed */
-    uint64_t used_bytes;       /* Bytes currently allocated */
-    uint64_t free_bytes;       /* Bytes available */
-    uint64_t total_blocks;     /* Total blocks in heap */
-    uint64_t used_blocks;      /* Allocated blocks */
-    uint64_t free_blocks;      /* Free blocks */
-    uint64_t alloc_count;      /* Total allocations */
-    uint64_t free_count;       /* Total frees */
-    uint64_t expand_count;     /* Times heap expanded */
+    uint64_t total_bytes;  /* Total heap bytes managed */
+    uint64_t used_bytes;   /* Bytes currently allocated */
+    uint64_t free_bytes;   /* Bytes available */
+    uint64_t total_blocks; /* Total blocks in heap */
+    uint64_t used_blocks;  /* Allocated blocks */
+    uint64_t free_blocks;  /* Free blocks */
+    uint64_t alloc_count;  /* Total allocations */
+    uint64_t free_count;   /* Total frees */
+    uint64_t expand_count; /* Times heap expanded */
 } heap_stats_t;
 
 /* ==============================================================================

@@ -24,7 +24,7 @@ static memory_region_t s_regions[MAX_REGIONS];
 static uint32_t s_region_count = 0;
 
 /* Virtual address allocation hint for kernel mappings */
-static virtual_addr_t s_kernel_virt_hint = KERNEL_HEAP_BASE;
+static virtual_addr_t s_kernel_virt_hint = KERNEL_GENERAL_BASE;
 
 /* Initialization flag */
 static bool s_initialized = false;
@@ -55,7 +55,7 @@ static bool check_region_collision(virtual_addr_t start, virtual_addr_t end) {
  */
 static vmm_result_t find_free_virt_range(uint64_t size, virtual_addr_t* out_vaddr) {
     virtual_addr_t hint = s_kernel_virt_hint;
-    virtual_addr_t end = KERNEL_HEAP_MAX; /* Don't go beyond heap region */
+    virtual_addr_t end = KERNEL_GENERAL_MAX; /* Don't go beyond general allocation region */
 
     /* Determine alignment based on size - use the size itself as alignment */
     uint64_t alignment = (size >= PAGE_SIZE_2MB) ? PAGE_SIZE_2MB : PAGE_SIZE;
@@ -140,19 +140,26 @@ vmm_result_t vmm_init(void) {
     klog_info("[VMM]   Kernel data: 0x%016llX - 0x%016llX\n", KERNEL_DATA_BASE,
               KERNEL_DATA_BASE + KERNEL_DATA_SIZE);
     klog_info("[VMM]   Kernel heap: 0x%016llX - 0x%016llX\n", KERNEL_HEAP_BASE, KERNEL_HEAP_MAX);
+    klog_info("[VMM]   General alloc: 0x%016llX - 0x%016llX\n", KERNEL_GENERAL_BASE, KERNEL_GENERAL_MAX);
     klog_info("[VMM]   User space:  0x%016llX - 0x%016llX\n", USER_BASE, USER_END);
 
-    /* Register fixed kernel regions (note: heap region is usable for allocation) */
+    /* Register fixed kernel regions */
     add_region(KERNEL_TEXT_BASE, KERNEL_TEXT_BASE + KERNEL_TEXT_SIZE, 0, VMAP_FLAG_NONE,
                "kernel_text");
     add_region(KERNEL_DATA_BASE, KERNEL_DATA_BASE + KERNEL_DATA_SIZE, 0, VMAP_FLAG_WRITE,
                "kernel_data");
 
+    /* Register heap region as reserved so vmm_alloc_pages doesn't use it
+     * The heap allocator will use vmm_alloc_pages_at to get fixed addresses
+     * within this region, ensuring heap contiguity */
+    add_region(KERNEL_HEAP_BASE, KERNEL_HEAP_MAX, 0, VMAP_FLAG_NONE, "kernel_heap");
+
     s_initialized = true;
     klog_info("[VMM] Initialization complete\n");
+    klog_info("[VMM] General page allocation starts at 0x%016llX\n", s_kernel_virt_hint);
 
     /* Dump the memory map for debugging */
-    vmm_dump_memory_map(0, 64);
+    // vmm_dump_memory_map(0, 64);
 
     return VMM_OK;
 }
@@ -301,8 +308,8 @@ virtual_addr_t vmm_alloc_pages(uint64_t count, uint64_t flags) {
             }
 
             if (!found_aligned) {
-                klog_error("[VMM] Failed to allocate aligned %s page after %d retries\n",
-                          page_type, retry_count);
+                klog_error("[VMM] Failed to allocate aligned %s page after %d retries\n", page_type,
+                           retry_count);
                 vmm_free_pages(vaddr, i);
                 return 0;
             }
@@ -427,8 +434,8 @@ vmm_result_t vmm_alloc_pages_at(virtual_addr_t vaddr, uint64_t count, uint64_t f
             }
 
             if (!found_aligned) {
-                klog_error("[VMM] Failed to allocate aligned %s page after %d retries\n",
-                          page_type, retry_count);
+                klog_error("[VMM] Failed to allocate aligned %s page after %d retries\n", page_type,
+                           retry_count);
                 vmm_free_pages(vaddr, i);
                 return VMM_ERR_OOM;
             }
@@ -459,6 +466,12 @@ vmm_result_t vmm_alloc_pages_at(virtual_addr_t vaddr, uint64_t count, uint64_t f
 
     /* Track the region */
     add_region(vaddr, vaddr + (count * page_size), 0, flags, "allocated_pages");
+
+    /* Update allocation hint to avoid allocating in this range again */
+    virtual_addr_t region_end = vaddr + (count * page_size);
+    if (s_kernel_virt_hint < region_end) {
+        s_kernel_virt_hint = region_end;
+    }
 
     /* Update statistics */
     s_stats.mapped_pages += count;

@@ -6,6 +6,7 @@
 #include "mm/heap/heap.h"
 #include "assert/assert.h"
 #include "base/memory.h"
+#include "heap_config.h"
 #include "klogs/kprintf.h"
 #include "math/bits.h"
 #include "mm/pframe/pframe.h"
@@ -95,9 +96,8 @@ static inline heap_block_t* ptr_to_block(void* ptr) {
 
     /* If the value at orig_ptr_loc points to a valid heap region,
      * and is reasonably aligned, assume this is an aligned allocation */
-    if (*orig_ptr_loc >= s_heap.heap_start &&
-        *orig_ptr_loc < s_heap.heap_brk &&
-        (*orig_ptr_loc & 0xF) == 0) {  /* 16-byte aligned hint */
+    if (*orig_ptr_loc >= s_heap.heap_start && *orig_ptr_loc < s_heap.heap_brk &&
+        (*orig_ptr_loc & 0xF) == 0) { /* 16-byte aligned hint */
         /* orig_ptr_loc stores the user pointer of the raw allocation,
          * so we need to go back further to get the block header */
         virtual_addr_t raw_user_ptr = *orig_ptr_loc;
@@ -129,7 +129,9 @@ static inline heap_block_t* next_block(heap_block_t* block) {
  * is_last_block - Check if this is the last block
  */
 static inline bool is_last_block(heap_block_t* block) {
-    return (virtual_addr_t)next_block(block) >= s_heap.heap_brk;
+    virtual_addr_t next_addr = (virtual_addr_t)next_block(block);
+    /* Check if next block is beyond the current heap break OR beyond heap region */
+    return (next_addr >= s_heap.heap_brk) || (next_addr >= s_heap.heap_end);
 }
 
 /**
@@ -343,15 +345,30 @@ static heap_result_t expand_heap(size_t min_needed) {
     klog_info("[HEAP] Expanding heap by %lu pages (%lu KB)\n", page_count,
               (page_count * PAGE_SIZE) / 1024);
 
-    /* Allocate pages */
-    virtual_addr_t new_pages = vmm_alloc_pages(page_count, VMAP_FLAG_WRITE);
-    if (new_pages == 0) {
-        klog_error("[HEAP] Failed to allocate pages for expansion\n");
+    /* Allocate pages at the current heap break to ensure continuity
+     * If heap_brk is 0 (first allocation), use KERNEL_HEAP_BASE */
+    virtual_addr_t target_vaddr = s_heap.heap_brk;
+    if (target_vaddr == 0) {
+        target_vaddr = KERNEL_HEAP_BASE;
+    }
+
+    /* Align target_vaddr to page boundary */
+    virtual_addr_t orig_vaddr = target_vaddr;
+    target_vaddr = (target_vaddr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    if (orig_vaddr != target_vaddr) {
+        klog_trace("[HEAP] Aligning heap_brk: 0x%llX -> 0x%llX\n", orig_vaddr, target_vaddr);
+    }
+
+    klog_trace("[HEAP] Attempting to allocate %lu pages at 0x%llX\n", page_count, target_vaddr);
+
+    vmm_result_t vmm_result = vmm_alloc_pages_at(target_vaddr, page_count, VMAP_FLAG_WRITE);
+    if (vmm_result != VMM_OK) {
+        klog_error("[HEAP] Failed to allocate pages at 0x%llX for expansion\n", target_vaddr);
         return HEAP_ERR_OOM;
     }
 
     /* Initialize as a new free block */
-    heap_block_t* new_block = (heap_block_t*)new_pages;
+    heap_block_t* new_block = (heap_block_t*)target_vaddr;
     new_block->size = page_count * PAGE_SIZE;
     new_block->used = false;
     new_block->magic = HEAP_BLOCK_MAGIC;
@@ -359,14 +376,14 @@ static heap_result_t expand_heap(size_t min_needed) {
     new_block->next = NULL;
 
     /* Clear the memory */
-    memset((void*)((virtual_addr_t)new_block + sizeof(heap_block_t)), 0,
+    memset((void*)(target_vaddr + sizeof(heap_block_t)), 0,
            new_block->size - sizeof(heap_block_t));
 
     /* Insert to free list */
     insert_to_free_list(new_block);
 
-    /* Update heap break */
-    s_heap.heap_brk = new_pages + new_block->size;
+    /* Update heap break (should always be page-aligned after this) */
+    s_heap.heap_brk = target_vaddr + new_block->size;
 
     /* Update stats */
     s_heap.stats.total_bytes += new_block->size;
@@ -402,7 +419,7 @@ heap_result_t heap_init(void) {
     /* Set up heap region boundaries (max possible range) */
     s_heap.heap_start = KERNEL_HEAP_BASE;
     s_heap.heap_end = KERNEL_HEAP_MAX;
-    s_heap.heap_brk = 0;  /* Will be set on first allocation */
+    s_heap.heap_brk = 0; /* Will be set on first allocation */
     s_heap.free_list = NULL;
 
     /* Allocate initial pages - this will set heap_brk */
@@ -629,8 +646,7 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
 
     klog_trace("[HEAP] Allocated %lu bytes at 0x%llX (block size: %lu)\n", size,
                (virtual_addr_t)raw_ptr, total_block_size(total_size));
-    klog_trace("[HEAP] Aligned allocation: raw=0x%llX, aligned=0x%llX\n",
-               raw_start, aligned_addr);
+    klog_trace("[HEAP] Aligned allocation: raw=0x%llX, aligned=0x%llX\n", raw_start, aligned_addr);
 
     return (void*)aligned_addr;
 }
@@ -665,7 +681,7 @@ heap_result_t heap_get_stats(heap_stats_t* stats) {
         if (validate_block(block)) {
             size_t user_bytes = block->size - sizeof(heap_block_t);
             stats->total_blocks++;
-            stats->total_bytes += user_bytes;  /* Only count user-available bytes */
+            stats->total_bytes += user_bytes; /* Only count user-available bytes */
 
             if (block->used) {
                 stats->used_blocks++;
