@@ -444,11 +444,9 @@ setup_page_tables:
     mov dword [0x9000], 0x0000A003    ; PML4[0] -> PDPT
     mov dword [0x9FF8], 0x0000A003    ; PML4[511] -> PDPT
     mov dword [0xA000], 0x0000B003    ; PDPT[0] -> PD
-    ; Map first 4MB (two 2MB pages) to cover kernel BSS in Debug builds
+    ; Map first 2MB (2MB page) to cover kernel BSS in Debug builds
     mov dword [0xB000], 0x00000083    ; PD[0] -> 2MB page at 0x00000000
     mov dword [0xB004], 0x00000000
-    mov dword [0xB008], 0x00200083    ; PD[1] -> 2MB page at 0x00200000
-    mov dword [0xB00C], 0x00000000
     ; High address mapping (for kernel access)
     mov dword [0xBFF0], 0x00000083    ; PD[511] -> 2MB page
     mov dword [0xBFF4], 0x00000000

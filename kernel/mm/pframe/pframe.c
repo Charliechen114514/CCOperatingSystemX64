@@ -30,11 +30,7 @@
  * Internal State
  * ============================================================================== */
 
-/* Static bitmap storage - sized for up to 64GB RAM
- * Use __attribute__((section(".bss"))) to force placement in regular BSS
- * instead of .lbss (large BSS) which may not be mapped by bootloader.
- */
-static byte_t s_frame_bitmap_storage[PFRAME_MAX_BITMAP_SIZE] __attribute__((section(".bss")));
+static byte_t s_frame_bitmap_storage[PFRAME_MAX_BITMAP_SIZE];
 
 /* Frame allocator state */
 typedef struct {
@@ -221,9 +217,10 @@ pframe_result_t pframe_init(void) {
     pframe_stats_t stats;
     pframe_get_stats(&stats);
 
-    klog_info("[PFRAME] Initialized: %llu frames (%llu MB managed)\n",
-              (unsigned long long)stats.total_frames,
-              (unsigned long long)((stats.managed_end - stats.managed_start) / (1024ULL * 1024ULL)));
+    klog_info(
+        "[PFRAME] Initialized: %llu frames (%llu MB managed)\n",
+        (unsigned long long)stats.total_frames,
+        (unsigned long long)((stats.managed_end - stats.managed_start) / (1024ULL * 1024ULL)));
     klog_info("[PFRAME] Free: %llu, Reserved: %llu, Allocated: %llu\n",
               (unsigned long long)stats.free_frames, (unsigned long long)stats.reserved_frames,
               (unsigned long long)stats.allocated_frames);
