@@ -35,6 +35,10 @@
 | **CMake 构建系统** | 现代化的构建与调试流程 |
 | **VSCode 调试** | 一键启动 GDB 远程调试 |
 | **模块化设计** | 清晰的代码组织，易于学习 |
+| **进程管理** | fork/exit/wait、Copy-on-Write |
+| **调度器框架** | Round-Robin、优先级调度、抢占式 |
+| **系统调用** | syscall/sysret、完整的 POSIX 接口 |
+| **用户态支持** | Ring 3 进程、用户态 C 库 |
 
 ---
 
@@ -133,6 +137,46 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | **栈回溯** | 符号解析、表格化输出、安全验证 |
 | **Shell 系统** | 多后端支持、命令注册、内置命令 |
 
+### 进程管理
+
+| 模块 | 功能 |
+|------|------|
+| **进程控制块** | PCB 结构定义、进程状态管理、PID 分配器 |
+| **上下文切换** | switch_context/switch_to_first 汇编实现 |
+| **进程操作** | fork/exit/wait4 系统调用、Copy-on-Write 支持 |
+| **内核栈管理** | 每进程独立内核栈、栈溢出保护 |
+| **用户栈设置** | 1MB 用户栈空间、自动增长支持 |
+
+### 调度器框架
+
+| 模块 | 功能 |
+|------|------|
+| **调度器抽象类** | sched_class 多态设计、策略枚举 |
+| **Round-Robin 调度** | FIFO 队列、固定时间片 (10ms) |
+| **优先级调度** | 128 级优先级、Active/Expired 队列机制 |
+| **抢占式调度** | 时间片到期、优先级抢占支持 |
+| **调度器注册** | 动态注册、运行时切换 |
+
+### 系统调用
+
+| 模块 | 功能 |
+|------|------|
+| **syscall/sysret** | 快速系统调用指令支持 |
+| **系统调用分发** | 统一入口、参数解析、错误处理 |
+| **进程管理** | fork/exit/wait/getpid/getppid/yield |
+| **I/O 操作** | write/read/open/close |
+| **系统信息** | uname/getuid/kill/execve |
+
+### 用户态支持
+
+| 模块 | 功能 |
+|------|------|
+| **Ring 3 切换** | iretq 用户态进入、syscall 内核态返回 |
+| **用户内存管理** | USER_BASE~USER_END 地址空间、安全访问验证 |
+| **内存拷贝** | user_copy_from_user/to_user 安全拷贝 |
+| **用户态 C 库** | printf/malloc/exit 等标准库函数 |
+| **用户程序构建** | freestanding 编译、符号重命名、内核嵌入 |
+
 ---
 
 ## 📚 学习路径
@@ -157,6 +201,15 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | [12 栈回溯](tutorial/12_stacktrace_supports/) | 符号解析与调试 |
 | [13 中断基础](tutorial/13_interrupt_base/) | IDT/PIT/键盘驱动 |
 | [14 更多中断设备](tutorial/14_more_intr_devices/) | 串口中断/RTC/Shell |
+| [15 物理内存管理](tutorial/15_memdetect_with_pframe/) | E820 内存检测与物理帧分配 |
+| [16 虚拟内存管理](tutorial/16_vmm_pagefaults/) | 页表管理与缺页异常 |
+| [17 堆内存管理](tutorial/17_kmalloc_kfree/) | kmalloc/kfree 实现 |
+| [18 COW 与异常处理](tutorial/18_cow_exception_handle/) | 写时复制与异常处理 |
+| [19 代码重构](tutorial/19_tidy_codes_and_refactorize/) | 代码整理与重构 |
+| [20 系统调用框架](tutorial/20_syscallframework/) | syscall/sysret 指令支持 |
+| [21 简单进程](tutorial/21_process_simple/) | 进程控制块与上下文切换 |
+| [22 调度器类](tutorial/22_sched_class/) | 调度器抽象类与多策略支持 |
+| [23 用户态进程](tutorial/23_usr_proc/) | Ring 3 切换与用户态 C 库 |
 
 ### 文档 (Document)
 
@@ -175,7 +228,24 @@ cmake -B build && cmake --build build --target build-and-vga-run
 
 ## 🎯 进度与规划
 
-当前项目已完成基础中断与设备驱动阶段，详见 [PROGRESS.md](PROGRESS.md)
+当前项目已完成进程管理、调度器框架和用户态支持阶段，详见 [PROGRESS.md](PROGRESS.md)
+
+| 模块 | 完成度 | 状态 |
+|:----:|:------:|:----:|
+| 构建系统 | 100% | ✅ 完成 |
+| Bootloader | 100% | ✅ 完成 |
+| 内核启动 | 100% | ✅ 完成 |
+| VGA 驱动 | 100% | ✅ 完成 |
+| 串口驱动 | 100% | ✅ 完成 |
+| 日志系统 | 100% | ✅ 完成 |
+| 内存管理 | 100% | ✅ 完成 |
+| 中断处理 | 90% | 🟢 部分完成 |
+| 进程管理 | 90% | 🟢 部分完成 |
+| 调度器框架 | 100% | ✅ 完成 |
+| 系统调用 | 95% | 🟢 部分完成 |
+| 用户态支持 | 85% | 🟢 部分完成 |
+| 用户态 C 库 | 80% | 🟢 部分完成 |
+| 文件系统 | 0% | 🔴 未开始 |
 
 ---
 
