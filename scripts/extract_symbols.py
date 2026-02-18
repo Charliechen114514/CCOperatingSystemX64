@@ -211,8 +211,8 @@ def get_text_section_bounds(elf_path):
 def main():
     parser = argparse.ArgumentParser(description='Extract symbols from kernel ELF')
     parser.add_argument('elf', help='Path to kernel ELF file')
-    parser.add_argument('-o', '--output', default='kernel/stacktrace',
-                       help='Output directory (default: kernel/stacktrace)')
+    parser.add_argument('-o', '--output', default='build/kernel/stacktrace',
+                       help='Output directory (default: build/kernel/stacktrace)')
     args = parser.parse_args()
 
     # Get symbol information

@@ -334,14 +334,15 @@ set(SYMBOLS_EXTRACTED_STAMP ${CMAKE_CURRENT_BINARY_DIR}/.symbols_extracted)
 
 # 符号提取命令：在 kernel 构建后自动执行
 # 使用 POST_BUILD 确保每次 kernel.elf 更新后都会重新提取符号
+# 符号文件输出到构建目录，避免污染源代码
 add_custom_command(
     TARGET kernel
     POST_BUILD
     COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/extract_symbols.py
         ${CMAKE_BINARY_DIR}/kernel.elf
-        -o ${CMAKE_CURRENT_SOURCE_DIR}/stacktrace
+        -o ${CMAKE_CURRENT_BINARY_DIR}/stacktrace
     COMMAND ${CMAKE_COMMAND} -E touch ${SYMBOLS_EXTRACTED_STAMP}
-    COMMENT "Extracting symbols from kernel.elf (triggering rebuild if changed)"
+    COMMENT "Extracting symbols from kernel.elf to build directory (triggering rebuild if changed)"
     VERBATIM
 )
 

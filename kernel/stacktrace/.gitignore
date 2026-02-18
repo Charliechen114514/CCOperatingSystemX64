@@ -1,1 +1,4 @@
+# Auto-generated symbol files (now generated in build directory)
+symbols.c
+symbols.h
 *.timestamp
