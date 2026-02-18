@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""
+Script to dynamically rename binary symbols for user programs
+Handles the fact that objcopy generates path-based symbol names
+"""
+import subprocess
+import sys
+
+def main():
+    if len(sys.argv) != 4:
+        print("Usage: rename_symbols.py <objcopy> <input.o> <output.o>", file=sys.stderr)
+        sys.exit(1)
+
+    objcopy = sys.argv[1]
+    input_obj = sys.argv[2]
+    output_obj = sys.argv[3]
+
+    # Get the symbols from the input object file
+    result = subprocess.run(
+        ['nm', input_obj],
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print(f"Error running nm: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    # Find the binary symbols (they start with _binary_)
+    binary_start = None
+    binary_end = None
+    binary_size = None
+
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 3:
+            symbol = parts[2]
+            if symbol.startswith('_binary_') and symbol.endswith('_start'):
+                # Extract the base name (without _start)
+                base = symbol[:-6]  # remove '_start'
+                binary_start = symbol
+                binary_end = base + '_end'
+                binary_size = base + '_size'
+                break
+
+    if binary_start is None:
+        print("Error: Could not find binary symbols in object file", file=sys.stderr)
+        print(f"nm output:\n{result.stdout}", file=sys.stderr)
+        sys.exit(1)
+
+    # Build the objcopy command with symbol redefinitions
+    # Ensure section alignment is preserved (4096 bytes for page mapping)
+    cmd = [
+        objcopy,
+        f'--redefine-sym={binary_start}=_binary_user_programs_demo_uname_test_start',
+        f'--redefine-sym={binary_end}=_binary_user_programs_demo_uname_test_end',
+        f'--redefine-sym={binary_size}=_binary_user_programs_demo_uname_test_size',
+        '--set-section-alignment=.user_uname_test=4096',
+        input_obj,
+        output_obj
+    ]
+
+    print(f"Renaming symbols: {binary_start} -> _binary_user_programs_demo_uname_test_start")
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"Error running objcopy: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    sys.exit(0)
+
+if __name__ == '__main__':
+    main()

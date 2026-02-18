@@ -164,9 +164,9 @@ static int load_and_execute_user_program(const uint8_t* program, size_t program_
      */
 
     /* Clean up for now (since we can't actually execute in Ring 3 yet) */
-    klog_trace("[USER_DEMO] About to call vmm_destroy_user_space...\n");
-    vmm_destroy_user_space(user_pcb->mm.pml4_phys);
-    klog_trace("[USER_DEMO] vmm_destroy_user_space returned\n");
+    klog_trace("[USER_DEMO] About to call user_destroy_process...\n");
+    user_destroy_process(user_pcb);
+    klog_trace("[USER_DEMO] user_destroy_process returned\n");
     kfree(user_pcb->cpu_ctx);
     kfree((void*)user_pcb->kernel_stack_base);
     kfree(user_pcb);

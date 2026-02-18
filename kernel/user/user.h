@@ -87,6 +87,12 @@ typedef struct user_region {
 int user_create_process(virtual_addr_t entry, pcb_t* pcb);
 
 /**
+ * @brief Destroy a user mode process and free its resources
+ * @param pcb Process PCB to destroy
+ */
+void user_destroy_process(pcb_t* pcb);
+
+/**
  * @brief Set up user stack for a process
  * @param pcb Process PCB
  * @param argv Argument vector (NULL for none)

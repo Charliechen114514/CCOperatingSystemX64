@@ -162,10 +162,11 @@ int user_create_process(virtual_addr_t entry, pcb_t* pcb) {
 
     klog_info("[USER] Creating user process\n");
 
-    /* Allocate user stack */
+    /* Allocate user stack - ensure page alignment */
     size_t stack_pages = USER_STACK_SIZE / PAGE_SIZE;
     pcb->user_stack_size = USER_STACK_SIZE;
-    pcb->user_stack = USER_END - USER_STACK_SIZE;
+    /* Align user stack to page boundary (USER_END may not be page-aligned) */
+    pcb->user_stack = (USER_END - USER_STACK_SIZE) & ~(PAGE_SIZE - 1);
 
     /* Map user stack pages */
     for (size_t i = 0; i < stack_pages; i++) {
@@ -216,6 +217,34 @@ int user_create_process(virtual_addr_t entry, pcb_t* pcb) {
               pcb->user_stack, pcb->user_stack_size);
 
     return 0;
+}
+
+void user_destroy_process(pcb_t* pcb) {
+    if (!pcb || !pcb->is_user_mode) {
+        return;
+    }
+
+    klog_info("[USER] Destroying user process\n");
+
+    /* Free user stack pages */
+    if (pcb->user_stack != 0 && pcb->user_stack_size != 0) {
+        size_t stack_pages = pcb->user_stack_size / PAGE_SIZE;
+        for (size_t i = 0; i < stack_pages; i++) {
+            virtual_addr_t vaddr = pcb->user_stack + (i * PAGE_SIZE);
+            physical_addr_t phys;
+            if (page_virt_to_phys(pcb->mm.pml4_phys, vaddr, &phys) == PAGE_OK) {
+                pframe_free(phys);
+            }
+            page_unmap_page(pcb->mm.pml4_phys, vaddr, false);
+        }
+    }
+
+    /* Destroy the user address space (frees page tables) */
+    if (pcb->mm.pml4_phys != 0) {
+        vmm_destroy_user_space(pcb->mm.pml4_phys);
+    }
+
+    klog_info("[USER] User process destroyed\n");
 }
 
 int user_setup_user_stack(pcb_t* pcb, const char** argv, const char** envp) {

@@ -26,6 +26,21 @@ SECTIONS
         *(.data.*)
     }
 
+    /* User programs embedded as binary data
+     * These must be placed after .got.plt and before .bss to maintain
+     * consistent memory layout regardless of whether user demos are enabled.
+     * The linker will place them here only when ENABLE_USER_DEMO=ON.
+     * IMPORTANT: User programs must be 4KB-aligned for proper page mapping.
+     */
+    . = ALIGN(4096);
+    .user_uname_test : {
+        *(.user_uname_test)
+    }
+    /* Catch-all for any future .user_* sections */
+    .user (NOLOAD) : {
+        *(.user_*)
+    }
+
     /* Uninitialized data */
     .bss : {
         __bss_start = .;

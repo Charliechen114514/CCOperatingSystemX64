@@ -615,9 +615,10 @@ vmm_result_t vmm_destroy_user_space(physical_addr_t pml4) {
                         if (pde->bits.present) {
                             /* Check for huge page */
                             if (pde->bits.pat) {
-                                /* Free 2MB page */
-                                physical_addr_t phys = pde->bits.frame << PAGE_SHIFT;
-                                pframe_free_n(phys, 512);
+                                /* NOTE: We don't free data pages here - they're owned
+                                 * by the process/memory manager, not the VMM. */
+                                /* physical_addr_t phys = pde->bits.frame << PAGE_SHIFT; */
+                                /* pframe_free_n(phys, 512); */
                             } else {
                                 /* Free the PT */
                                 pt_t* pt =
@@ -627,9 +628,12 @@ vmm_result_t vmm_destroy_user_space(physical_addr_t pml4) {
                                     page_table_entry_t* pte = &pt->entries[l];
 
                                     if (pte->bits.present) {
-                                        /* Free 4KB page */
-                                        physical_addr_t phys = pte->bits.frame << PAGE_SHIFT;
-                                        pframe_free(phys);
+                                        /* NOTE: We don't free data pages here - they're owned
+                                         * by the process/memory manager, not the VMM. In a real
+                                         * system, the process cleanup would free these separately.
+                                         * The VMM only frees the page table structures. */
+                                        /* physical_addr_t phys = pte->bits.frame << PAGE_SHIFT; */
+                                        /* pframe_free(phys); */
                                     }
                                 }
 
