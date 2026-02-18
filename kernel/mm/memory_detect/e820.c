@@ -54,21 +54,6 @@ void e820_init(void) {
     /* Entries start at offset 3 */
     volatile e820_entry_t* src_entries = (volatile e820_entry_t*)(mem_map_ptr + 3);
 
-    /* Debug: Print last few entries' raw bytes */
-    if (s_e820_entry_count > 0) {
-        volatile uint8_t* raw_bytes = (volatile uint8_t*)src_entries;
-        uint32_t last_idx = s_e820_entry_count - 1;
-
-        klog_trace("[E820] Entry %u raw bytes (first 24):\n", (unsigned int)last_idx);
-        volatile uint8_t* entry_bytes = raw_bytes + (last_idx * 24);
-        for (int b = 0; b < 24; b++) {
-            klog_trace("%02X ", entry_bytes[b]);
-            if ((b & 7) == 7)
-                klog_trace("\n");
-        }
-        klog_trace("\n");
-    }
-
     for (uint32_t i = 0; i < s_e820_entry_count; i++) {
         /* Copy entry data */
         s_e820_entries[i].base = src_entries[i].base;

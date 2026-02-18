@@ -124,9 +124,6 @@ add_custom_command(
         # interrupt object files
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/idt.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/interrupt.c.o
-        # mm object files
-        ${CMAKE_CURRENT_BINARY_DIR}/mm/CMakeFiles/mm.dir/e820.c.o
-        ${CMAKE_CURRENT_BINARY_DIR}/mm/CMakeFiles/mm.dir/memory_state_helper.c.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)
@@ -137,6 +134,8 @@ add_custom_command(
         $<TARGET_FILE:list>
         $<TARGET_FILE:driver>
         $<TARGET_FILE:stacktrace>
+        $<TARGET_FILE:memory_detect>
+        $<TARGET_FILE:pframe>
         --end-group
         # Demo libraries (optional, added after main libs)
         $<TARGET_FILE:demo_rtc>
@@ -158,7 +157,8 @@ add_custom_command(
         interrupt
         demo_rtc
         shell
-        mm
+        memory_detect
+        pframe
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

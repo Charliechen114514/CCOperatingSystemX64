@@ -2,28 +2,23 @@
 # Memory Management Module
 # ============================================================================
 
-# Create the mm library
-add_library(mm OBJECT
-    e820.c
-    memory_state_helper.c
+# Add memory detection subdirectory
+add_subdirectory(memory_detect)
+
+# Add physical frame allocator subdirectory
+add_subdirectory(pframe)
+
+# Create the mm library as an interface library that aggregates memory components
+add_library(mm INTERFACE)
+# This is an interface library - no sources, just links the sub-libraries
+target_link_libraries(mm INTERFACE
+    memory_detect
+    pframe
 )
 
-target_include_directories(mm PUBLIC
+target_include_directories(mm INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../defines
     ${CMAKE_BINARY_DIR}/include
-)
-
-# Apply freestanding compilation flags
-target_compile_options(mm PUBLIC ${CCOS_FREESTANDING_FLAGS})
-
-# Apply frame pointer flags if enabled
-if(CCOS_ENABLE_FRAME_POINTER)
-    target_compile_options(mm PUBLIC ${CCOS_FRAME_POINTER_FLAGS})
-endif()
-
-# Disable PIC for kernel code
-set_target_properties(mm PROPERTIES
-    POSITION_INDEPENDENT_CODE FALSE
 )

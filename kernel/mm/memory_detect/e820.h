@@ -6,9 +6,7 @@
  * query memory layout and statistics.
  * ==============================================================================
  */
-
-#ifndef CCOS_KERNEL_MM_E820_H
-#define CCOS_KERNEL_MM_E820_H
+#pragma once
 
 #include "defines/types.h"
 #include "mem_config.h"
@@ -173,5 +171,3 @@ uint64_t e820_get_usable_memory_above(uint64_t min_base);
  * @return Number of regions marked as usable
  */
 uint32_t e820_count_usable_regions(void);
-
-#endif /* CCOS_KERNEL_MM_E820_H */

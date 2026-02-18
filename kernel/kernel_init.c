@@ -8,7 +8,8 @@
 #include "interrupt/interrupt.h"
 #include "klogs/kprintf.h"
 #include "klogs/kprintf_config.h"
-#include "mm/e820.h"
+#include "mm/memory_detect/e820.h"
+#include "mm/pframe/pframe.h"
 #include "shell/backends/serial_shell.h"
 #include "shell/backends/vga_shell.h"
 #include "welcomes/welcome.h"
@@ -45,6 +46,10 @@ void kernel_init(void) {
     e820_get_stats(&mem_stats);
     klog_trace("[MEM] Total: %u MB, Usable: %u MB, Entries: %u\n", mem_stats.total_mb,
                mem_stats.usable_mb, mem_stats.entry_count);
+
+    // Initialize physical frame allocator
+    pframe_init();
+    pframe_dump();
 
     /* One must Ensure the backends have been bootified, else sucks! */
     bootAllWelcomes();

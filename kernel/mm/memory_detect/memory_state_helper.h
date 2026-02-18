@@ -5,10 +5,7 @@
  * Functions include size formatting, unit conversion, and memory statistics.
  * ==============================================================================
  */
-
-#ifndef CCOS_KERNEL_MM_MEMORY_STATE_HELPER_H
-#define CCOS_KERNEL_MM_MEMORY_STATE_HELPER_H
-
+#pragma once
 #include "../defines/types.h"
 
 /* ==============================================================================
@@ -150,8 +147,8 @@ void mem_summary_init(memory_summary_t* summary);
  * @param length: Length of region in bytes
  * @param is_usable: Whether the region is usable
  */
-void mem_summary_add_region(memory_summary_t* summary, uint64_t base,
-                            uint64_t length, bool is_usable);
+void mem_summary_add_region(memory_summary_t* summary, uint64_t base, uint64_t length,
+                            bool is_usable);
 
 /**
  * mem_summary_calculate_mb - Calculate MB values from bytes
@@ -183,8 +180,7 @@ void mem_summary_dump(const memory_summary_t* summary);
  * @param end2: End of second range (exclusive)
  * @return true if ranges overlap
  */
-bool ranges_overlap(uint64_t start1, uint64_t end1,
-                   uint64_t start2, uint64_t end2);
+bool ranges_overlap(uint64_t start1, uint64_t end1, uint64_t start2, uint64_t end2);
 
 /**
  * range_contains - Check if a range contains another range
@@ -194,8 +190,8 @@ bool ranges_overlap(uint64_t start1, uint64_t end1,
  * @param inner_end: End of inner range (exclusive)
  * @return true if outer range fully contains inner range
  */
-bool range_contains(uint64_t outer_start, uint64_t outer_end,
-                   uint64_t inner_start, uint64_t inner_end);
+bool range_contains(uint64_t outer_start, uint64_t outer_end, uint64_t inner_start,
+                    uint64_t inner_end);
 
 /**
  * is_aligned - Check if a value is aligned
@@ -204,5 +200,3 @@ bool range_contains(uint64_t outer_start, uint64_t outer_end,
  * @return true if aligned
  */
 bool is_aligned(uint64_t value, uint32_t alignment);
-
-#endif /* CCOS_KERNEL_MM_MEMORY_STATE_HELPER_H */

@@ -85,7 +85,7 @@ kernel/mm/
       MEM_DETECT_UNKNOWN
   } mem_detect_method_t;
   ```
-- [ ] 创建 `kernel/mm/e820.c` - 解析实现
+- [x] 创建 `kernel/mm/e820.c` - 解析实现
   - `void e820_init(void)` - 从 0xC000 读取内存地图
   - `mem_detect_method_t e820_get_detect_method(void)` - 获取检测方法
   - `uint32_t e820_get_entry_count(void)` - 获取条目数
@@ -105,7 +105,7 @@ kernel/mm/
 - [x] 启动测试 - 使用串口/VGA 输出
 - [x] 功能测试 - 验证各接口函数正确性
 
-- [ ] 物理帧分配器 (Bitmap/Stack)
+- [x] 物理帧分配器 (Bitmap/Stack)
 
 #### 2.2 虚拟内存管理
 ```
@@ -120,17 +120,6 @@ kernel/mm/vmm/
 - [ ] 页标志位管理 (R/W, U/S, NX)
 - [ ] 缺页异常处理集成
 - [ ] 用户空间/内核空间隔离
-
-#### 2.3 堆管理器
-```
-kernel/mm/heap/
-├── heap.h           - 堆管理接口
-└── heap.c           - 堆管理实现
-```
-- [ ] 内核堆初始化
-- [ ] malloc/free 实现
-- [ ] 内存碎片整理
-- [ ] 内存泄漏检测
 
 
 #### 1.1 页错误处理 (Vector 14)
@@ -154,6 +143,17 @@ kernel/interrupt/
 - [ ] Stack Fault 自动修复
 - [ ] Double Fault 嵌套处理
 - [ ] IST (Interrupt Stack Table) 配置
+
+#### 2.3 堆管理器
+```
+kernel/mm/heap/
+├── heap.h           - 堆管理接口
+└── heap.c           - 堆管理实现
+```
+- [ ] 内核堆初始化
+- [ ] malloc/free 实现
+- [ ] 内存碎片整理
+- [ ] 内存泄漏检测
 
 #### 1.3 调试异常增强
 ```
