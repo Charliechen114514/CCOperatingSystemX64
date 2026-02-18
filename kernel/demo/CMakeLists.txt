@@ -240,12 +240,17 @@ if(ENABLE_SCHED_DEMO AND CCOS_ENABLE_DEMO)
 
     # 将 sched demo 链接到基础 demo 库
     target_link_libraries(demo PUBLIC demo_sched)
+<<<<<<< HEAD
     # 将宏定义传递到 basic demo 库
+=======
+    # 将宏定义传递到基础 demo 库
+>>>>>>> main
     target_compile_definitions(demo PUBLIC SCHED_DEMO_ENABLED=1)
 else()
     message(STATUS "Sched Demo: DISABLED")
 endif()
 
+<<<<<<< HEAD
 # User Mode Demo
 if(ENABLE_USER_DEMO AND CCOS_ENABLE_DEMO)
     list(APPEND DEMO_ENABLED_LIST "USER")
@@ -278,6 +283,8 @@ else()
     message(STATUS "User Mode Demo: DISABLED")
 endif()
 
+=======
+>>>>>>> main
 # 根据 CCOS_ENABLE_DEMO 定义编译宏
 # 只有在启用时才定义宏，这样 #ifdef CCOS_ENABLE_DEMO 才能正确工作
 if(CCOS_ENABLE_DEMO)

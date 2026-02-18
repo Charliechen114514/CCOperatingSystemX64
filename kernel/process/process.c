@@ -4,19 +4,19 @@
  */
 
 #include "process/process.h"
-#include "process/sched.h"
-#include "process/sched_rr.h"
-#include "process/sched_prio.h"
-#include "mm/heap/heap.h"
-#include "mm/vmm/vmm.h"
-#include "mm/vmm/page.h"
-#include "mm/pframe/pframe.h"
-#include "mm/vmm/cow.h"
+#include "assert/assert.h"
+#include "base/memory.h"
+#include "bitmap/bitmap.h"
 #include "interrupt/tss.h"
 #include "klogs/kprintf.h"
-#include "base/memory.h"
-#include "assert/assert.h"
-#include "bitmap/bitmap.h"
+#include "mm/heap/heap.h"
+#include "mm/pframe/pframe.h"
+#include "mm/vmm/cow.h"
+#include "mm/vmm/page.h"
+#include "mm/vmm/vmm.h"
+#include "process/sched.h"
+#include "process/sched_prio.h"
+#include "process/sched_rr.h"
 
 /* ==============================================================================
  * Global Scheduler State
@@ -43,7 +43,7 @@ static struct bitmap s_pid_bitmap;
  */
 void pid_alloc_init(void) {
     bitmap_init(&s_pid_bitmap, s_pid_bitmap_buffer, PID_MAX);
-    bitmap_set(&s_pid_bitmap, 0);  /* Reserve PID 0 */
+    bitmap_set(&s_pid_bitmap, 0); /* Reserve PID 0 */
 }
 
 /**
@@ -113,7 +113,7 @@ static pcb_t* proc_alloc_pcb(void) {
 
     /* Initialize sched_entity with default values */
     pcb->sched_entity.policy = SCHED_NORMAL;
-    pcb->sched_entity.sched_class = NULL;  /* Will be set during enqueue */
+    pcb->sched_entity.sched_class = NULL; /* Will be set during enqueue */
     pcb->sched_entity.time_slice = DEF_TIMESLICE_MS;
     pcb->sched_entity.time_slice_total = DEF_TIMESLICE_MS;
     pcb->sched_entity.priority = PRIO_DEFAULT;
@@ -345,7 +345,7 @@ int32_t proc_fork(void) {
     child->ppid = parent->pid;
     child->parent = parent;
     child->state = PROC_READY;
-    child->start_time = 0;  /* TODO: Get actual time */
+    child->start_time = 0; /* TODO: Get actual time */
 
     /* Copy command name */
     for (int i = 0; i < 16; i++) {
@@ -366,10 +366,9 @@ int32_t proc_fork(void) {
     sched_set_policy(child, SCHED_NORMAL, 0);
 
     /* Add to scheduler run queue */
-    sched_enqueue_task(child, false);  /* false = add to tail */
+    sched_enqueue_task(child, false); /* false = add to tail */
 
-    klog_info("[PROC] Forked: parent PID=%d, child PID=%d\n",
-              parent->pid, child->pid);
+    klog_info("[PROC] Forked: parent PID=%d, child PID=%d\n", parent->pid, child->pid);
 
     /* If this is the child process, return 0 */
     if (proc_current() == child) {
@@ -431,7 +430,7 @@ void proc_exit(int exit_code) {
  * @return PID of exited child, or negative on error
  */
 int32_t proc_wait4(int32_t pid, int* wstatus, int options) {
-    (void)options;  /* TODO: Implement options */
+    (void)options; /* TODO: Implement options */
 
     pcb_t* current = proc_current();
     if (!current) {
@@ -467,7 +466,7 @@ int32_t proc_wait4(int32_t pid, int* wstatus, int options) {
     current->state = PROC_BLOCKED;
     schedule();
 
-    return -1;  /* Will be resumed when child exits */
+    return -1; /* Will be resumed when child exits */
 }
 
 /* ==============================================================================

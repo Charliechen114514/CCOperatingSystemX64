@@ -140,10 +140,16 @@ option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" OFF)
 option(ENABLE_MOCK_SYSCALL_DEMO "Enable System Call mock demo" OFF)
 option(ENABLE_PROCESS_DEMO "Enable Process Management demo" OFF)
 option(ENABLE_SCHED_DEMO "Enable Scheduling Class demo" OFF)
+<<<<<<< HEAD
 option(ENABLE_USER_DEMO "Enable User Mode support demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
 if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO OR ENABLE_USER_DEMO)
+=======
+
+# 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO)
+>>>>>>> main
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -198,10 +204,13 @@ if(TARGET demo_sched)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_sched>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_sched)
 endif()
+<<<<<<< HEAD
 if(TARGET demo_user)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_user>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_user)
 endif()
+=======
+>>>>>>> main
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -250,10 +259,13 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_rr.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_prio.c.o
+<<<<<<< HEAD
         # user mode object files
         ${CMAKE_CURRENT_BINARY_DIR}/user/CMakeFiles/user.dir/user.c.o
         # user programs (when user demo is enabled)
         ${CMAKE_BINARY_DIR}/uname_test_symbols.o
+=======
+>>>>>>> main
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)

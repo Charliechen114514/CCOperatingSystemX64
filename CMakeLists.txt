@@ -88,6 +88,9 @@ set(CCOS_FREESTANDING_FLAGS
     -nostartfiles
     -nodefaultlibs
     -mcmodel=large
+    -fno-pic
+    -fno-pie
+    -fno-plt
 )
 
 # Freestanding 编译标志（仅包含编译器选项，不含链接选项）

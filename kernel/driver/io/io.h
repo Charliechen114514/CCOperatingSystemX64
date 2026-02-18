@@ -17,7 +17,11 @@
  * @param port
  * @return uint8_t
  */
+<<<<<<< HEAD
 static inline uint8_t inb(uint16_t port) {
+=======
+__attribute__((always_inline)) inline uint8_t inb(uint16_t port) {
+>>>>>>> main
     uint8_t result;
     __asm__ volatile("inb %1, %0" : "=a"(result) : "Nd"(port));
     return result;
@@ -29,6 +33,12 @@ static inline uint8_t inb(uint16_t port) {
  * @param port
  * @param data
  */
+<<<<<<< HEAD
 static inline void outb(uint16_t port, uint8_t data) {
     __asm__ volatile("outb %0, %1" : : "a"(data), "Nd"(port));
 }
+=======
+__attribute__((always_inline)) inline void outb(uint16_t port, uint8_t data) {
+    __asm__ volatile("outb %0, %1" : : "a"(data), "Nd"(port));
+}
+>>>>>>> main
