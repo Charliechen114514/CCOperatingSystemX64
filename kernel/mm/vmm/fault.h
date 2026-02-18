@@ -124,40 +124,38 @@ static inline virtual_addr_t pf_get_cr2(void) {
 }
 
 /* ============================================================================
- * Copy-on-Write Support (Future Enhancement)
+ * Copy-on-Write Support
  * ============================================================================ */
 
 /**
- * @brief Copy-on-Write region descriptor
+ * @brief Forward declarations - full definitions in cow.h
  */
-typedef struct {
-    virtual_addr_t base;      /* Base address of COW region */
-    uint64_t page_count;      /* Number of pages in region */
-    uint64_t ref_count;       /* Reference count */
-} cow_region_t;
+typedef struct cow_block cow_block_t;
+typedef struct cow_region cow_region_t;
 
 /**
  * pf_handle_cow - Handle a copy-on-write page fault
  *
- * Called when a write fault occurs on a COW page. Allocates a new
- * physical page, copies the content, and updates the mapping.
+ * Called when a write fault occurs on a COW page. Delegates to the
+ * COW module for actual handling.
  *
+ * @param pml4 Current address space PML4
  * @param fault_addr Address that caused the fault
  * @return PF_SUCCESS if handled, error code otherwise
  */
-pf_result_t pf_handle_cow(virtual_addr_t fault_addr);
+pf_result_t pf_handle_cow(physical_addr_t pml4, virtual_addr_t fault_addr);
 
 /**
  * pf_register_cow_region - Register a COW region
  *
- * Marks a region of memory as copy-on-write. Any write attempts
- * will trigger a COW fault.
+ * Marks a region of memory as copy-on-write. Delegates to the COW module.
  *
+ * @param pml4 Address space PML4
  * @param base Base address of region
  * @param size Size of region in bytes
  * @return VMM_OK on success, error code otherwise
  */
-vmm_result_t pf_register_cow_region(virtual_addr_t base, size_t size);
+vmm_result_t pf_register_cow_region(physical_addr_t pml4, virtual_addr_t base, size_t size);
 
 /* ============================================================================
  * Demand Paging Support (Future Enhancement)

@@ -94,6 +94,18 @@ void idt_init(void);
 void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr, uint16_t segment_selector);
 
 /**
+ * @brief Set an IDT entry with IST
+ *
+ * @param vector Interrupt vector number (0-255)
+ * @param handler Pointer to the interrupt handler function
+ * @param type_attr Type attributes (e.g., IDT_KERNEL_INTERRUPT_GATE)
+ * @param segment_selector Code segment selector (usually 0x08 for kernel code)
+ * @param ist IST index (0-7, 0 = no IST switch)
+ */
+void idt_set_gate_ist(uint8_t vector, uint64_t handler, uint8_t type_attr,
+                      uint16_t segment_selector, uint8_t ist);
+
+/**
  * @brief Register a custom interrupt handler
  *
  * @param vector Interrupt vector number

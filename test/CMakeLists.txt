@@ -67,6 +67,7 @@ set(TEST_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/kernel/math
     ${CMAKE_SOURCE_DIR}/kernel/bitmap
     ${CMAKE_SOURCE_DIR}/kernel/list
+    ${CMAKE_SOURCE_DIR}/kernel/mm/heap
 )
 
 # ============================================================================
@@ -229,6 +230,27 @@ set_tests_properties(test_list PROPERTIES
     TIMEOUT 10
 )
 
+# ----------------------------------------------------------------------------
+# Test: Hashmap Functions
+# ----------------------------------------------------------------------------
+add_executable(test_hashmap
+    test_hashmap.c
+    ${CMAKE_SOURCE_DIR}/kernel/base/hashmap.c
+    ${CMAKE_SOURCE_DIR}/kernel/base/memory.c
+    heap_stub.c  # Host-side stub for heap allocation
+    assert_stub.c  # Host-side stub for ccos_assert_impl
+)
+
+target_include_directories(test_hashmap PRIVATE ${TEST_INCLUDE_DIRS})
+target_compile_options(test_hashmap PRIVATE ${TEST_C_FLAGS} -fno-builtin)
+
+add_test(NAME test_hashmap COMMAND test_hashmap)
+
+set_tests_properties(test_hashmap PROPERTIES
+    LABELS "runtime"
+    TIMEOUT 10
+)
+
 # ============================================================================
 # Test Integration with Main Build
 # ============================================================================
@@ -241,7 +263,7 @@ add_custom_target(check
         --output-on-failure
         --label-regex "(static|runtime)"
         $<IF:$<CONFIG:Debug>,--extra-verbose,>
-    DEPENDS test_types test_static_assert test_string test_memory test_math test_bits test_bitmap test_list
+    DEPENDS test_types test_static_assert test_string test_memory test_math test_bits test_bitmap test_list test_hashmap
     COMMENT "Running static tests..."
     VERBATIM
 )

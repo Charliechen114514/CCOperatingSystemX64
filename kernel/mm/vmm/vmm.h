@@ -135,6 +135,16 @@ vmm_result_t vmm_init(void);
 physical_addr_t vmm_get_kernel_pml4(void);
 
 /**
+ * vmm_get_current_pml4 - Get the current active PML4 physical address
+ *
+ * Reads CR3 to get the current page table base. This is useful for
+ * determining which address space is currently active.
+ *
+ * @return Physical address of current PML4
+ */
+physical_addr_t vmm_get_current_pml4(void);
+
+/**
  * vmm_map_physical - Map a physical page into kernel virtual address space
  *
  * Creates a temporary mapping for a physical page. The virtual address

@@ -7,6 +7,7 @@ add_library(base STATIC
     memory.c
     strhelpers.c
     stack_check.c
+    hashmap.c
 )
 
 target_include_directories(base PUBLIC

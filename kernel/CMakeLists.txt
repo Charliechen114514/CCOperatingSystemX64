@@ -24,6 +24,17 @@ add_custom_command(
     VERBATIM
 )
 
+# GDT/TSS 汇编辅助文件
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/gdt_asm.o
+    COMMAND ${NASM} -f elf64
+        ${CMAKE_CURRENT_SOURCE_DIR}/interrupt/gdt.asm
+        -o ${CMAKE_BINARY_DIR}/gdt_asm.o
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/interrupt/gdt.asm
+    COMMENT "Building GDT/TSS assembly helpers"
+    VERBATIM
+)
+
 # C内核主文件
 # 使用 OBJECT 库类型便于未来扩展
 add_library(kernel_main OBJECT
@@ -89,9 +100,10 @@ add_subdirectory(interrupt)
 option(ENABLE_RTC_DEMO "Enable RTC driver demo" OFF)
 option(ENABLE_VMM_DEMO "Enable VMM demo" OFF)
 option(ENABLE_HEAP_DEMO "Enable Heap allocator demo" OFF)
+option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" ON)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -124,6 +136,10 @@ if(TARGET demo_heap)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_heap>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_heap)
 endif()
+if(TARGET demo_cow)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_cow>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_cow)
+endif()
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -142,6 +158,8 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/kernel_main.dir/kernel_init.c.o
         # interrupt assembly stubs
         ${CMAKE_BINARY_DIR}/interrupt_asm.o
+        # gdt/tss assembly helpers
+        ${CMAKE_BINARY_DIR}/gdt_asm.o
         # klogs object files
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf_backends.c.o
@@ -153,6 +171,9 @@ add_custom_command(
         # interrupt object files
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/idt.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/interrupt.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/tss.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/gdt.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/exception.c.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)
@@ -175,6 +196,7 @@ add_custom_command(
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         ${CMAKE_BINARY_DIR}/interrupt_asm.o
+        ${CMAKE_BINARY_DIR}/gdt_asm.o
         kernel_main
         assert
         base

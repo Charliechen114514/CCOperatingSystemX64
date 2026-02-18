@@ -162,6 +162,13 @@ physical_addr_t vmm_get_kernel_pml4(void) {
     return s_kernel_pml4;
 }
 
+physical_addr_t vmm_get_current_pml4(void) {
+    /* Read CR3 to get current PML4 physical address */
+    uint64_t cr3 = page_get_cr3();
+    /* Clear lower 12 bits (flags) and 4KB alignment requirement */
+    return cr3 & ~0xFFFULL;
+}
+
 virtual_addr_t vmm_map_physical(physical_addr_t phys, uint64_t flags) {
     CCOS_ASSERT(s_initialized);
 

@@ -1,16 +1,21 @@
 #include "kernel_init.h"
+#include "base/hashmap.h"
 #include "driver/keyboard/keyboard.h"
 #include "driver/rtc/rtc.h"
 #include "driver/serial/serial.h"
 #include "driver/serial/serial_intr.h"
 #include "driver/timer/timer.h"
 #include "driver/vga/vga.h"
+#include "interrupt/exception.h"
+#include "interrupt/gdt.h"
 #include "interrupt/interrupt.h"
+#include "interrupt/tss.h"
 #include "klogs/kprintf.h"
 #include "klogs/kprintf_config.h"
 #include "mm/heap/heap.h"
 #include "mm/memory_detect/e820.h"
 #include "mm/pframe/pframe.h"
+#include "mm/vmm/cow.h"
 #include "mm/vmm/fault.h"
 #include "mm/vmm/page.h"
 #include "mm/vmm/vmm.h"
@@ -42,9 +47,6 @@ void kernel_init(void) {
     // Initialize memory detection (parse E820 map from bootloader)
     e820_init();
 
-    // Print full E820 memory map for debugging
-    e820_dump_map();
-
     // Print available physical memory
     mem_stats_t mem_stats;
     e820_get_stats(&mem_stats);
@@ -60,30 +62,40 @@ void kernel_init(void) {
     // Initialize virtual memory manager
     vmm_init();
 
-    // Initialize page fault handler
-    pf_init();
-
+    // Initialize kernel heap (kmalloc/kfree)
     heap_init();
-    /* One must Ensure the backends have been bootified, else sucks! */
-    bootAllWelcomes();
-    klog_trace("Boot Welcomes Done!\n");
 
-    // Phase 1: Initialize interrupt subsystem (PIC + IDT, but interrupts disabled)
+    // Phase 1: Initialize TSS and GDT (must be before IDT)
+    tss_init(); /* Initialize TSS with IST stacks */
+    gdt_init(); /* Initialize GDT and load TSS */
+
+    // Phase 2: Initialize interrupt subsystem (PIC + IDT, but interrupts disabled)
     interrupt_init();
 
-    // Phase 2: Initialize all interrupt-dependent devices
+    // Phase 3: Register exception handlers
+    exception_init(); /* Register DF, SS, GP handlers */
+
+    // Phase 4: Initialize COW subsystem (depends on hashmap and heap)
+    cow_init(); /* Initialize copy-on-write tracking */
+
+    // Phase 5: Initialize page fault handler (depends on COW)
+    pf_init();
+
+    // Phase 6: Initialize all interrupt-dependent devices
     // They will register their IRQ handlers during this phase
     timer_init(0);         // 0 = use default frequency (1000 Hz)
     rtc_init();            // Initialize RTC (periodic interrupt disabled by default)
     uart_init_intr_mode(); // Initialize UART interrupt mode for interactive communication
     keyboard_init();       // Initialize keyboard driver for VGA shell
 
-    // Phase 3: Finalize interrupt initialization (enable IRQs + CPU interrupts)
+    // Phase 7: Finalize interrupt initialization (enable IRQs + CPU interrupts)
     interrupt_finalize();
 
     // Initialize shell-specific commands
     // serial_shell_init_commands();  // Serial shell commands (time, ticks, echo, uart)
     // vga_shell_init_commands();     // VGA shell commands (cls, color, goto, keyboard)
-
+    /* One must Ensure the backends have been bootified, else sucks! */
+    bootAllWelcomes();
+    klog_trace("Boot Welcomes Done!\n");
     klog_info("kernel init finished!\n");
 }

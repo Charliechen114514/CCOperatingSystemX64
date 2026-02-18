@@ -19,6 +19,10 @@
 #    include "heap/heap_demo.h"
 #endif
 
+#ifdef COW_DEMO_ENABLED
+#    include "cow/cow_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -45,6 +49,11 @@ void run_possible_demos(void) {
 #    ifdef HEAP_DEMO_ENABLED
     klog_trace("[Demo Controller] Heap Demo is enabled, running...\n");
     heap_run_demo();
+#    endif
+
+#    ifdef COW_DEMO_ENABLED
+    klog_trace("[Demo Controller] COW Demo is enabled, running...\n");
+    cow_run_demo();
 #    endif
 
     // Add more demos here as they are implemented

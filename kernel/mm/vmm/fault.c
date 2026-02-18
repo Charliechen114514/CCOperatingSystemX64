@@ -6,6 +6,7 @@
 #include "fault.h"
 #include "mm/vmm/vmm.h"
 #include "mm/vmm/page.h"
+#include "mm/vmm/cow.h"
 #include "klogs/kprintf.h"
 #include "interrupt/idt.h"
 #include "assert/assert.h"
@@ -126,17 +127,28 @@ void pf_handler(interrupt_frame_t* frame, uint64_t error_code) {
 
         goto kernel_panic;
     } else {
-        /* User page fault */
-        klog_error("[PF] User page fault\n");
+        /* User page fault - try COW handling first */
+        klog_debug("[PF] User page fault at 0x%016llX\n", fault_addr);
+
+        /* Check for COW fault: present=1, write=1, user=1 */
+        if (info.present && info.write && !info.reserved_bit) {
+            physical_addr_t current_pml4 = vmm_get_current_pml4();
+            pf_result_t cow_result = pf_handle_cow(current_pml4, fault_addr);
+
+            if (cow_result == PF_SUCCESS) {
+                klog_debug("[PF] COW fault handled successfully\n");
+                return;  /* Resume execution */
+            }
+        }
 
         /* TODO: When process management is implemented:
          * 1. Send signal to process (e.g., SIGSEGV)
          * 2. If process has no handler, terminate it
-         * 3. If it's a valid COW or demand page fault, handle it
+         * 3. If it's a valid demand page fault, handle it
          */
 
         /* For now, we halt since we don't have process management */
-        klog_error("[PF] User page faults not yet handled - system halted\n");
+        klog_error("[PF] User page fault not handled - system halted\n");
         klog_error("[PF] TODO: Implement process management and signal delivery\n");
         goto kernel_panic;
     }
@@ -162,30 +174,22 @@ kernel_panic:
  * Copy-on-Write Implementation
  * ============================================================================ */
 
-pf_result_t pf_handle_cow(virtual_addr_t fault_addr) {
-    /* TODO: Implement COW handling
-     * 1. Check if fault_addr is in a COW region
-     * 2. Allocate a new physical page
-     * 3. Copy the content from the original page
-     * 4. Update the mapping to point to the new page
-     * 5. Make the new mapping writable
-     */
+pf_result_t pf_handle_cow(physical_addr_t pml4, virtual_addr_t fault_addr) {
+    /* Delegate to the COW module */
+    cow_result_t result = cow_handle_fault(pml4, fault_addr);
 
-    (void)fault_addr;
-    s_pf_stats.handled_cow++;
+    if (result == COW_OK) {
+        s_pf_stats.handled_cow++;
+        return PF_SUCCESS;
+    }
+
     return PF_NOT_OUR_FAULT;
 }
 
-vmm_result_t pf_register_cow_region(virtual_addr_t base, size_t size) {
-    /* TODO: Implement COW region registration
-     * 1. Validate the region is page-aligned
-     * 2. Add to COW region tracking list
-     * 3. Mark existing mappings as read-only
-     */
-
-    (void)base;
-    (void)size;
-    return VMM_OK;  /* Placeholder */
+vmm_result_t pf_register_cow_region(physical_addr_t pml4, virtual_addr_t base, size_t size) {
+    /* Delegate to the COW module */
+    cow_result_t result = cow_register_region(pml4, base, size);
+    return (result == COW_OK) ? VMM_OK : VMM_ERR_INVALID;
 }
 
 /* ============================================================================

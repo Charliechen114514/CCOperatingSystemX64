@@ -33,9 +33,9 @@
 
 #### 待完成任务
 - [x] 堆管理器 (kmalloc/kfree 实现)
-- [ ] Copy-on-Write 完整实现
+- [x] Copy-on-Write 完整实现
 - [ ] 按需分页完整实现
-- [ ] 异常恢复机制 (GPF/Stack Fault/Double Fault)
+- [x] 异常恢复机制 (GPF/Stack Fault/Double Fault)
 
 ---
 

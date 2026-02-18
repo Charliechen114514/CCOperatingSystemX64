@@ -122,6 +122,37 @@ else()
     message(STATUS "Heap Demo: DISABLED")
 endif()
 
+# COW Demo
+if(ENABLE_COW_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "COW")
+    message(STATUS "COW Demo: ENABLED")
+
+    add_library(demo_cow STATIC cow/cow_demo.c)
+
+    target_include_directories(demo_cow PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_cow PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_cow PUBLIC COW_DEMO_ENABLED=1)
+
+    # COW demo 依赖 klogs, kernel_vmm, base
+    target_link_libraries(demo_cow PUBLIC klogs kernel_vmm base)
+
+    set_target_properties(demo_cow PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 COW demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_cow)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC COW_DEMO_ENABLED=1)
+else()
+    message(STATUS "COW Demo: DISABLED")
+endif()
+
 # 根据 CCOS_ENABLE_DEMO 定义编译宏
 # 只有在启用时才定义宏，这样 #ifdef CCOS_ENABLE_DEMO 才能正确工作
 if(CCOS_ENABLE_DEMO)

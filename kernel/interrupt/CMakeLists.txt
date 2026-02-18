@@ -6,6 +6,9 @@
 add_library(interrupt OBJECT
     idt.c
     interrupt.c
+    tss.c
+    gdt.c
+    exception.c
 )
 
 target_include_directories(interrupt PUBLIC

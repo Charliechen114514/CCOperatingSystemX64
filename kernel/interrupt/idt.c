@@ -6,6 +6,8 @@
 #include "idt.h"
 #include "base/memory.h"
 #include "idt_constants.h"
+#include "gdt.h"
+#include "tss.h"
 #include "klogs/kprintf.h"
 
 /* ============================================================================
@@ -129,17 +131,25 @@ static const char* exception_names[] = {
  * ============================================================================ */
 
 /**
- * @brief Set an IDT entry (internal implementation)
+ * @brief Set an IDT entry (internal implementation with IST support)
  */
-static void idt_set_entry(uint8_t vector, uint64_t handler, uint8_t type_attr,
-                          uint16_t segment_selector) {
+static void idt_set_entry_internal(uint8_t vector, uint64_t handler, uint8_t type_attr,
+                                   uint16_t segment_selector, uint8_t ist) {
     idt[vector].offset_low = (uint16_t)(handler & 0xFFFF);
     idt[vector].offset_middle = (uint16_t)((handler >> 16) & 0xFFFF);
     idt[vector].offset_high = (uint32_t)((handler >> 32) & 0xFFFFFFFF);
     idt[vector].segment_selector = segment_selector;
-    idt[vector].ist = 0; // No IST for now
+    idt[vector].ist = ist;  /* IST index (0-7, 0 = no IST) */
     idt[vector].type_attr = type_attr;
     idt[vector].reserved = 0;
+}
+
+/**
+ * @brief Set an IDT entry (without IST - for backward compatibility)
+ */
+static void idt_set_entry(uint8_t vector, uint64_t handler, uint8_t type_attr,
+                          uint16_t segment_selector) {
+    idt_set_entry_internal(vector, handler, type_attr, segment_selector, 0);
 }
 
 /* ============================================================================
@@ -155,16 +165,22 @@ void idt_init(void) {
     idt_ptr.limit = (sizeof(idt_entry_t) * IDT_ENTRIES) - 1;
     idt_ptr.base = (uint64_t)&idt;
 
-    // Kernel code segment selector (should match your GDT)
-    // Bootloader GDT: gdt_code64 is at offset 0x18 (3rd selector)
-    uint16_t kernel_cs = 0x18;
+    // Kernel code segment selector (from our new GDT)
+    uint16_t kernel_cs = GDT_KERNEL_CODE;
 
     // Set up exception handlers (ISRs 0-31) using loop
     for (int i = 0; i < 32; i++) {
         // Breakpoint (#BP) and Overflow (#OF) use trap gates
         uint8_t type =
             (i == IDT_BP || i == IDT_OF) ? IDT_KERNEL_TRAP_GATE : IDT_KERNEL_INTERRUPT_GATE;
-        idt_set_entry(i, (uint64_t)isr_handler_table[i], type, kernel_cs);
+
+        // Set IST for critical exceptions
+        uint8_t ist = 0;
+        if (i == IDT_DF) ist = IST_DF;      /* Double Fault -> IST1 */
+        if (i == IDT_NMI) ist = IST_NMI;    /* NMI -> IST2 */
+        if (i == IDT_SS) ist = IST_SS;      /* Stack Fault -> IST4 */
+
+        idt_set_entry_internal(i, (uint64_t)isr_handler_table[i], type, kernel_cs, ist);
     }
 
     // Set up IRQ handlers (IRQs 0-15 -> vectors 32-47) using loop
@@ -177,6 +193,8 @@ void idt_init(void) {
     idt_load((uint64_t)&idt_ptr);
 
     klog_trace("IDT initialized with %d entries at 0x%016lx\n", IDT_ENTRIES, (uint64_t)&idt);
+    klog_trace("IDT IST configuration: DF=%d, NMI=%d, SS=%d\n",
+               IST_DF, IST_NMI, IST_SS);
 }
 
 void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr, uint16_t segment_selector) {
@@ -185,6 +203,17 @@ void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr, uint16_t 
     idt[vector].offset_high = (uint32_t)((handler >> 32) & 0xFFFFFFFF);
     idt[vector].segment_selector = segment_selector;
     idt[vector].ist = 0;
+    idt[vector].type_attr = type_attr;
+    idt[vector].reserved = 0;
+}
+
+void idt_set_gate_ist(uint8_t vector, uint64_t handler, uint8_t type_attr,
+                      uint16_t segment_selector, uint8_t ist) {
+    idt[vector].offset_low = (uint16_t)(handler & 0xFFFF);
+    idt[vector].offset_middle = (uint16_t)((handler >> 16) & 0xFFFF);
+    idt[vector].offset_high = (uint32_t)((handler >> 32) & 0xFFFFFFFF);
+    idt[vector].segment_selector = segment_selector;
+    idt[vector].ist = ist;  /* Set IST index */
     idt[vector].type_attr = type_attr;
     idt[vector].reserved = 0;
 }
