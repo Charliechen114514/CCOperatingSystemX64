@@ -108,5 +108,4 @@ typedef int32_t ptrdiff_t;
 // ============================================================================
 typedef uint32_t physical_addr_t; // Physical memory address
 typedef uintptr_t virtual_addr_t; // Virtual memory address
-
 typedef uint8_t byte_t;

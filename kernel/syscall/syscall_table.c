@@ -8,6 +8,7 @@
 
 #include "syscall.h"
 #include "klogs/kprintf.h"
+#include "process/process.h"
 
 /* Forward declaration for registration function */
 extern int syscall_register_handler(uint64_t number, syscall_handler_fn handler, const char* name);
@@ -17,13 +18,32 @@ extern int syscall_register_handler(uint64_t number, syscall_handler_fn handler,
  * ============================================================================ */
 
 /**
+ * @brief Fork - create a new process
+ */
+static int64_t sys_fork(syscall_frame_t* frame) {
+    (void)frame;
+    int32_t result = proc_fork();
+    return (int64_t)result;
+}
+
+/**
  * @brief Exit current process
  */
 static int64_t sys_exit(syscall_frame_t* frame) {
     int exit_code = (int)frame->arg0;
-    klog_info("[SYSCALL] exit(%d)\n", exit_code);
-    /* TODO: Implement process termination */
-    return SYS_OK;
+    proc_exit(exit_code);
+    __builtin_unreachable();  /* proc_exit never returns */
+}
+
+/**
+ * @brief Wait for a child process to exit
+ */
+static int64_t sys_wait4(syscall_frame_t* frame) {
+    int32_t pid = (int32_t)frame->arg0;
+    int* wstatus = (int*)frame->arg1;
+    int options = (int)frame->arg2;
+    int32_t result = proc_wait4(pid, wstatus, options);
+    return (int64_t)result;
 }
 
 /**
@@ -31,8 +51,8 @@ static int64_t sys_exit(syscall_frame_t* frame) {
  */
 static int64_t sys_getpid(syscall_frame_t* frame) {
     (void)frame;
-    /* TODO: Return actual process ID */
-    return 1;  /* Return dummy PID for now */
+    pcb_t* current = proc_current();
+    return current ? (int64_t)current->pid : -1;
 }
 
 /**
@@ -40,8 +60,11 @@ static int64_t sys_getpid(syscall_frame_t* frame) {
  */
 static int64_t sys_getppid(syscall_frame_t* frame) {
     (void)frame;
-    /* TODO: Return actual parent process ID */
-    return 0;  /* Return dummy PPID for now */
+    pcb_t* current = proc_current();
+    if (current && current->parent) {
+        return (int64_t)current->parent->pid;
+    }
+    return 0;
 }
 
 /* ============================================================================
@@ -130,7 +153,9 @@ static int64_t sys_uname(syscall_frame_t* frame) {
  */
 void syscall_register_all(void) {
     /* Process management */
+    syscall_register_handler(SYS_FORK, sys_fork, "fork");
     syscall_register_handler(SYS_EXIT, sys_exit, "exit");
+    syscall_register_handler(SYS_WAIT4, sys_wait4, "wait4");
     syscall_register_handler(SYS_GETPID, sys_getpid, "getpid");
     syscall_register_handler(SYS_GETPPID, sys_getppid, "getppid");
 

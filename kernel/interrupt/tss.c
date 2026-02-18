@@ -165,3 +165,21 @@ void tss_dump(void) {
     klog_info("[TSS]   IST7:      0x%016llX\n", s_tss.ist7);
     klog_info("[TSS]   IOMP base: 0x%04X\n", s_tss.iomap_base);
 }
+
+/* ============================================================================
+ * Process Management Support Functions
+ * ============================================================================ */
+
+/**
+ * @brief Set kernel stack for process context switching
+ *
+ * This function is called from assembly during context switch.
+ * It updates the TSS RSP0 field with the new process's kernel stack.
+ *
+ * @param stack_top Top of the kernel stack (stack grows down)
+ */
+void tss_set_kernel_stack_ctx(virtual_addr_t stack_top) {
+    if (s_initialized) {
+        s_tss.rsp0 = stack_top;
+    }
+}

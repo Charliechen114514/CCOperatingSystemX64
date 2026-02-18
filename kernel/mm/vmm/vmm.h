@@ -112,6 +112,16 @@ physical_addr_t vmm_get_kernel_pml4(void);
 physical_addr_t vmm_get_current_pml4(void);
 
 /**
+ * vmm_load_pml4 - Load a new PML4 (switch address space)
+ *
+ * Loads the specified PML4 physical address into CR3, effectively
+ * switching to a different address space.
+ *
+ * @param pml4_phys Physical address of PML4 to load
+ */
+void vmm_load_pml4(physical_addr_t pml4_phys);
+
+/**
  * vmm_map_physical - Map a physical page into kernel virtual address space
  *
  * Creates a temporary mapping for a physical page. The virtual address

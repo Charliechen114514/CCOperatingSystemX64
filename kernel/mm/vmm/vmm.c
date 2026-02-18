@@ -176,6 +176,13 @@ physical_addr_t vmm_get_current_pml4(void) {
     return cr3 & ~0xFFFULL;
 }
 
+void vmm_load_pml4(physical_addr_t pml4_phys) {
+    /* Load PML4 into CR3, switching address space */
+    /* Clear lower 12 bits to ensure alignment */
+    uint64_t cr3 = pml4_phys & ~0xFFFULL;
+    page_set_cr3(cr3);
+}
+
 virtual_addr_t vmm_map_physical(physical_addr_t phys, uint64_t flags) {
     CCOS_ASSERT(s_initialized);
 

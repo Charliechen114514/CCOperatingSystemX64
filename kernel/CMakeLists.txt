@@ -46,6 +46,17 @@ add_custom_command(
     VERBATIM
 )
 
+# Process context switch assembly
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/process_switch_asm.o
+    COMMAND ${NASM} -f elf64
+        ${CMAKE_CURRENT_SOURCE_DIR}/process/switch.s
+        -o ${CMAKE_BINARY_DIR}/process_switch_asm.o
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/process/switch.s
+    COMMENT "Building process context switch assembly"
+    VERBATIM
+)
+
 # C内核主文件
 # 使用 OBJECT 库类型便于未来扩展
 add_library(kernel_main OBJECT
@@ -116,9 +127,10 @@ option(ENABLE_VMM_DEMO "Enable VMM demo" OFF)
 option(ENABLE_HEAP_DEMO "Enable Heap allocator demo" OFF)
 option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" OFF)
 option(ENABLE_MOCK_SYSCALL_DEMO "Enable System Call mock demo" OFF)
+option(ENABLE_PROCESS_DEMO "Enable Process Management demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -134,6 +146,9 @@ add_subdirectory(shell)
 
 # 添加 mm 内存管理模块
 add_subdirectory(mm)
+
+# 添加 process 进程管理模块
+add_subdirectory(process)
 
 # Demo library is always built and linked (provides run_possible_demos symbol)
 # Collect all sub-demo libraries for explicit linking (static libs don't propagate deps)
@@ -159,6 +174,10 @@ if(TARGET demo_mock_syscall)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_mock_syscall>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_mock_syscall)
 endif()
+if(TARGET demo_process)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_process>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_process)
+endif()
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -181,6 +200,8 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/gdt_asm.o
         # syscall assembly stubs
         ${CMAKE_BINARY_DIR}/syscall_asm.o
+        # process context switch assembly
+        ${CMAKE_BINARY_DIR}/process_switch_asm.o
         # klogs object files
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf_backends.c.o
@@ -198,6 +219,8 @@ add_custom_command(
         # syscall object files
         ${CMAKE_CURRENT_BINARY_DIR}/syscall/CMakeFiles/syscall.dir/syscall.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/syscall/CMakeFiles/syscall.dir/syscall_table.c.o
+        # process object files
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/process.c.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)
@@ -222,6 +245,7 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/interrupt_asm.o
         ${CMAKE_BINARY_DIR}/gdt_asm.o
         ${CMAKE_BINARY_DIR}/syscall_asm.o
+        ${CMAKE_BINARY_DIR}/process_switch_asm.o
         kernel_main
         assert
         base
@@ -239,6 +263,7 @@ add_custom_command(
         memory_detect
         pframe
         kernel_heap
+        process
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

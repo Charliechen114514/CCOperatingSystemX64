@@ -23,7 +23,7 @@
 | 内存管理 | 100% | ✅ 完成 |
 | 系统调用框架 | 70% | 🟢 部分完成 |
 | 中断处理 | 90% | 🟢 部分完成 |
-| 进程管理 | 0% | 🔴 未开始 |
+| 进程管理 | 30% | 🟡 部分完成 |
 | 文件系统 | 0% | 🔴 未开始 |
 
 ---
@@ -33,21 +33,6 @@
 ### 第五阶段：系统调用接口 (进行中)
 
 #### 5.1 系统调用框架 ✅
-```
-kernel/syscall/
-├── syscall.h            - 系统调用接口
-├── syscall.c            - 系统调用实现
-├── syscall.asm          - 系统调用汇编入口
-├── syscall_numbers.h    - 系统调用号定义
-└── syscall_table.c      - 系统调用表
-```
-- [x] 系统调用号定义
-- [x] syscall/sysret 指令实现
-- [x] 用户态/内核态切换
-- [x] 参数传递约定 (System V AMD64 ABI)
-- [x] MSR 配置 (IA32_LSTAR, IA32_STAR, IA32_FMASK)
-- [x] int 0x80 传统接口回退支持
-- [x] 系统调用统计功能
 
 #### 5.2 基础系统调用 (部分完成)
 - [x] sys_write - 写入标准输出
@@ -59,18 +44,9 @@ kernel/syscall/
 - [x] sys_close - 关闭文件描述符
 - [ ] sys_brk - 改变数据段大小 (框架已就绪)
 - [x] sys_getppid - 获取父进程 ID
+- [x] sys_fork - 创建新进程
+- [x] sys_wait4 - 等待子进程退出
 
-#### 5.3 测试与验证 ✅
-```
-kernel/demo/mock_syscall/
-├── mock_syscall_demo.h
-└── mock_syscall_demo.c
-```
-- [x] MSR 配置验证测试
-- [x] 系统调用分发测试
-- [x] 多参数传递测试
-- [x] 错误处理测试
-- [x] 统计功能测试
 
 #### 下一步工作
 - [ ] 完善更多基础系统调用实现
@@ -87,19 +63,39 @@ kernel/demo/mock_syscall/
 kernel/process/
 ├── process.h        - PCB 定义
 ├── process.c        - PCB 管理
+├── process_defines.h - 进程类型定义
 └── switch.s         - 上下文切换汇编
 ```
-- [ ] PCB 结构定义
-- [ ] 进程状态 (Running/Ready/Blocked)
-- [ ] 进程创建与销毁
-- [ ] 上下文切换实现
+- [x] PCB 结构定义
+- [x] 进程状态 (Running/Ready/Blocked/Zombie)
+- [x] PID 分配器 (使用 bitmap)
+- [x] 进程创建与销毁 (fork, exit, wait4)
+- [x] 上下文切换实现 (switch_context, switch_to_first)
+- [ ] 进程初始化
+- [ ] 完整的 COW fork 实现
+- [ ] 用户栈设置
 
-#### 6.2 调度器
+#### 6.2 进程管理 Demo
 ```
-kernel/scheduler/
-├── scheduler.h      - 调度器接口
-└── scheduler.c      - 调度器实现
+kernel/demo/process_simple/
+├── process_demo.h   - Demo 接口
+└── process_demo.c   - Demo 实现
 ```
+- [x] PID 分配测试
+- [x] PCB 分配测试
+- [x] 进程状态测试
+- [x] 调度器初始化测试
+- [x] PCB 列表管理测试
+- [x] 内核栈管理测试
+- [x] 内存上下文测试
+
+#### 6.3 调度器
+```
+kernel/process/ (集成在 process 模块中)
+├── scheduler_t      - 调度器结构
+└── schedule()       - 调度函数
+```
+- [ ] 实现调度器类，方便后续快速的扩展
 - [ ] Round-Robin 调度算法
 - [ ] 时间片管理
 - [ ] 进程队列管理
@@ -132,8 +128,7 @@ kernel/fs/
 ├── fat32.h/c        - FAT32 支持
 └── vfs.h/c          - 虚拟文件系统
 ```
-- [ ] FAT32 支持 (推荐)
-- [ ] ext2 支持 (可选)
+- [ ] ext2 支持
 - [ ] 文件操作接口
 - [ ] 目录操作
 - [ ] 路径解析

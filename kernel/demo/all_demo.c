@@ -27,6 +27,10 @@
 #    include "mock_syscall/mock_syscall_demo.h"
 #endif
 
+#ifdef PROCESS_DEMO_ENABLED
+#    include "process_simple/process_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -63,6 +67,11 @@ void run_possible_demos(void) {
 #    ifdef MOCK_SYSCALL_DEMO_ENABLED
     klog_trace("[Demo Controller] Mock Syscall Demo is enabled, running...\n");
     mock_syscall_run_demo();
+#    endif
+
+#    ifdef PROCESS_DEMO_ENABLED
+    klog_trace("[Demo Controller] Process Simple Demo is enabled, running...\n");
+    process_run_demo();
 #    endif
 
     // Add more demos here as they are implemented

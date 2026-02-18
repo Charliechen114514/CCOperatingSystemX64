@@ -153,6 +153,37 @@ else()
     message(STATUS "COW Demo: DISABLED")
 endif()
 
+# Process Simple Demo
+if(ENABLE_PROCESS_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "PROCESS")
+    message(STATUS "Process Simple Demo: ENABLED")
+
+    add_library(demo_process STATIC process_simple/process_demo.c)
+
+    target_include_directories(demo_process PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_process PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_process PUBLIC PROCESS_DEMO_ENABLED=1)
+
+    # Process demo 依赖 process, klogs, list, bitmap
+    target_link_libraries(demo_process PUBLIC process klogs list bitmap base)
+
+    set_target_properties(demo_process PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 process demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_process)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC PROCESS_DEMO_ENABLED=1)
+else()
+    message(STATUS "Process Simple Demo: DISABLED")
+endif()
+
 # Mock Syscall Demo
 if(ENABLE_MOCK_SYSCALL_DEMO AND CCOS_ENABLE_DEMO)
     list(APPEND DEMO_ENABLED_LIST "MOCK_SYSCALL")

@@ -115,3 +115,13 @@ virtual_addr_t tss_get_ist_stack(uint8_t ist_index);
  * @brief Dump TSS state for debugging
  */
 void tss_dump(void);
+
+/**
+ * @brief Set kernel stack for process context switching
+ *
+ * This function is called from assembly during context switch.
+ * It updates the TSS RSP0 field with the new process's kernel stack.
+ *
+ * @param stack_top Top of the kernel stack (stack grows down)
+ */
+void tss_set_kernel_stack_ctx(virtual_addr_t stack_top);
