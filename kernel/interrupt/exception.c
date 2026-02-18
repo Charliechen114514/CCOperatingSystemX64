@@ -6,6 +6,8 @@
 #include "interrupt/exception.h"
 #include "interrupt/idt.h"
 #include "interrupt/idt_constants.h"
+#include "process/process.h"
+#include "process/process_defines.h"
 #include "klogs/kprintf.h"
 #include "klogs/ksnprintf.h"
 
@@ -126,13 +128,15 @@ void stack_fault_handler(interrupt_frame_t* frame, uint64_t error_code) {
         klog_error("[SS]   - User stack overflow\n");
         klog_error("[SS]   - Invalid stack segment reference\n");
 
-        /* TODO: When process management exists:
-         * 1. Check if stack guard page was hit
-         * 2. Attempt to expand stack if valid
-         * 3. Otherwise, send SIGSEGV to process
-         */
+        /* Terminate user process */
+        pcb_t* current = proc_current();
+        if (current && current->is_user_mode) {
+            klog_error("[SS] Terminating user process %d\n", current->pid);
+            proc_exit(SIGSEGV);
+            __builtin_unreachable();  /* proc_exit never returns */
+        }
 
-        klog_error("[SS] User stack faults not yet handled - terminating\n");
+        klog_error("[SS] User stack fault with no valid process - halting\n");
     } else {
         klog_error("\n[SS] KERNEL stack fault - CRITICAL ERROR\n");
         klog_error("[SS] Possible causes:\n");
@@ -214,12 +218,15 @@ void gp_fault_handler(interrupt_frame_t* frame, uint64_t error_code) {
         klog_error("[GP]   - Writing to read-only memory\n");
         klog_error("[GP]   - Invalid segment reference\n");
 
-        /* TODO: When process management exists:
-         * 1. Decode what caused the fault
-         * 2. Send appropriate signal (SIGSEGV, SIGILL, etc.)
-         */
+        /* Terminate user process */
+        pcb_t* current = proc_current();
+        if (current && current->is_user_mode) {
+            klog_error("[GP] Terminating user process %d\n", current->pid);
+            proc_exit(SIGSEGV);
+            __builtin_unreachable();  /* proc_exit never returns */
+        }
 
-        klog_error("[GP] User GPF not yet handled - halting\n");
+        klog_error("[GP] User GPF with no valid process - halting\n");
     } else {
         klog_error("\n[GP] KERNEL GPF - KERNEL BUG DETECTED\n");
         klog_error("[GP] This indicates a serious kernel error\n");

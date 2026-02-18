@@ -106,6 +106,6 @@ typedef int32_t ptrdiff_t;
 // ============================================================================
 // Common Utility Types
 // ============================================================================
-typedef uint32_t physical_addr_t; // Physical memory address
+typedef uint64_t physical_addr_t; // Physical memory address (64-bit for x86_64)
 typedef uintptr_t virtual_addr_t; // Virtual memory address
 typedef uint8_t byte_t;

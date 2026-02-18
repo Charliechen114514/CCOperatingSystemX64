@@ -7,6 +7,9 @@
 #include "mm/vmm/vmm.h"
 #include "mm/vmm/page.h"
 #include "mm/vmm/cow.h"
+#include "process/process.h"
+#include "process/process_defines.h"
+#include "mm/pframe/pframe.h"
 #include "klogs/kprintf.h"
 #include "interrupt/idt.h"
 #include "assert/assert.h"
@@ -141,14 +144,26 @@ void pf_handler(interrupt_frame_t* frame, uint64_t error_code) {
             }
         }
 
-        /* TODO: When process management is implemented:
-         * 1. Send signal to process (e.g., SIGSEGV)
-         * 2. If process has no handler, terminate it
-         * 3. If it's a valid demand page fault, handle it
-         */
+        /* Try demand paging for non-present pages */
+        if (!info.present && vmm_is_user_addr(fault_addr)) {
+            pf_result_t demand_result = pf_handle_demand_page(fault_addr, true);
+            if (demand_result == PF_SUCCESS) {
+                klog_debug("[PF] Demand page handled successfully\n");
+                return;  /* Resume execution */
+            }
+        }
 
-        /* For now, we halt since we don't have process management */
-        klog_error("[PF] User page fault not handled - system halted\n");
+        /* Unhandleable user fault - terminate user process */
+        pcb_t* current = proc_current();
+        if (current && current->is_user_mode) {
+            klog_error("[PF] Terminating user process %d due to page fault at 0x%llX\n",
+                      current->pid, fault_addr);
+            proc_exit(SIGSEGV);
+            __builtin_unreachable();  /* proc_exit never returns */
+        }
+
+        /* No current process or not a user process - halt */
+        klog_error("[PF] User page fault with no valid process - system halted\n");
         klog_error("[PF] TODO: Implement process management and signal delivery\n");
         goto kernel_panic;
     }

@@ -79,13 +79,17 @@ void kernel_init(void) {
     exception_init(); /* Register DF, SS, GP handlers */
 
     // Phase 3.5: Initialize system call framework (after IDT and exception handlers)
+    klog_trace("[INIT] Before syscall_init...\n");
     syscall_init(); /* Initialize syscall/sysret framework */
+    klog_trace("[INIT] After syscall_init, before cow_init...\n");
 
     // Phase 4: Initialize COW subsystem (depends on hashmap and heap)
     cow_init(); /* Initialize copy-on-write tracking */
+    klog_trace("[INIT] After cow_init, before pf_init...\n");
 
     // Phase 5: Initialize page fault handler (depends on COW)
     pf_init();
+    klog_trace("[INIT] After pf_init...\n");
 
     // Phase 6: Initialize all interrupt-dependent devices
     // They will register their IRQ handlers during this phase
@@ -101,7 +105,8 @@ void kernel_init(void) {
     // serial_shell_init_commands();  // Serial shell commands (time, ticks, echo, uart)
     // vga_shell_init_commands();     // VGA shell commands (cls, color, goto, keyboard)
     /* One must Ensure the backends have been bootified, else sucks! */
+    klog_trace("[INIT] Before bootAllWelcomes...\n");
     bootAllWelcomes();
-    klog_trace("Boot Welcomes Done!\n");
+    klog_trace("[INIT] After bootAllWelcomes...\n");
     klog_info("kernel init finished!\n");
 }

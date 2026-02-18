@@ -53,7 +53,7 @@ STATIC_ASSERT(UINT64_MAX == 0xFFFFFFFFFFFFFFFFULL, uint64_max_correct);
 // Utility Type Tests
 // ============================================================================
 
-STATIC_ASSERT(sizeof(physical_addr_t) == 4, physical_addr_is_32bit);
+STATIC_ASSERT(sizeof(physical_addr_t) == 8, physical_addr_is_64bit);
 STATIC_ASSERT(sizeof(virtual_addr_t)  == 8, virtual_addr_is_64bit);
 
 // ============================================================================

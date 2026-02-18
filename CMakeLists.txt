@@ -90,6 +90,15 @@ set(CCOS_FREESTANDING_FLAGS
     -mcmodel=large
 )
 
+# Freestanding 编译标志（仅包含编译器选项，不含链接选项）
+# 用于 user 态程序等需要编译标志但不需要链接标志的场景
+set(CCOS_FREESTANDING_COMPILE_FLAGS
+    -ffreestanding
+    -fno-builtin
+    -fno-stack-protector
+    -mcmodel=large
+)
+
 # ============================================================================
 # 项目配置头文件（可选，用于条件编译）
 # ============================================================================
@@ -113,6 +122,7 @@ include(cmake/MemSizeConfig.cmake)
 # ============================================================================
 add_subdirectory(boot)
 add_subdirectory(kernel)
+add_subdirectory(user)
 
 # ============================================================================
 # 测试套件（可选，独立于内核构建）
@@ -134,6 +144,7 @@ add_dependencies(final_config bootloader)
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/bootloader_final.bin
     COMMAND ${NASM} -f bin
+        -I${CMAKE_BINARY_DIR}/
         -I${CMAKE_SOURCE_DIR}/boot/
         ${CMAKE_SOURCE_DIR}/boot/bootloader.asm
         -o ${CMAKE_BINARY_DIR}/bootloader_final.bin
@@ -145,7 +156,8 @@ add_custom_command(
     COMMAND ls -lh ${CMAKE_BINARY_DIR}/bootloader.bin
     DEPENDS
         ${CMAKE_SOURCE_DIR}/boot/bootloader.asm
-        ${CMAKE_SOURCE_DIR}/boot/boot_config.inc
+        ${CMAKE_SOURCE_DIR}/boot/serial_constants.inc
+        ${CMAKE_BINARY_DIR}/mem_detect_constants.inc
         ${CMAKE_BINARY_DIR}/boot_config_final.inc
     COMMENT "Rebuilding bootloader with final config"
     VERBATIM

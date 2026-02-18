@@ -10,13 +10,18 @@
  */
 #pragma once
 #include "defines/types.h"
+
 /**
  * @brief Read One Byte from the target port
  *
  * @param port
  * @return uint8_t
  */
-uint8_t inb(uint16_t port);
+static inline uint8_t inb(uint16_t port) {
+    uint8_t result;
+    __asm__ volatile("inb %1, %0" : "=a"(result) : "Nd"(port));
+    return result;
+}
 
 /**
  * @brief Write target bytes to the port
@@ -24,4 +29,6 @@ uint8_t inb(uint16_t port);
  * @param port
  * @param data
  */
-void outb(uint16_t port, uint8_t data);
+static inline void outb(uint16_t port, uint8_t data) {
+    __asm__ volatile("outb %0, %1" : : "a"(data), "Nd"(port));
+}

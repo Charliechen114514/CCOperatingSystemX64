@@ -186,7 +186,7 @@ endif()
 
 # Mock Syscall Demo
 if(ENABLE_MOCK_SYSCALL_DEMO AND CCOS_ENABLE_DEMO)
-    list(APPEND DEMO_ENABLED_LIST "MOCK_SYSCALL")
+    list(APPEND DEMO_ENABLED_LIST "MOOCK_SYSCALL")
     message(STATUS "Mock Syscall Demo: ENABLED")
 
     add_library(demo_mock_syscall STATIC mock_syscall/mock_syscall_demo.c)
@@ -213,6 +213,69 @@ if(ENABLE_MOCK_SYSCALL_DEMO AND CCOS_ENABLE_DEMO)
     target_compile_definitions(demo PUBLIC MOCK_SYSCALL_DEMO_ENABLED=1)
 else()
     message(STATUS "Mock Syscall Demo: DISABLED")
+endif()
+
+# Sched Demo
+if(ENABLE_SCHED_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "SCHED")
+    message(STATUS "Sched Demo: ENABLED")
+
+    add_library(demo_sched STATIC sched/sched_demo.c)
+
+    target_include_directories(demo_sched PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_sched PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_sched PUBLIC SCHED_DEMO_ENABLED=1)
+
+    # Sched demo 依赖 process, klogs, base
+    target_link_libraries(demo_sched PUBLIC process klogs base)
+
+    set_target_properties(demo_sched PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 sched demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_sched)
+    # 将宏定义传递到 basic demo 库
+    target_compile_definitions(demo PUBLIC SCHED_DEMO_ENABLED=1)
+else()
+    message(STATUS "Sched Demo: DISABLED")
+endif()
+
+# User Mode Demo
+if(ENABLE_USER_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "USER")
+    message(STATUS "User Mode Demo: ENABLED")
+
+    add_library(demo_user STATIC user/user_demo.c)
+
+    target_include_directories(demo_user PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_user PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_user PUBLIC USER_DEMO_ENABLED=1)
+
+    # User demo 依赖 user, process, syscall, klogs, vmm, pframe, base
+    target_link_libraries(demo_user PUBLIC user process syscall klogs kernel_vmm pframe base)
+
+    set_target_properties(demo_user PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 user demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_user)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC USER_DEMO_ENABLED=1)
+else()
+    message(STATUS "User Mode Demo: DISABLED")
 endif()
 
 # 根据 CCOS_ENABLE_DEMO 定义编译宏

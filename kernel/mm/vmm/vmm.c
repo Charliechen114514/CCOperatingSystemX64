@@ -590,6 +590,8 @@ vmm_result_t vmm_create_user_space(physical_addr_t* out_pml4) {
 vmm_result_t vmm_destroy_user_space(physical_addr_t pml4) {
     CCOS_ASSERT(s_initialized);
 
+    klog_trace("[VMM] vmm_destroy_user_space: entry, pml4=0x%X\n", pml4);
+
     /* Walk the page tables and free user-space entries (0-255) */
     pml4_t* user_pml4 = (pml4_t*)phys_to_virt_offset(pml4);
 

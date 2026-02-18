@@ -57,6 +57,17 @@ add_custom_command(
     VERBATIM
 )
 
+# User mode entry assembly
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/user_enter_asm.o
+    COMMAND ${NASM} -f elf64
+        ${CMAKE_CURRENT_SOURCE_DIR}/user/user_enter.asm
+        -o ${CMAKE_BINARY_DIR}/user_enter_asm.o
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/user/user_enter.asm
+    COMMENT "Building user mode entry assembly"
+    VERBATIM
+)
+
 # C内核主文件
 # 使用 OBJECT 库类型便于未来扩展
 add_library(kernel_main OBJECT
@@ -128,9 +139,11 @@ option(ENABLE_HEAP_DEMO "Enable Heap allocator demo" OFF)
 option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" OFF)
 option(ENABLE_MOCK_SYSCALL_DEMO "Enable System Call mock demo" OFF)
 option(ENABLE_PROCESS_DEMO "Enable Process Management demo" OFF)
+option(ENABLE_SCHED_DEMO "Enable Scheduling Class demo" OFF)
+option(ENABLE_USER_DEMO "Enable User Mode support demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO OR ENABLE_USER_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -149,6 +162,9 @@ add_subdirectory(mm)
 
 # 添加 process 进程管理模块
 add_subdirectory(process)
+
+# 添加 user 用户态支持模块
+add_subdirectory(user)
 
 # Demo library is always built and linked (provides run_possible_demos symbol)
 # Collect all sub-demo libraries for explicit linking (static libs don't propagate deps)
@@ -178,6 +194,14 @@ if(TARGET demo_process)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_process>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_process)
 endif()
+if(TARGET demo_sched)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_sched>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_sched)
+endif()
+if(TARGET demo_user)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_user>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_user)
+endif()
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -202,6 +226,8 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/syscall_asm.o
         # process context switch assembly
         ${CMAKE_BINARY_DIR}/process_switch_asm.o
+        # user mode entry assembly
+        ${CMAKE_BINARY_DIR}/user_enter_asm.o
         # klogs object files
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf_backends.c.o
@@ -221,6 +247,13 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/syscall/CMakeFiles/syscall.dir/syscall_table.c.o
         # process object files
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/process.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_rr.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_prio.c.o
+        # user mode object files
+        ${CMAKE_CURRENT_BINARY_DIR}/user/CMakeFiles/user.dir/user.c.o
+        # user programs (when user demo is enabled)
+        ${CMAKE_BINARY_DIR}/uname_test_symbols.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)
@@ -264,6 +297,8 @@ add_custom_command(
         pframe
         kernel_heap
         process
+        user
+        uname_test_obj
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM
@@ -342,7 +377,7 @@ add_custom_target(kernel_with_symbols
 )
 
 # ============================================================================
-# 自动生成 boot_config.inc（两阶段构建）
+# 自动生成 boot_config_final.inc（两阶段构建）
 # ============================================================================
 # 阶段1：生成初始配置（用于首次编译）
 # 阶段2：在bootloader和kernel都构建后，生成实际配置，然后重新编译bootloader
@@ -353,15 +388,11 @@ add_custom_command(
         -DOUTPUT_FILE=${CMAKE_BINARY_DIR}/boot_config_final.inc
         -DBOOTLOADER_BIN=${CMAKE_BINARY_DIR}/bootloader.bin
         -P ${CMAKE_SOURCE_DIR}/cmake/GenerateKernelSize.cmake
-    # Copy final config to boot directory to trigger bootloader rebuild
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_BINARY_DIR}/boot_config_final.inc
-        ${CMAKE_SOURCE_DIR}/boot/boot_config.inc
     DEPENDS
         ${CMAKE_BINARY_DIR}/kernel.bin
         ${CMAKE_BINARY_DIR}/bootloader.bin
         ${CMAKE_SOURCE_DIR}/cmake/GenerateKernelSize.cmake
-    COMMENT "Generating final boot_config.inc with actual sizes"
+    COMMENT "Generating final boot_config_final.inc with actual sizes"
     VERBATIM
 )
 

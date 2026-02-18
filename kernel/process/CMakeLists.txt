@@ -5,6 +5,9 @@
 # Process management C code
 add_library(process OBJECT
     process.c
+    sched.c
+    sched_rr.c
+    sched_prio.c
 )
 
 target_include_directories(process PUBLIC
