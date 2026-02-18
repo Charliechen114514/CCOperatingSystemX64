@@ -22,13 +22,11 @@ void run_possible_demos(void) {
     klog_trace("╔════════════════════════════════════════╗\n");
     klog_trace("║   Running Enabled Demos                ║\n");
     klog_trace("╚════════════════════════════════════════╝\n");
-#endif
-#ifdef RTC_DEMO_ENABLED
+
+#    ifdef RTC_DEMO_ENABLED
     klog_trace("[Demo Controller] RTC Demo is enabled, running...\n");
     rtc_run_demo();
-#else
-    klog_trace("[Demo Controller] RTC Demo is disabled (use -DENABLE_RTC_DEMO=ON to enable)\n");
-#endif
+#    endif
 
     // Add more demos here as they are implemented
     // #ifdef TIMER_DEMO_ENABLED
@@ -38,9 +36,10 @@ void run_possible_demos(void) {
     // #ifdef KEYBOARD_DEMO_ENABLED
     //     keyboard_run_demo();
     // #endif
-#ifdef CCOS_ENABLE_DEMO
+#    ifdef CCOS_ENABLE_DEMO
     klog_trace("╔════════════════════════════════════════╗\n");
     klog_trace("║   Demo Controller Finished             ║\n");
     klog_trace("╚════════════════════════════════════════╝\n");
+#    endif
 #endif
 }

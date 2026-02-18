@@ -6,6 +6,7 @@ add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/bootloader.bin
     COMMAND ${NASM} -f bin
         -I${CMAKE_CURRENT_SOURCE_DIR}/
+        -I${CMAKE_BINARY_DIR}/
         ${CMAKE_CURRENT_SOURCE_DIR}/bootloader.asm
         -o ${CMAKE_BINARY_DIR}/bootloader.bin
     COMMAND ${CMAKE_COMMAND} -E echo ""
@@ -14,6 +15,7 @@ add_custom_command(
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/bootloader.asm
         ${CMAKE_CURRENT_SOURCE_DIR}/boot_config.inc
+        ${CMAKE_BINARY_DIR}/mem_detect_constants.inc
     COMMENT "Building bootloader"
     VERBATIM
 )

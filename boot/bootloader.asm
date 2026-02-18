@@ -10,30 +10,10 @@
 %include "boot_config.inc"
 
 ; ==============================================================================
-; Serial Port Constants (COM1)
+; Include Constants Files
 ; ==============================================================================
-SERIAL_PORT        equ 0x3F8
-SERIAL_THR         equ 0x03F8  ; Transmit Holding Register (write)
-SERIAL_RBR         equ 0x03F8  ; Receive Buffer Register (read)
-SERIAL_IER         equ 0x03F9  ; Interrupt Enable Register
-SERIAL_IIR         equ 0x03FA  ; Interrupt Identification Register
-SERIAL_FCR         equ 0x03FA  ; FIFO Control Register (write)
-SERIAL_LCR         equ 0x03FB  ; Line Control Register
-SERIAL_MCR         equ 0x03FC  ; Modem Control Register
-SERIAL_LSR         equ 0x03FD  ; Line Status Register
-SERIAL_MSR         equ 0x03FE  ; Modem Status Register
-SERIAL_DLL         equ 0x03F8  ; Divisor Latch Low (when DLAB=1)
-SERIAL_DLM         equ 0x03F9  ; Divisor Latch High (when DLAB=1)
-
-; Line Control bits
-LCR_DLAB           equ 0x80    ; Divisor Latch Access Bit
-LCR_8BIT           equ 0x03    ; 8 bits per character
-LCR_NO_PARITY      equ 0x00    ; No parity
-LCR_ONE_STOP       equ 0x00    ; 1 stop bit
-
-; Line Status bits
-LSR_THRE           equ 0x20    ; Transmit Holding Register Empty
-LSR_TEMT           equ 0x40    ; Transmitter Empty
+%include "serial_constants.inc"
+%include "mem_detect_constants.inc"
 
 ; ==============================================================================
 ; Stage 1: MBR (0x7C00)
@@ -273,6 +253,9 @@ stage2_main:
     mov si, msg_stage2
     call serial_write_string
 
+    ; Detect memory map (must be done before loading kernel)
+    call detect_memory_map
+
     ; Load kernel using automatic LBA/CHS selection
     call load_kernel_auto
     jc kernel_error
@@ -325,6 +308,71 @@ msg_kernel_load_success:
 
 msg_kernel_error:
     db "[E2] Failed to load kernel", 0x0d, 0x0a, 0
+
+
+; ==============================================================================
+; Debug Helper Functions - Print Hex Values
+; ==============================================================================
+
+; print_byte_hex - Print a byte as 2 hex digits to serial
+; Input: AL = byte to print
+; Clobbers: AX, CX, DX
+print_byte_hex:
+    pusha
+    mov ah, al              ; Save byte
+    shr al, 4               ; High nibble
+    call print_hex_nibble
+    mov al, ah              ; Restore byte
+    and al, 0x0F            ; Low nibble
+    call print_hex_nibble
+    popa
+    ret
+
+; print_word_hex - Print a word as 4 hex digits to serial
+; Input: AX = word to print
+; Clobbers: AX, CX, DX
+print_word_hex:
+    pusha
+    xchg al, ah             ; Print high byte first
+    call print_byte_hex
+    xchg al, ah             ; Restore
+    call print_byte_hex     ; Print low byte
+    popa
+    ret
+
+; print_dword_hex - Print a dword as 8 hex digits to serial
+; Input: EAX = dword to print (use via stack in 16-bit mode)
+; Clobbers: AX, CX, DX, SI
+print_dword_hex_serial:
+    pusha
+    ; On stack: [original BP] [original AX] [original CX] [original DX] [original BX] [original SP] [original BP] [original SI] [original DI]
+    ; We want to print the dword passed in EAX, but in 16-bit mode we need special handling
+    ; For simplicity, we'll use a different approach: print value in DX:AX
+    mov si, sp
+    mov ax, [si+12]         ; Get original AX
+    mov dx, [si+10]         ; Get original DX (high word of EAX if passed)
+    call print_word_hex     ; Print high word
+    mov ax, [si+12]         ; Get original AX (low word)
+    call print_word_hex     ; Print low word
+    popa
+    ret
+
+; print_hex_nibble - Print a 4-bit nibble as hex
+; Input: AL = nibble (0-15)
+; Clobbers: AL
+print_hex_nibble:
+    pusha
+    and al, 0x0F
+    cmp al, 10
+    jb .digit
+    add al, 'A' - 10
+    jmp .print
+.digit:
+    add al, '0'
+.print:
+    call serial_write_char_blocking
+    popa
+    ret
 
 
 ; ==============================================================================
@@ -1146,3 +1194,346 @@ serial_write_decimal:
     pop cx
     pop bx
     ret
+
+
+; ==============================================================================
+; Memory Detection Functions (Real Mode)
+; ==============================================================================
+
+; detect_memory_map - Detect system memory map using E820/E801/INT 15h/88h
+; Input: none
+; Output: E820 map stored at E820_STORAGE_ADDR (0xC000)
+;         Detection method stored at E820_STORAGE_ADDR (first byte)
+; Clobbers: AX, BX, CX, DX, SI, DI, BP
+bits 16
+detect_memory_map:
+    pusha
+    push ds
+    push es
+
+    ; Set DS to point to storage area
+    mov ax, 0x0000
+    mov ds, ax
+
+    ; Print memory detection start message
+    mov si, msg_mem_detect_start
+    call serial_write_string
+
+    ; -----------------------------------------------------------------
+    ; Try E820 first (most detailed)
+    ; -----------------------------------------------------------------
+    call detect_memory_e820
+    jc .try_e801              ; CF=1 means E820 failed
+
+    ; E820 succeeded!
+    mov byte [E820_STORAGE_ADDR], MEM_METHOD_E820
+
+    mov si, msg_mem_method_e820
+    call serial_write_string
+
+    jmp .detect_done
+
+.try_e801:
+    ; -----------------------------------------------------------------
+    ; Try E801 (two memory regions)
+    ; -----------------------------------------------------------------
+    call detect_memory_e801
+    jc .try_88h               ; CF=1 means E801 failed
+
+    ; E801 succeeded!
+    mov byte [E820_STORAGE_ADDR], MEM_METHOD_E801
+
+    mov si, msg_mem_method_e801
+    call serial_write_string
+
+    jmp .detect_done
+
+.try_88h:
+    ; -----------------------------------------------------------------
+    ; Try INT 15h/88h (max 64MB)
+    ; -----------------------------------------------------------------
+    call detect_memory_88h
+    jc .detect_failed         ; CF=1 means 88h failed
+
+    ; 88h succeeded!
+    mov byte [E820_STORAGE_ADDR], MEM_METHOD_88H
+
+    mov si, msg_mem_method_88h
+    call serial_write_string
+
+    jmp .detect_done
+
+.detect_failed:
+    ; All methods failed
+    mov byte [E820_STORAGE_ADDR], MEM_METHOD_UNKNOWN
+
+    mov si, msg_mem_method_failed
+    call serial_write_string
+
+    jmp .detect_exit
+
+.detect_done:
+    mov si, msg_mem_detect_done
+    call serial_write_string
+
+.detect_exit:
+    pop es
+    pop ds
+    popa
+    ret
+
+
+; ==============================================================================
+; detect_memory_e820 - Detect memory using INT 15h/E820
+; Input: none
+; Output: Memory map stored at E820_STORAGE_ADDR + 1
+;         CF=0 on success, CF=1 on failure
+;         CX = entry count (stored at E820_STORAGE_ADDR + 1)
+; Clobbers: AX, BX, CX, DX, SI, DI, BP
+bits 16
+detect_memory_e820:
+    pusha
+    push ds
+    push es
+
+    ; Set ES:DI to point to storage area
+    ; Layout: [method (1)][count (2)][entries...]
+    ; So entries start at E820_STORAGE_ADDR + 3
+    mov ax, 0x0000
+    mov es, ax
+    mov di, E820_STORAGE_ADDR + 3
+
+    ; Initialize entry count (use BP to avoid conflicts with CX, SI, DI)
+    xor bp, bp                 ; BP = entry counter
+
+    ; === First E820 call (before loop) ===
+    ; E820 requires 32-bit registers even in real mode!
+    ; We use the 0x66 operand-size prefix to access 32-bit registers
+    mov di, E820_STORAGE_ADDR + 3
+    xor ebx, ebx              ; EBX = 0 for first call
+    mov edx, 'PAMS'           ; EDX = 'SMAP' signature (0x534D4150)
+                                ; 'PAMS' in little-endian = 'SMAP'
+    mov eax, 0xe820           ; EAX = E820 function
+    mov ecx, 24               ; ECX = buffer size (24 bytes)
+    int 0x15
+
+    ; Check carry flag immediately
+    jc .e820_cf_set
+
+    ; Verify signature in EAX (should return 'SMAP' = 0x534D4150 = 'PAMS')
+    cmp eax, 'PAMS'
+    jne .e820_sig_mismatch
+
+    ; EBX=0 after first call means no more entries (single entry system)
+    ; This is actually OK, not an error
+    test ebx, ebx
+    jz .process_entry_first
+
+.e820_loop:
+    ; Setup E820 call - use 32-bit registers
+    mov eax, 0xe820           ; EAX = E820 function
+    mov ecx, 24               ; ECX = buffer size
+    ; EDX already set to 'PAMS', EBX contains continuation value
+
+    int 0x15
+
+    ; Check carry flag immediately
+    jc .e820_cf_set             ; CF=1 means error
+
+    ; Verify signature in EAX
+    cmp eax, 'PAMS'
+    jne .e820_sig_mismatch
+
+.process_entry_first:
+    ; Entry processing
+    ; BIOS may have modified ES, so restore it to 0
+    mov ax, 0x0000
+    mov es, ax
+
+    ; Check if ECX (bytes returned) is 0 - skip such entries
+    jecxz .skip_entry           ; Use 32-bit ECX check
+
+    ; Entry stored successfully
+    inc bp                     ; Increment entry count
+
+.skip_entry:
+    ; Check if we've reached max entries
+    cmp bp, E820_MAX_ENTRIES
+    jae .e820_done             ; Too many entries
+
+    ; Check for continuation (EBX=0 means last entry)
+    test ebx, ebx              ; Test full 32-bit EBX
+    jz .e820_done
+
+    ; Advance DI to next entry
+    add di, 24
+
+    ; Continue loop
+    jmp .e820_loop
+
+.e820_cf_set:
+    ; CF is set - error occurred
+    jmp .e820_error
+
+.e820_sig_mismatch:
+    ; EAX signature doesn't match 'SMAP'
+    jmp .e820_error
+
+.e820_done:
+    ; Success - store entry count after method byte (at offset 1-2)
+    mov word [E820_STORAGE_ADDR + 1], bp
+
+    clc                        ; Clear carry = success
+    jmp .e820_exit
+
+.e820_error:
+    stc                        ; Set carry = error
+.e820_exit:
+    pop es
+    pop ds
+    popa
+    ret
+
+
+; ==============================================================================
+; detect_memory_e801 - Detect memory using INT 15h/E801
+; Input: none
+; Output: Two entries stored at E820_STORAGE_ADDR + 1
+;         CF=0 on success, CF=1 on failure
+; Clobbers: AX, BX, CX, DX
+bits 16
+detect_memory_e801:
+    pusha
+    push ds
+
+    mov ax, 0x0000
+    mov ds, ax
+
+    ; Call INT 15h/AH=E801
+    mov ax, 0xE801
+    int 0x15
+
+    ; Check CF
+    jc .e801_error
+
+    ; E801 succeeded - create two E820 entries manually
+    ; Layout: [method (1)][count (2)][entries...]
+    ; Entries start at E820_STORAGE_ADDR + 3
+    mov di, E820_STORAGE_ADDR + 3
+
+    ; --- Entry 1: Memory between 1MB and 16MB ---
+    ; Base = 1MB = 0x100000
+    mov dword [di], 0x00100000    ; Base low
+    mov dword [di+4], 0x00000000  ; Base high
+
+    ; Length = AX * 1024 bytes
+    movzx eax, ax
+    shl eax, 10                   ; Multiply by 1024
+    mov dword [di+8], eax         ; Length low
+    mov dword [di+12], 0          ; Length high
+
+    mov dword [di+16], E820_TYPE_USABLE  ; Type
+    mov dword [di+20], 0          ; ACPI attrs
+
+    ; --- Entry 2: Memory above 16MB ---
+    add di, 24                    ; Move to next entry
+
+    ; Base = 16MB = 0x1000000
+    mov dword [di], 0x00000000    ; Base low
+    mov dword [di+4], 0x00000001  ; Base high
+
+    ; Length = BX * 65536 bytes
+    movzx eax, bx
+    shl eax, 16                   ; Multiply by 65536
+    mov dword [di+8], eax         ; Length low
+    mov dword [di+12], 0          ; Length high
+
+    mov dword [di+16], E820_TYPE_USABLE  ; Type
+    mov dword [di+20], 0          ; ACPI attrs
+
+    ; Store entry count = 2
+    mov word [E820_STORAGE_ADDR + 1], 2
+
+    clc                            ; Clear carry = success
+    jmp .e801_exit
+
+.e801_error:
+    stc                            ; Set carry = error
+.e801_exit:
+    pop ds
+    popa
+    ret
+
+
+; ==============================================================================
+; detect_memory_88h - Detect memory using INT 15h/AH=88h
+; Input: none
+; Output: One entry stored at E820_STORAGE_ADDR + 3
+;         CF=0 on success, CF=1 on failure
+; Clobbers: AX, CX
+bits 16
+detect_memory_88h:
+    pusha
+    push ds
+
+    mov ax, 0x0000
+    mov ds, ax
+
+    ; Call INT 15h/AH=88h
+    mov ah, 0x88
+    int 0x15
+
+    jc .88h_error                 ; CF=1 means error
+
+    ; 88h succeeded - create one E820 entry
+    ; Layout: [method (1)][count (2)][entries...]
+    ; Entries start at E820_STORAGE_ADDR + 3
+    mov di, E820_STORAGE_ADDR + 3
+
+    ; Base = 0
+    mov dword [di], 0             ; Base low
+    mov dword [di+4], 0           ; Base high
+
+    ; Length = AX * 1024 bytes
+    movzx eax, ax
+    shl eax, 10                   ; Multiply by 1024
+    mov dword [di+8], eax         ; Length low
+    mov dword [di+12], 0          ; Length high
+
+    mov dword [di+16], E820_TYPE_USABLE  ; Type
+    mov dword [di+20], 0          ; ACPI attrs
+
+    ; Store entry count = 1
+    mov word [E820_STORAGE_ADDR + 1], 1
+
+    clc                            ; Clear carry = success
+    jmp .88h_exit
+
+.88h_error:
+    stc                            ; Set carry = error
+.88h_exit:
+    pop ds
+    popa
+    ret
+
+
+; ==============================================================================
+; Memory Detection Messages
+; ==============================================================================
+msg_mem_detect_start:
+    db "[MEM] Detecting system memory...", 0x0d, 0x0a, 0
+
+msg_mem_method_e820:
+    db "[MEM] Method: E820 (detailed map)", 0x0d, 0x0a, 0
+
+msg_mem_method_e801:
+    db "[MEM] Method: E801 (two regions)", 0x0d, 0x0a, 0
+
+msg_mem_method_88h:
+    db "[MEM] Method: INT 15h/88h (max 64MB)", 0x0d, 0x0a, 0
+
+msg_mem_method_failed:
+    db "[MEM] ERROR: All memory detection methods failed!", 0x0d, 0x0a, 0
+
+msg_mem_detect_done:
+    db "[MEM] Memory detection complete", 0x0d, 0x0a, 0

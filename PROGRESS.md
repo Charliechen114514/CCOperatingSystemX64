@@ -27,9 +27,111 @@
 
 ---
 
-## 🎯 下一步工作计划
+### 第二阶段：内存管理完善 (3-4 周) ⭐ 第二优先级
 
-### 第一阶段：异常处理增强 (2-3 周) ⭐ 当前优先级
+#### 2.1 物理内存管理
+
+**文件结构**:
+```
+kernel/mm/
+├── e820.h           - E820 内存地图数据结构与接口
+├── e820.c           - E820 内存地图解析实现
+└── CMakeLists.txt   - 构建配置
+```
+
+**内存布局约定**:
+| 地址范围 | 用途 |
+|---------|------|
+| 0x0 - 0x7FFF | BIOS 数据区 |
+| 0x7C00 - 0x7DFF | MBR (Stage 1) |
+| 0x7E00 - 0x8FFF | Stage 2 Bootloader |
+| 0x9000 - 0xBFFF | 页表 (PML4/PDPT/PD) |
+| **0xC000 - 0xFFFF** | **内存地图存储 (4KB)** |
+| 0x10000+ | 内核 |
+
+**任务清单**:
+
+##### 第一阶段: Bootloader 内存检测
+- [x] 在 `boot/bootloader.asm` 中添加 `detect_memory_map` 函数
+  - 首选: INT 15h/E820 - 获取详细内存地图
+  - 回退1: INT 15h/E801 - 获取两个内存区域（1MB 以下/以上）
+  - 回退2: INT 15h/88h - 获取最大连续内存（最大 64MB）
+- [x] 将内存地图存储到 0xC000（E820_STORAGE_ADDR）
+- [x] 在 `stage2_main` 中调用内存检测（加载内核之前）
+- [x] 添加串口调试输出
+
+##### 第二阶段: 内核端内存地图解析
+- [x] 创建 `kernel/mm/e820.h` - 数据结构定义
+  ```c
+  typedef enum {
+      E820_TYPE_USABLE       = 1,  // 可用内存
+      E820_TYPE_RESERVED     = 2,  // 保留区域
+      E820_TYPE_ACPI_RECLAIM = 3,  // ACPI 可回收内存
+      E820_TYPE_NVS          = 4,  // ACPI NVS 内存
+      E820_TYPE_UNUSABLE     = 5,  // 不可用内存
+  } e820_type_t;
+
+  typedef struct PACKED e820_entry {
+      uint64_t base;      // 基地址
+      uint64_t length;    // 区域长度
+      uint32_t type;      // 内存类型
+      uint32_t acpi_attrs; // ACPI 扩展属性
+  } e820_entry_t;
+
+  typedef enum {
+      MEM_DETECT_E820,
+      MEM_DETECT_E801,
+      MEM_DETECT_88H,
+      MEM_DETECT_UNKNOWN
+  } mem_detect_method_t;
+  ```
+- [ ] 创建 `kernel/mm/e820.c` - 解析实现
+  - `void e820_init(void)` - 从 0xC000 读取内存地图
+  - `mem_detect_method_t e820_get_detect_method(void)` - 获取检测方法
+  - `uint32_t e820_get_entry_count(void)` - 获取条目数
+  - `bool e820_get_entry(uint32_t index, e820_entry_t* entry)` - 获取指定条目
+  - `void e820_get_stats(mem_stats_t* stats)` - 获取内存统计
+  - `void e820_dump_map(void)` - 打印内存地图
+  - `bool e820_is_range_usable(uint64_t base, uint64_t length)` - 检查范围可用性
+  - `uint64_t e820_find_usable_range(...)` - 查找可用内存区域
+
+##### 第三阶段: 构建系统集成
+- [x] 创建 `kernel/mm/CMakeLists.txt`
+- [x] 修改 `kernel/CMakeLists.txt` - 添加 mm 子目录和链接
+- [x] 修改 `kernel/kernel_init.c` - 在 `driver_subsystem_inits()` 之后添加 `e820_init()`
+
+##### 第四阶段: 测试验证
+- [x] 编译测试
+- [x] 启动测试 - 使用串口/VGA 输出
+- [x] 功能测试 - 验证各接口函数正确性
+
+- [ ] 物理帧分配器 (Bitmap/Stack)
+
+#### 2.2 虚拟内存管理
+```
+kernel/mm/vmm/
+├── vmm.h            - 虚拟内存管理接口
+├── vmm.c            - 虚拟内存管理实现
+├── page.h           - 页表操作接口
+└── page.c           - 页表操作实现
+```
+- [ ] 页分配器 (kmalloc/kfree)
+- [ ] 页表管理函数 (map/unmap)
+- [ ] 页标志位管理 (R/W, U/S, NX)
+- [ ] 缺页异常处理集成
+- [ ] 用户空间/内核空间隔离
+
+#### 2.3 堆管理器
+```
+kernel/mm/heap/
+├── heap.h           - 堆管理接口
+└── heap.c           - 堆管理实现
+```
+- [ ] 内核堆初始化
+- [ ] malloc/free 实现
+- [ ] 内存碎片整理
+- [ ] 内存泄漏检测
+
 
 #### 1.1 页错误处理 (Vector 14)
 ```
@@ -63,47 +165,6 @@ kernel/debug/
 - [ ] 调试寄存器支持 (DR0-DR7)
 - [ ] 单步执行模式
 - [ ] 栈回溯自动触发
-
----
-
-### 第二阶段：内存管理完善 (3-4 周) ⭐ 第二优先级
-
-#### 2.1 物理内存管理
-```
-kernel/mm/pmm/
-├── pmm.h            - 物理内存管理接口
-├── pmm.c            - 物理内存管理实现
-└── e820.h           - E820 内存地图解析
-```
-- [ ] BIOS 内存地图解析 (INT 15h/E820)
-- [ ] 可用内存区域检测
-- [ ] 物理帧分配器 (Bitmap/Stack)
-- [ ] 内存统计与监控
-
-#### 2.2 虚拟内存管理
-```
-kernel/mm/vmm/
-├── vmm.h            - 虚拟内存管理接口
-├── vmm.c            - 虚拟内存管理实现
-├── page.h           - 页表操作接口
-└── page.c           - 页表操作实现
-```
-- [ ] 页分配器 (kmalloc/kfree)
-- [ ] 页表管理函数 (map/unmap)
-- [ ] 页标志位管理 (R/W, U/S, NX)
-- [ ] 缺页异常处理集成
-- [ ] 用户空间/内核空间隔离
-
-#### 2.3 堆管理器
-```
-kernel/mm/heap/
-├── heap.h           - 堆管理接口
-└── heap.c           - 堆管理实现
-```
-- [ ] 内核堆初始化
-- [ ] malloc/free 实现
-- [ ] 内存碎片整理
-- [ ] 内存泄漏检测
 
 ---
 

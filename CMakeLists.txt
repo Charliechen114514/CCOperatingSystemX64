@@ -99,6 +99,16 @@ configure_file(
 )
 
 # ============================================================================
+# 内存配置生成（Bootloader和内核共享）
+# ============================================================================
+include(cmake/MemConfig.cmake)
+
+# ============================================================================
+# Memory Size Configuration
+# ============================================================================
+include(cmake/MemSizeConfig.cmake)
+
+# ============================================================================
 # 子目录
 # ============================================================================
 add_subdirectory(boot)
@@ -183,72 +193,9 @@ add_custom_command(TARGET boot_img POST_BUILD
 )
 
 # ============================================================================
-# 运行目标
+# QEMU 运行目标配置
 # ============================================================================
-add_custom_target(run
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide -serial stdio
-    DEPENDS boot_img
-    COMMENT "Running CCOS in QEMU (text mode, no graphics)"
-    VERBATIM
-)
-
-# VGA运行目标（图形界面 - VNC backend）
-add_custom_target(vga-run
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -vga std -display vnc=:0
-    DEPENDS boot_img
-    COMMENT "Running CCOS in QEMU with VGA graphics (VNC backend, connect with: vncviewer localhost:5900)"
-    VERBATIM
-)
-
-# QEMU Monitor 运行目标（支持 QEMU Monitor 命令）
-# Monitor 通过 telnet localhost:4444 访问，与串口分离
-add_custom_target(qemu-monitor-run
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -monitor telnet:127.0.0.1:4444,server,nowait
-    DEPENDS boot_img
-    COMMENT "Running CCOS with Monitor on telnet port 4444 (connect with: telnet localhost 4444)"
-    VERBATIM
-)
-
-# 调试目标
-add_custom_target(debug
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide -serial stdio -nographic -s -S
-    DEPENDS boot_img
-    COMMENT "Running CCOS in QEMU (debug mode, connect with: gdb -ex 'target remote :1234')"
-    VERBATIM
-)
-
-# ============================================================================
-# 构建并运行目标（便捷快捷方式）
-# ============================================================================
-add_custom_target(build-and-vga-run
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${CMAKE_COMMAND} -E echo "Building CCOS..."
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${CMAKE_COMMAND} --build . --target boot_img
-    COMMAND ${CMAKE_COMMAND} -E echo ""
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${CMAKE_COMMAND} -E echo "Starting QEMU with VGA graphics (VNC)..."
-    COMMAND ${CMAKE_COMMAND} -E echo "Connect with: vncviewer localhost:5900"
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -vga std -display vnc=:0
-    COMMENT "Build and run CCOS in QEMU with VGA graphics (VNC backend)"
-    VERBATIM
-)
-
-add_custom_target(build-and-qemu-monitor-run
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${CMAKE_COMMAND} -E echo "Building CCOS..."
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${CMAKE_COMMAND} --build . --target boot_img
-    COMMAND ${CMAKE_COMMAND} -E echo ""
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${CMAKE_COMMAND} -E echo "Starting QEMU with Monitor on telnet:4444..."
-    COMMAND ${CMAKE_COMMAND} -E echo "Connect to Monitor: telnet localhost 4444"
-    COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${QEMU} -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img -serial stdio -monitor telnet:127.0.0.1:4444,server,nowait
-    COMMENT "Build and run CCOS with Monitor on telnet port 4444"
-    VERBATIM
-)
+include(cmake/QemuTargets.cmake)
 
 # ============================================================================
 # 安装目标（可选，用于生成ISO或部署）

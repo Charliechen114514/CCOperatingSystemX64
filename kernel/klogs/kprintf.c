@@ -11,8 +11,8 @@
 
 #include "kprintf.h"
 #include "backends/serial_backends.h"
-#include "private/format.h"
 #include "kprintf_config.h"
+#include "private/format.h"
 
 // Buffer for formatted output
 static char buffer[KPRINTF_BUFFER_SIZE];
@@ -32,10 +32,10 @@ bool klog_init(klog_backend_t backend) {
     klog_set_default_backend(backend);
 
     klog_trace("Klog Finished, attempt to send followings...\n");
-    klog_trace("========================================================");
+    klog_trace("========================================================\n");
     klog_trace("\tCurrent Filtered Level: %s\n", klog_level_name(g_log_level));
-    klog_trace("\tCached printf size: %d", KPRINTF_BUFFER_SIZE);
-    klog_trace("========================================================");
+    klog_trace("\tCached printf size: %d\n", KPRINTF_BUFFER_SIZE);
+    klog_trace("========================================================\n");
 
     return true;
 }

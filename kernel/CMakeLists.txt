@@ -93,6 +93,9 @@ endif()
 # 添加 shell 模块
 add_subdirectory(shell)
 
+# 添加 mm 内存管理模块
+add_subdirectory(mm)
+
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
 # the object files that reference their symbols
@@ -121,6 +124,9 @@ add_custom_command(
         # interrupt object files
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/idt.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/interrupt.c.o
+        # mm object files
+        ${CMAKE_CURRENT_BINARY_DIR}/mm/CMakeFiles/mm.dir/e820.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/mm/CMakeFiles/mm.dir/memory_state_helper.c.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)
@@ -152,6 +158,7 @@ add_custom_command(
         interrupt
         demo_rtc
         shell
+        mm
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM
@@ -195,6 +202,21 @@ add_custom_command(
         -o ${CMAKE_CURRENT_SOURCE_DIR}/stacktrace
     COMMAND ${CMAKE_COMMAND} -E touch ${SYMBOLS_EXTRACTED_STAMP}
     COMMENT "Extracting symbols from kernel.elf (triggering rebuild if changed)"
+    VERBATIM
+)
+
+# ============================================================================
+# Kernel Size and Memory Report
+# ============================================================================
+add_custom_command(
+    TARGET kernel
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        -DKERNEL_BIN=${CMAKE_BINARY_DIR}/kernel.bin
+        -DCCOS_MEMORY_SIZE_MB=${CCOS_MEMORY_SIZE_MB}
+        -DCCOS_MEMORY_SIZE_HUMAN=${CCOS_MEMORY_SIZE_HUMAN}
+        -P ${CMAKE_SOURCE_DIR}/cmake/KernelSizeReport.cmake
+    COMMENT "Generating kernel size and memory report"
     VERBATIM
 )
 

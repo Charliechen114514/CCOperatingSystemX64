@@ -14,7 +14,7 @@ static char g_format_buffer[KPRINTF_FORMAT_BUFFER_SIZE];
 /**
  * @brief Format string to buffer (internal vsnprintf implementation)
  *
- * Supports: %c, %s, %d/%i, %u, %x, %lx, %p
+ * Supports: %c, %s, %d/%i, %u, %x/%X, %lx/%lX, %p
  * Width/flags: %Nx, %0Nx, %-Ns (where N is width, - means left align)
  */
 int klog_format_string(char* buffer, size_t size, const char* format, va_list args) {
@@ -61,11 +61,15 @@ int klog_format_string(char* buffer, size_t size, const char* format, va_list ar
             p++;
         }
 
-        // Length modifier: 'l' for long (64-bit on x86_64)
+        // Length modifier: 'l' or 'll' for long long (64-bit)
         int is_long = 0;
         if (*p == 'l') {
             is_long = 1;
             p++;
+            // Check for 'll' (long long), treat same as 'l' on x86_64
+            if (*p == 'l') {
+                p++;
+            }
         }
 
         // Handle format specifiers
@@ -194,9 +198,22 @@ int klog_format_string(char* buffer, size_t size, const char* format, va_list ar
                 }
                 break;
             }
-            case 'x': {
+            case 'x':
+            case 'X': {
                 uint64_t val = is_long ? va_arg(args, uint64_t) : va_arg(args, unsigned int);
                 uitoa64(val, g_format_buffer, 16);
+
+                // Convert to uppercase if 'X' format
+                int uppercase = (*p == 'X');
+                if (uppercase) {
+                    char* s = g_format_buffer;
+                    while (*s != '\0') {
+                        if (*s >= 'a' && *s <= 'f') {
+                            *s = *s - 'a' + 'A';
+                        }
+                        s++;
+                    }
+                }
 
                 // Handle width padding
                 int len = 0;
