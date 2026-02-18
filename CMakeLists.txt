@@ -88,6 +88,9 @@ set(CCOS_FREESTANDING_FLAGS
     -nostartfiles
     -nodefaultlibs
     -mcmodel=large
+    -fno-pic
+    -fno-pie
+    -fno-plt
 )
 
 # ============================================================================
