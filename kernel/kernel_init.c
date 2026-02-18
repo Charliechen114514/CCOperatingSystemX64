@@ -101,7 +101,7 @@ void kernel_init(void) {
     // serial_shell_init_commands();  // Serial shell commands (time, ticks, echo, uart)
     // vga_shell_init_commands();     // VGA shell commands (cls, color, goto, keyboard)
     /* One must Ensure the backends have been bootified, else sucks! */
-    // bootAllWelcomes();
+    bootAllWelcomes();
     klog_trace("Boot Welcomes Done!\n");
     klog_info("kernel init finished!\n");
 }
