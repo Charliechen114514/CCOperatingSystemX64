@@ -10,6 +10,9 @@
 #include "klogs/kprintf_config.h"
 #include "mm/memory_detect/e820.h"
 #include "mm/pframe/pframe.h"
+#include "mm/vmm/fault.h"
+#include "mm/vmm/page.h"
+#include "mm/vmm/vmm.h"
 #include "shell/backends/serial_shell.h"
 #include "shell/backends/vga_shell.h"
 #include "welcomes/welcome.h"
@@ -51,6 +54,16 @@ void kernel_init(void) {
     pframe_init();
     pframe_dump();
 
+    // Initialize page table management
+    page_init();
+
+    // Initialize virtual memory manager
+    vmm_init();
+
+    // Initialize page fault handler
+    pf_init();
+
+    page_dump_pml4(page_get_pml4());
     /* One must Ensure the backends have been bootified, else sucks! */
     bootAllWelcomes();
     klog_trace("Boot Welcomes Done!\n");

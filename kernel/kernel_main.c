@@ -17,7 +17,7 @@ void run_possible_demos(void);
 // Simple kernel with more code to test multi-sector loading
 void kernel_main(void) {
     kernel_init();
-    klog_info("===Kernel Stage Init Reach End===");
+    klog_info("===Kernel Stage Init Reach End===\n");
     // Run enabled demos after system initialization is complete
     run_possible_demos();
 

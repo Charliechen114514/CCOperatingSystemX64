@@ -85,16 +85,38 @@ add_subdirectory(stacktrace)
 add_subdirectory(interrupt)
 
 # 添加 demo 演示模块（可选）
-option(CCOS_ENABLE_DEMO "Enable kernel demo programs" ON)
-if(CCOS_ENABLE_DEMO)
-    add_subdirectory(demo)
+# 定义各个 demo 的 option（需要在 add_subdirectory 之前定义，以便可以通过命令行设置）
+option(ENABLE_RTC_DEMO "Enable RTC driver demo" OFF)
+option(ENABLE_VMM_DEMO "Enable VMM demo" OFF)
+
+# 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO)
+    set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
+else()
+    option(CCOS_ENABLE_DEMO "Enable kernel demo programs" OFF)
 endif()
+
+# 始终添加 demo 子目录（基础 demo 库必须始终存在以提供 run_possible_demos 符号）
+add_subdirectory(demo)
 
 # 添加 shell 模块
 add_subdirectory(shell)
 
 # 添加 mm 内存管理模块
 add_subdirectory(mm)
+
+# Demo library is always built and linked (provides run_possible_demos symbol)
+# Collect all sub-demo libraries for explicit linking (static libs don't propagate deps)
+set(KERNEL_DEMO_LIBS $<TARGET_FILE:demo>)
+set(KERNEL_DEMO_DEPENDS demo)
+if(TARGET demo_rtc)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_rtc>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_rtc)
+endif()
+if(TARGET demo_vmm)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_vmm>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_vmm)
+endif()
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -136,9 +158,10 @@ add_custom_command(
         $<TARGET_FILE:stacktrace>
         $<TARGET_FILE:memory_detect>
         $<TARGET_FILE:pframe>
+        $<TARGET_FILE:kernel_vmm>
+        # Demo libraries (base + any enabled sub-demos)
+        ${KERNEL_DEMO_LIBS}
         --end-group
-        # Demo libraries (optional, added after main libs)
-        $<TARGET_FILE:demo_rtc>
         # Shell library
         $<TARGET_FILE:shell>
     DEPENDS
@@ -155,7 +178,7 @@ add_custom_command(
         welcomes
         stacktrace
         interrupt
-        demo_rtc
+        ${KERNEL_DEMO_DEPENDS}
         shell
         memory_detect
         pframe

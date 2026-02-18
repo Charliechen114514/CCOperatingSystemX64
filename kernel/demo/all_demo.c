@@ -11,6 +11,10 @@
 #    include "rtc/rtc_demo.h"
 #endif
 
+#ifdef VMM_DEMO_ENABLED
+#    include "vmm/vmm_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -28,6 +32,12 @@ void run_possible_demos(void) {
     rtc_run_demo();
 #    endif
 
+#    ifdef VMM_DEMO_ENABLED
+    klog_trace("[Demo Controller] VMM Demo is enabled, running...\n");
+    /* Run VMM demo without page fault test by default for safety */
+    vmm_run_demo(false); /* Set to true to test page fault handling */
+#    endif
+
     // Add more demos here as they are implemented
     // #ifdef TIMER_DEMO_ENABLED
     //     timer_run_demo();
@@ -41,5 +51,7 @@ void run_possible_demos(void) {
     klog_trace("║   Demo Controller Finished             ║\n");
     klog_trace("╚════════════════════════════════════════╝\n");
 #    endif
+#else
+    klog_trace("CCOS_ENABLE_DEMO is marking as disabled, jump the demo shell");
 #endif
 }

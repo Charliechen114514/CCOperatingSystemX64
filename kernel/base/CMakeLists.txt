@@ -6,6 +6,7 @@ add_library(base STATIC
     string.c
     memory.c
     strhelpers.c
+    stack_check.c
 )
 
 target_include_directories(base PUBLIC

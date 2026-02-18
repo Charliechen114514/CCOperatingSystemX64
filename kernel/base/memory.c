@@ -1,5 +1,6 @@
 #include "memory.h"
 #include "assert/assert.h"
+
 void* memset(void* s, int c, size_t n) {
     CCOS_DEBUG_ASSERT(s);
     char* asByteWrite = (char*)s;
