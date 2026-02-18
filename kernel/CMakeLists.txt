@@ -92,8 +92,10 @@ option(ENABLE_VMM_DEMO "Enable VMM demo" OFF)
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
 if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
-else()
-    option(CCOS_ENABLE_DEMO "Enable kernel demo programs" OFF)
+elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
+    # 只有在没有显式设置为 ON 的情况下才设置为 OFF
+    # 这样如果用户显式设置 -DCCOS_ENABLE_DEMO=ON，它不会被覆盖
+    set(CCOS_ENABLE_DEMO OFF CACHE BOOL "Enable kernel demo programs" FORCE)
 endif()
 
 # 始终添加 demo 子目录（基础 demo 库必须始终存在以提供 run_possible_demos 符号）
