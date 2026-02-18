@@ -8,22 +8,8 @@
 
 | 模块 | 完成度 | 状态 |
 |:----:|:------:|:----:|
-| 构建系统 | 100% | ✅ 完成 |
-| Bootloader | 100% | ✅ 完成 |
-| 内核启动 | 100% | ✅ 完成 |
-| VGA 驱动 | 100% | ✅ 完成 |
-| 串口驱动 | 100% | ✅ 完成 |
-| 日志系统 | 100% | ✅ 完成 |
-| Shell 系统 | 100% | ✅ 完成 |
-| RTC 驱动 | 100% | ✅ 完成 |
-| 调试支持 | 100% | ✅ 完成 |
-| 断言系统 | 100% | ✅ 完成 |
-| 基础库函数 | 100% | ✅ 完成 |
-| 栈回溯支持 | 100% | ✅ 完成 |
-| 内存管理 | 100% | ✅ 完成 |
 | 中断处理 | 90% | 🟢 部分完成 |
 | 进程管理 | 90% | 🟢 部分完成 |
-| 调度器框架 | 100% | ✅ 完成 |
 | 系统调用框架 | 95% | 🟢 部分完成 |
 | 用户态支持 | 85% | 🟢 部分完成 |
 | 用户态 C 库 | 80% | 🟢 部分完成 |
@@ -32,196 +18,6 @@
 ---
 
 ## 🔄 当前任务
-
-### 第五阶段：系统调用接口 (基本完成)
-
-#### 5.1 系统调用框架 ✅
-- syscall/sysret 指令支持
-- 系统调用分发机制
-- 中断/异常处理集成
-
-#### 5.2 基础系统调用 (大部分完成)
-- [x] sys_write - 写入标准输出
-- [x] sys_read - 读取标准输入 (框架已就绪)
-- [x] sys_exit - 进程退出
-- [x] sys_yield - 让出 CPU
-- [x] sys_getpid - 获取进程 ID
-- [x] sys_open - 打开文件 (框架已就绪，无文件系统返回错误)
-- [x] sys_close - 关闭文件描述符
-- [ ] sys_brk - 改变数据段大小 (框架已就绪)
-- [x] sys_getppid - 获取父进程 ID
-- [x] sys_fork - 创建新进程
-- [x] sys_wait4 - 等待子进程退出
-- [x] sys_uname - 获取系统信息
-- [x] sys_kill - 发送信号
-- [x] sys_getuid - 获取用户 ID
-- [x] sys_execve - 执行新程序 (基础框架)
-
-#### 下一步工作
-- [ ] 完善剩余系统调用实现 (brk)
-- [ ] ELF 程序加载器完善
-- [ ] 信号机制支持
-
----
-
-### 第六阶段：进程管理 (大部分完成)
-
-#### 6.1 进程控制块 ✅
-```
-kernel/process/
-├── process.h        - PCB 定义
-├── process.c        - PCB 管理
-├── process_defines.h - 进程类型定义
-├── switch.s         - 上下文切换汇编
-├── sched.h          - 调度器抽象接口
-└── sched.c          - 调度器核心实现
-```
-- [x] PCB 结构定义
-- [x] 进程状态 (Running/Ready/Blocked/Zombie)
-- [x] PID 分配器 (使用 bitmap)
-- [x] 进程创建与销毁 (fork, exit, wait4)
-- [x] 上下文切换实现 (switch_context, switch_to_first)
-- [x] 进程初始化
-- [x] Copy-on-Write fork 实现
-- [x] 内核栈管理
-- [x] 用户栈设置 (需要用户态支持)
-
-#### 6.2 调度器框架 ✅
-```
-kernel/process/
-├── sched.h          - 调度器抽象接口
-├── sched.c          - 调度器核心实现
-├── sched_rr.h/c     - Round-Robin 调度算法
-└── sched_prio.h/c   - 优先级调度算法
-```
-- [x] 调度器抽象类设计 (sched_class)
-- [x] Round-Robin 调度算法 (SCHED_NORMAL)
-- [x] 优先级调度算法 (SCHED_PRIORITY)
-- [x] Active/Expired 队列机制 (优先级调度)
-- [x] 时间片管理
-- [x] 进程队列管理 (运行队列/等待队列)
-- [x] 调度器注册与切换机制
-- [x] 抢占式调度支持
-- [ ] 多核调度支持 (需要 APIC)
-
-#### 6.3 进程管理 Demo ✅
-```
-kernel/demo/process_simple/
-├── process_demo.h   - Demo 接口
-└── process_demo.c   - Demo 实现
-
-kernel/demo/sched/
-├── sched_demo.h     - 调度器 Demo 接口
-└── sched_demo.c     - 调度器 Demo 实现
-```
-- [x] PID 分配测试
-- [x] PCB 分配测试
-- [x] 进程状态测试
-- [x] 调度器初始化测试
-- [x] PCB 列表管理测试
-- [x] 内核栈管理测试
-- [x] 内存上下文测试
-- [x] Round-Robin 调度演示
-- [x] 优先级调度演示
-- [x] 多进程协作演示
-
-#### 6.4 进程间通信
-- [ ] 简单消息队列
-- [ ] 共享内存 (可选)
-- [ ] 信号量机制 (可选)
-
----
-
-### 第八阶段：用户态支持 (大部分完成)
-
-#### 8.1 用户模式框架 ✅
-```
-kernel/user/
-├── user.h           - 用户态支持接口
-├── user.c           - 用户态支持实现
-└── user_enter.asm   - Ring 3 切换汇编
-```
-- [x] 用户态特权级 (Ring 3) 支持
-- [x] 用户态内存映射 (USER_BASE ~ USER_END)
-- [x] 用户栈设置 (USER_STACK_SIZE = 1MB)
-- [x] 用户态与内核态切换 (iretq/syscall)
-- [x] 安全内存访问 (user_validate_pointer)
-- [x] 用户内存拷贝 (user_copy_from_user/to_user)
-- [x] 用户内存区域管理
-- [ ] 用户程序加载器 (ELF) - 基础框架已就绪
-
-#### 8.2 用户态 C 库 ✅
-```
-user/
-├── include/         - 用户态头文件
-│   ├── stdio.h      - 标准 I/O
-│   ├── stdlib.h     - 标准库
-│   ├── stddef.h     - 类型定义
-│   ├── stdint.h     - 整数类型
-│   └── unistd.h     - POSIX 系统调用
-├── src/             - C 库实现
-│   ├── stdio.c      - printf/puts
-│   ├── stdlib.c     - malloc/exit
-│   └── unistd.c     - 系统调用封装
-├── syscall/         - 系统调用实现
-│   └── x86_64/syscall.c - 内联汇编系统调用
-└── programs/        - 用户程序
-    └── demo/uname_test.c - uname 示例程序
-```
-- [x] 标准 I/O 函数 (printf, puts, putchar)
-- [x] 标准库函数 (malloc, free, exit)
-- [x] POSIX 系统调用封装 (write, read, fork, etc.)
-- [x] 符号重命名机制 (避免与内核符号冲突)
-- [x] 用户程序构建系统
-- [x] 内核嵌入用户程序 (uname_test)
-- [ ] 完整的 malloc 实现
-
-#### 8.3 用户态 Demo ✅
-```
-kernel/demo/user/
-├── user_demo.h      - 用户态 Demo 接口
-└── user_demo.c      - 用户态 Demo 实现
-```
-- [x] Ring 3 进程创建演示
-- [x] 用户态系统调用演示
-- [x] 用户态内存访问演示
-- [x] uname_test 用户程序演示
-
-#### 8.4 Shell 扩展功能
-- [x] 基础 Shell 框架与命令解析
-- [x] 内置命令 (help, clear, time, echo, etc.)
-- [ ] 管道支持
-- [ ] 后台任务
-- [ ] 命令历史记录
-
----
-
-### 第九阶段：调试与文档 ✅
-
-#### 9.1 调试工具增强 ✅
-```
-kernel/stacktrace/
-├── symbols.h        - 符号表接口
-└── symbols.c        - 符号查询实现
-```
-- [x] 增强的符号表解析
-- [x] 地址到符号名转换
-- [x] BSS 段过大问题排查与修复
-- [x] Debug 模式稳定性改进
-
-#### 9.2 技术文档 ✅
-```
-document/experience/
-└── bss-segment-crash-debugging.md - BSS 段调试报告
-```
-- [x] BSS 段过大导致内核启动失败排查报告
-- [x] 符号表分析方法文档化
-
----
-
-## 📋 未来规划
-
-### 第七阶段：文件系统 (4-6 周)
 
 #### 7.1 磁盘驱动
 ```
@@ -245,6 +41,35 @@ kernel/fs/
 - [ ] 路径解析
 
 ---
+
+#### 其他杂项
+- [ ] 完善剩余系统调用实现 (brk)
+- [ ] ELF 程序加载器完善
+- [ ] 信号机制支持
+- [ ] 多核调度支持 (需要 APIC)
+- [ ] 若干进程同步机制
+- [ ] 简单消息队列
+- [ ] 共享内存 (可选)
+- [ ] 信号量机制 (可选)
+- [ ] 用户程序加载器 (ELF) - 基础框架已就绪
+- [ ] 完整的 malloc 实现
+#### Shell 扩展功能
+- [ ] 管道支持
+- [ ] 后台任务
+- [ ] 命令历史记录
+
+---
+
+### 第九阶段：调试与文档 ✅
+
+
+---
+
+## 📋 未来规划
+
+### 第七阶段：文件系统 (4-6 周)
+
+
 
 ### 第三阶段：中断子系统架构升级 (2-3 周)
 
@@ -335,63 +160,5 @@ kernel/interrupt/apic/
 - [ ] VBE/EFI 图形模式
 - [ ] 基本窗口管理器
 - [ ] 图形库
-
----
-
-## 📝 最近更新
-
-### 2026-02-18 (stage/23_usr_proc - 用户态进程支持)
-- ✅ 完成用户态进程框架
-  - Ring 3 特权级切换实现 (user_enter.asm)
-  - 用户态内存映射与安全访问验证
-  - 用户栈管理 (1MB 栈空间)
-  - 用户态到内核态的内存拷贝函数
-- ✅ 实现用户态 C 库
-  - 标准 I/O (printf, puts, putchar)
-  - 标准库 (malloc, free, exit)
-  - POSIX 系统调用封装
-  - 符号重命名机制 (避免与内核冲突)
-- ✅ 创建用户程序构建系统
-  - 用户程序编译为二进制并嵌入内核
-  - uname_test 示例程序
-  - freestanding 编译配置
-- ✅ 系统调用完善
-  - 新增 sys_uname (获取系统信息)
-  - 新增 sys_kill (信号发送)
-  - 新增 sys_getuid
-  - 新增 sys_execve 框架
-  - 完善 sys_read, sys_open 返回值
-- ✅ 调试与稳定性改进
-  - BSS 段过大问题排查与修复 (symbols.c 优化)
-  - 调试文档: bss-segment-crash-debugging.md
-  - 符号表解析增强
-
-### 2026-02-18 (stage/22_sched_class - 调度器类框架)
-- ✅ 完成模块化调度器框架设计
-  - 调度器抽象类 (sched_class_t) 设计
-  - 策略枚举 (SCHED_NORMAL, SCHED_PRIORITY)
-  - 调度器注册与切换机制
-- ✅ 实现 Round-Robin 调度算法
-  - FIFO 队列管理
-  - 固定时间片 (10ms)
-  - enqueue_task/dequeue_task/pick_next_task 实现
-- ✅ 实现优先级调度算法
-  - 128 级优先级 (0-127)
-  - Active/Expired 队列机制
-  - 基于优先级的时间片分配
-  - 优先级抢占支持
-- ✅ 新增调度器演示程序 (kernel/demo/sched/)
-  - Round-Robin 调度演示
-  - 优先级调度演示
-  - 多进程协作演示
-- ✅ 完善进程管理与调度器的集成
-  - 进程调度策略支持
-  - sched_rq 数据结构
-  - 时间片到期处理 (task_tick)
-
-### 2026-02-XX (早期阶段)
-- 完成系统调用框架基础实现
-- 实现多个核心系统调用 (write, exit, fork, wait4, yield)
-- 进程管理模块基础功能完成
 
 ---
