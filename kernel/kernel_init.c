@@ -8,6 +8,7 @@
 #include "interrupt/interrupt.h"
 #include "klogs/kprintf.h"
 #include "klogs/kprintf_config.h"
+#include "mm/heap/heap.h"
 #include "mm/memory_detect/e820.h"
 #include "mm/pframe/pframe.h"
 #include "mm/vmm/fault.h"
@@ -52,7 +53,6 @@ void kernel_init(void) {
 
     // Initialize physical frame allocator
     pframe_init();
-    pframe_dump();
 
     // Initialize page table management
     page_init();
@@ -63,7 +63,7 @@ void kernel_init(void) {
     // Initialize page fault handler
     pf_init();
 
-    page_dump_pml4(page_get_pml4());
+    heap_init();
     /* One must Ensure the backends have been bootified, else sucks! */
     bootAllWelcomes();
     klog_trace("Boot Welcomes Done!\n");

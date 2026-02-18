@@ -22,7 +22,7 @@ void kernel_main(void) {
     run_possible_demos();
 
     // serial_shell_run();
-    vga_shell_run();
+    // vga_shell_run();
     while (1) {
         __asm__ volatile("hlt");
     }

@@ -91,6 +91,37 @@ else()
     message(STATUS "VMM Demo: DISABLED")
 endif()
 
+# Heap Demo
+if(ENABLE_HEAP_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "HEAP")
+    message(STATUS "Heap Demo: ENABLED")
+
+    add_library(demo_heap STATIC heap/heap_demo.c)
+
+    target_include_directories(demo_heap PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_heap PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_heap PUBLIC HEAP_DEMO_ENABLED=1)
+
+    # Heap demo 依赖 klogs 和 kernel_heap
+    target_link_libraries(demo_heap PUBLIC klogs kernel_heap base)
+
+    set_target_properties(demo_heap PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 Heap demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_heap)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC HEAP_DEMO_ENABLED=1)
+else()
+    message(STATUS "Heap Demo: DISABLED")
+endif()
+
 # 根据 CCOS_ENABLE_DEMO 定义编译宏
 # 只有在启用时才定义宏，这样 #ifdef CCOS_ENABLE_DEMO 才能正确工作
 if(CCOS_ENABLE_DEMO)

@@ -15,6 +15,10 @@
 #    include "vmm/vmm_demo.h"
 #endif
 
+#ifdef HEAP_DEMO_ENABLED
+#    include "heap/heap_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -36,6 +40,11 @@ void run_possible_demos(void) {
     klog_trace("[Demo Controller] VMM Demo is enabled, running...\n");
     /* Run VMM demo without page fault test by default for safety */
     vmm_run_demo(false); /* Set to true to test page fault handling */
+#    endif
+
+#    ifdef HEAP_DEMO_ENABLED
+    klog_trace("[Demo Controller] Heap Demo is enabled, running...\n");
+    heap_run_demo();
 #    endif
 
     // Add more demos here as they are implemented

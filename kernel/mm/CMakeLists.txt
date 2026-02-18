@@ -11,6 +11,9 @@ add_subdirectory(pframe)
 # Add virtual memory manager subdirectory
 add_subdirectory(vmm)
 
+# Add heap allocator subdirectory
+add_subdirectory(heap)
+
 # Create the mm library as an interface library that aggregates memory components
 add_library(mm INTERFACE)
 # This is an interface library - no sources, just links the sub-libraries
@@ -18,6 +21,7 @@ target_link_libraries(mm INTERFACE
     memory_detect
     pframe
     kernel_vmm
+    kernel_heap
 )
 
 target_include_directories(mm INTERFACE

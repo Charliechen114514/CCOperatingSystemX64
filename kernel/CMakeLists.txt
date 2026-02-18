@@ -88,9 +88,10 @@ add_subdirectory(interrupt)
 # 定义各个 demo 的 option（需要在 add_subdirectory 之前定义，以便可以通过命令行设置）
 option(ENABLE_RTC_DEMO "Enable RTC driver demo" OFF)
 option(ENABLE_VMM_DEMO "Enable VMM demo" OFF)
+option(ENABLE_HEAP_DEMO "Enable Heap allocator demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -118,6 +119,10 @@ endif()
 if(TARGET demo_vmm)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_vmm>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_vmm)
+endif()
+if(TARGET demo_heap)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_heap>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_heap)
 endif()
 
 # 链接内核ELF
@@ -161,6 +166,7 @@ add_custom_command(
         $<TARGET_FILE:memory_detect>
         $<TARGET_FILE:pframe>
         $<TARGET_FILE:kernel_vmm>
+        $<TARGET_FILE:kernel_heap>
         # Demo libraries (base + any enabled sub-demos)
         ${KERNEL_DEMO_LIBS}
         --end-group
@@ -184,6 +190,7 @@ add_custom_command(
         shell
         memory_detect
         pframe
+        kernel_heap
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"
     VERBATIM

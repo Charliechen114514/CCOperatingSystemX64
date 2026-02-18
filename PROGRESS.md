@@ -32,85 +32,13 @@
 ### 内存管理完善
 
 #### 待完成任务
-- [ ] 堆管理器 (kmalloc/kfree 实现)
+- [x] 堆管理器 (kmalloc/kfree 实现)
 - [ ] Copy-on-Write 完整实现
 - [ ] 按需分页完整实现
 - [ ] 异常恢复机制 (GPF/Stack Fault/Double Fault)
 
 ---
 
-## 📋 未来规划
-
-### 第三阶段：中断子系统架构升级 (2-3 周)
-
-#### 3.1 分层抽象接口
-```
-kernel/interrupt/
-├── intr.h           - 中断抽象层接口
-└── intr.c           - 中断抽象层实现
-```
-```c
-// 统一的中断注册接口
-int intr_request_irq(uint8_t irq, intr_handler_fn handler,
-                     const char* name, intr_flags_t flags);
-void intr_free_irq(uint8_t irq, intr_handler_fn handler);
-void intr_enable_irq(uint8_t irq);
-void intr_disable_irq(uint8_t irq);
-```
-
-#### 3.2 中断描述符管理增强
-- [ ] 处理器链表 (支持共享 IRQ)
-- [ ] 中断计数和伪中断检测
-- [ ] 优先级管理
-
-#### 3.3 软中断支持
-```
-kernel/interrupt/
-├── softirq.h        - 软中断接口
-└── softirq.c        - 软中断实现
-```
-```c
-#define SOFTIRQ_SCHED   0  // 调度器
-#define SOFTIRQ_NET     1  // 网络栈
-#define SOFTIRQ_TIMER   2  // 定时器软中断
-```
-- [ ] 软中断注册接口
-- [ ] 软中断触发机制
-- [ ] 软中断处理 (在硬中断退出时调用)
-
-#### 3.4 中断优先级与嵌套
-- [ ] 中断优先级定义 (LOW/NORMAL/HIGH/CRITICAL)
-- [ ] 中断嵌套计数器
-- [ ] 高优先级中断可抢占低优先级
-
----
-
-### 第四阶段：APIC 与多核准备 (4-6 周)
-
-#### 4.1 Local APIC
-```
-kernel/interrupt/apic/
-├── local_apic.c/h   - Local APIC 驱动
-└── lapic_constants.h - LAPIC 寄存器定义
-```
-- [ ] Local APIC 初始化
-- [ ] 定时器中断配置
-- [ ] IPI (Inter-Processor Interrupt) 支持
-
-#### 4.2 I/O APIC
-```
-kernel/interrupt/apic/
-├── io_apic.c/h      - I/O APIC 驱动
-└── ioapic_constants.h - IOAPIC 寄存器定义
-```
-- [ ] I/O APIC 初始化
-- [ ] IRQ 重映射配置
-- [ ] 中断路由设置
-
-#### 4.3 多核中断支持
-- [ ] 中断亲和性设置
-- [ ] 多核中断分发
-- [ ] SMP 初始化
 
 ---
 
@@ -216,6 +144,80 @@ kernel/user/
 
 ---
 
+## 📋 未来规划
+
+### 第三阶段：中断子系统架构升级 (2-3 周)
+
+#### 3.1 分层抽象接口
+```
+kernel/interrupt/
+├── intr.h           - 中断抽象层接口
+└── intr.c           - 中断抽象层实现
+```
+```c
+// 统一的中断注册接口
+int intr_request_irq(uint8_t irq, intr_handler_fn handler,
+                     const char* name, intr_flags_t flags);
+void intr_free_irq(uint8_t irq, intr_handler_fn handler);
+void intr_enable_irq(uint8_t irq);
+void intr_disable_irq(uint8_t irq);
+```
+
+#### 3.2 中断描述符管理增强
+- [ ] 处理器链表 (支持共享 IRQ)
+- [ ] 中断计数和伪中断检测
+- [ ] 优先级管理
+
+#### 3.3 软中断支持
+```
+kernel/interrupt/
+├── softirq.h        - 软中断接口
+└── softirq.c        - 软中断实现
+```
+```c
+#define SOFTIRQ_SCHED   0  // 调度器
+#define SOFTIRQ_NET     1  // 网络栈
+#define SOFTIRQ_TIMER   2  // 定时器软中断
+```
+- [ ] 软中断注册接口
+- [ ] 软中断触发机制
+- [ ] 软中断处理 (在硬中断退出时调用)
+
+#### 3.4 中断优先级与嵌套
+- [ ] 中断优先级定义 (LOW/NORMAL/HIGH/CRITICAL)
+- [ ] 中断嵌套计数器
+- [ ] 高优先级中断可抢占低优先级
+
+---
+
+### 第四阶段：APIC 与多核准备 (4-6 周)
+
+#### 4.1 Local APIC
+```
+kernel/interrupt/apic/
+├── local_apic.c/h   - Local APIC 驱动
+└── lapic_constants.h - LAPIC 寄存器定义
+```
+- [ ] Local APIC 初始化
+- [ ] 定时器中断配置
+- [ ] IPI (Inter-Processor Interrupt) 支持
+
+#### 4.2 I/O APIC
+```
+kernel/interrupt/apic/
+├── io_apic.c/h      - I/O APIC 驱动
+└── ioapic_constants.h - IOAPIC 寄存器定义
+```
+- [ ] I/O APIC 初始化
+- [ ] IRQ 重映射配置
+- [ ] 中断路由设置
+
+#### 4.3 多核中断支持
+- [ ] 中断亲和性设置
+- [ ] 多核中断分发
+- [ ] SMP 初始化
+
+
 ### 第九阶段：高级特性 (长期)
 
 #### 9.1 高级中断特性
@@ -232,28 +234,5 @@ kernel/user/
 - [ ] VBE/EFI 图形模式
 - [ ] 基本窗口管理器
 - [ ] 图形库
-
----
-
-## 🔮 未来展望
-
-### 短期目标 (3-6 个月)
-- ✅ 完成中断处理框架 (基础部分完成 90%)
-- ✅ 阶段 1: 基础硬件中断 (键盘/串口/RTC/Shell) - 已完成
-- ✅ 阶段 2: 异常处理增强 (页错误处理完成)
-- ✅ 阶段 3: 内存管理完善 (E820/物理帧/VMM/页表完成)
-- 🟡 阶段 4: 堆管理器与异常恢复机制
-
-### 中期目标 (6-12 个月)
-- 📋 实现 APIC 与多核支持
-- 📋 添加系统调用接口
-- 📋 实现进程调度器
-- 📋 支持用户态程序
-
-### 长期目标 (1-2 年)
-- 🌟 实现 FAT32 文件系统
-- 🌟 实现 TCP/IP 网络协议栈
-- 🌟 图形界面 (GUI)
-- 🌟 完整的多任务操作系统
 
 ---
