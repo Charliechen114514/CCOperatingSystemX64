@@ -21,6 +21,7 @@
 #include "mm/vmm/vmm.h"
 #include "shell/backends/serial_shell.h"
 #include "shell/backends/vga_shell.h"
+#include "syscall/syscall.h"
 #include "welcomes/welcome.h"
 
 // Forward declaration for demo controller (always available, checks internally)
@@ -70,10 +71,15 @@ void kernel_init(void) {
     gdt_init(); /* Initialize GDT and load TSS */
 
     // Phase 2: Initialize interrupt subsystem (PIC + IDT, but interrupts disabled)
+    // NOTE: syscall_init is moved after interrupt_init to ensure IDT is ready
+    // in case any MSR/CR4 operations trigger exceptions.
     interrupt_init();
 
     // Phase 3: Register exception handlers
     exception_init(); /* Register DF, SS, GP handlers */
+
+    // Phase 3.5: Initialize system call framework (after IDT and exception handlers)
+    syscall_init(); /* Initialize syscall/sysret framework */
 
     // Phase 4: Initialize COW subsystem (depends on hashmap and heap)
     cow_init(); /* Initialize copy-on-write tracking */

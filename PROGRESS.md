@@ -20,8 +20,9 @@
 | 断言系统 | 100% | ✅ 完成 |
 | 基础库函数 | 100% | ✅ 完成 |
 | 栈回溯支持 | 100% | ✅ 完成 |
+| 内存管理 | 100% | ✅ 完成 |
+| 系统调用框架 | 70% | 🟢 部分完成 |
 | 中断处理 | 90% | 🟢 部分完成 |
-| 内存管理 | 60% | 🟢 部分完成 |
 | 进程管理 | 0% | 🔴 未开始 |
 | 文件系统 | 0% | 🔴 未开始 |
 
@@ -29,39 +30,53 @@
 
 ## 🔄 当前任务
 
-### 内存管理完善
+### 第五阶段：系统调用接口 (进行中)
 
-#### 待完成任务
-- [x] 堆管理器 (kmalloc/kfree 实现)
-- [x] Copy-on-Write 完整实现
-
-- [x] 异常恢复机制 (GPF/Stack Fault/Double Fault)
-
----
-
-
----
-
-### 第五阶段：系统调用接口 (2-3 周)
-
-#### 5.1 系统调用框架
+#### 5.1 系统调用框架 ✅
 ```
 kernel/syscall/
-├── syscall.h        - 系统调用接口
-├── syscall.c        - 系统调用实现
-└── syscall_numbers.h - 系统调用号定义
+├── syscall.h            - 系统调用接口
+├── syscall.c            - 系统调用实现
+├── syscall.asm          - 系统调用汇编入口
+├── syscall_numbers.h    - 系统调用号定义
+└── syscall_table.c      - 系统调用表
 ```
-- [ ] 系统调用号定义
-- [ ] syscall/sysret 指令实现
-- [ ] 用户态/内核态切换
-- [ ] 参数传递约定
+- [x] 系统调用号定义
+- [x] syscall/sysret 指令实现
+- [x] 用户态/内核态切换
+- [x] 参数传递约定 (System V AMD64 ABI)
+- [x] MSR 配置 (IA32_LSTAR, IA32_STAR, IA32_FMASK)
+- [x] int 0x80 传统接口回退支持
+- [x] 系统调用统计功能
 
-#### 5.2 基础系统调用
-- [ ] sys_write - 写入标准输出
-- [ ] sys_read - 读取标准输入
-- [ ] sys_exit - 进程退出
+#### 5.2 基础系统调用 (部分完成)
+- [x] sys_write - 写入标准输出
+- [ ] sys_read - 读取标准输入 (框架已就绪)
+- [x] sys_exit - 进程退出
 - [ ] sys_yield - 让出 CPU
-- [ ] sys_getpid - 获取进程 ID
+- [x] sys_getpid - 获取进程 ID
+- [ ] sys_open - 打开文件 (框架已就绪)
+- [x] sys_close - 关闭文件描述符
+- [ ] sys_brk - 改变数据段大小 (框架已就绪)
+- [x] sys_getppid - 获取父进程 ID
+
+#### 5.3 测试与验证 ✅
+```
+kernel/demo/mock_syscall/
+├── mock_syscall_demo.h
+└── mock_syscall_demo.c
+```
+- [x] MSR 配置验证测试
+- [x] 系统调用分发测试
+- [x] 多参数传递测试
+- [x] 错误处理测试
+- [x] 统计功能测试
+
+#### 下一步工作
+- [ ] 完善更多基础系统调用实现
+- [ ] 用户态进程支持
+- [ ] 系统调用安全性验证
+- [ ] 与调度器集成
 
 ---
 

@@ -153,6 +153,37 @@ else()
     message(STATUS "COW Demo: DISABLED")
 endif()
 
+# Mock Syscall Demo
+if(ENABLE_MOCK_SYSCALL_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "MOCK_SYSCALL")
+    message(STATUS "Mock Syscall Demo: ENABLED")
+
+    add_library(demo_mock_syscall STATIC mock_syscall/mock_syscall_demo.c)
+
+    target_include_directories(demo_mock_syscall PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_mock_syscall PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_mock_syscall PUBLIC MOCK_SYSCALL_DEMO_ENABLED=1)
+
+    # Mock syscall demo 依赖 syscall 模块
+    target_link_libraries(demo_mock_syscall PUBLIC syscall klogs)
+
+    set_target_properties(demo_mock_syscall PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 mock_syscall demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_mock_syscall)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC MOCK_SYSCALL_DEMO_ENABLED=1)
+else()
+    message(STATUS "Mock Syscall Demo: DISABLED")
+endif()
+
 # 根据 CCOS_ENABLE_DEMO 定义编译宏
 # 只有在启用时才定义宏，这样 #ifdef CCOS_ENABLE_DEMO 才能正确工作
 if(CCOS_ENABLE_DEMO)

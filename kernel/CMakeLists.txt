@@ -35,6 +35,17 @@ add_custom_command(
     VERBATIM
 )
 
+# System call assembly stubs
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/syscall_asm.o
+    COMMAND ${NASM} -f elf64
+        ${CMAKE_CURRENT_SOURCE_DIR}/syscall/syscall.asm
+        -o ${CMAKE_BINARY_DIR}/syscall_asm.o
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/syscall/syscall.asm
+    COMMENT "Building syscall assembly stubs"
+    VERBATIM
+)
+
 # C内核主文件
 # 使用 OBJECT 库类型便于未来扩展
 add_library(kernel_main OBJECT
@@ -95,15 +106,19 @@ add_subdirectory(stacktrace)
 # 添加 interrupt 中断子系统模块
 add_subdirectory(interrupt)
 
+# 添加 syscall 系统调用模块
+add_subdirectory(syscall)
+
 # 添加 demo 演示模块（可选）
 # 定义各个 demo 的 option（需要在 add_subdirectory 之前定义，以便可以通过命令行设置）
 option(ENABLE_RTC_DEMO "Enable RTC driver demo" OFF)
 option(ENABLE_VMM_DEMO "Enable VMM demo" OFF)
 option(ENABLE_HEAP_DEMO "Enable Heap allocator demo" OFF)
 option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" OFF)
+option(ENABLE_MOCK_SYSCALL_DEMO "Enable System Call mock demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -140,6 +155,10 @@ if(TARGET demo_cow)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_cow>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_cow)
 endif()
+if(TARGET demo_mock_syscall)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_mock_syscall>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_mock_syscall)
+endif()
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -160,6 +179,8 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/interrupt_asm.o
         # gdt/tss assembly helpers
         ${CMAKE_BINARY_DIR}/gdt_asm.o
+        # syscall assembly stubs
+        ${CMAKE_BINARY_DIR}/syscall_asm.o
         # klogs object files
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/klogs/CMakeFiles/klogs.dir/kprintf_backends.c.o
@@ -174,6 +195,9 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/tss.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/gdt.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/interrupt/CMakeFiles/interrupt.dir/exception.c.o
+        # syscall object files
+        ${CMAKE_CURRENT_BINARY_DIR}/syscall/CMakeFiles/syscall.dir/syscall.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/syscall/CMakeFiles/syscall.dir/syscall_table.c.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)
@@ -197,6 +221,7 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/kernel_entry.o
         ${CMAKE_BINARY_DIR}/interrupt_asm.o
         ${CMAKE_BINARY_DIR}/gdt_asm.o
+        ${CMAKE_BINARY_DIR}/syscall_asm.o
         kernel_main
         assert
         base
@@ -208,6 +233,7 @@ add_custom_command(
         welcomes
         stacktrace
         interrupt
+        syscall
         ${KERNEL_DEMO_DEPENDS}
         shell
         memory_detect

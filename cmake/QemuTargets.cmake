@@ -3,7 +3,16 @@
 # ==============================================================================
 # 此文件定义所有 QEMU 相关的运行目标
 # 内存大小通过 CCOS_QEMU_MEMORY_ARG 变量配置（来自 MemSizeConfig.cmake）
+# CPU 配置通过 CCOS_QEMU_CPU_FLAG 变量配置
 # ==============================================================================
+
+# ============================================================================
+# QEMU 配置参数
+# ============================================================================
+
+# CPU 配置：使用 -cpu max 启用所有 CPU 功能（包括 syscall/sysret）
+# 可选值: qemu64 (默认), max (所有功能), host (主机功能), 具体型号如 IvyBridge
+set(CCOS_QEMU_CPU_FLAG -cpu max CACHE STRING "QEMU CPU flags")
 
 # ============================================================================
 # 运行目标
@@ -11,7 +20,7 @@
 
 # 基础运行目标（文本模式，串口输出）
 add_custom_target(run
-    COMMAND ${QEMU} -m ${CCOS_QEMU_MEMORY_ARG}
+    COMMAND ${QEMU} -cpu max -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide
         -serial stdio
     DEPENDS boot_img
@@ -21,7 +30,7 @@ add_custom_target(run
 
 # VGA运行目标（图形界面 - VNC backend）
 add_custom_target(vga-run
-    COMMAND ${QEMU} -m ${CCOS_QEMU_MEMORY_ARG}
+    COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
         -serial stdio
         -vga std
@@ -33,7 +42,7 @@ add_custom_target(vga-run
 
 # QEMU Monitor 运行目标（Monitor 通过 telnet localhost:4444 访问）
 add_custom_target(qemu-monitor-run
-    COMMAND ${QEMU} -m ${CCOS_QEMU_MEMORY_ARG}
+    COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
         -serial stdio
         -monitor telnet:127.0.0.1:4444,server,nowait
@@ -44,7 +53,7 @@ add_custom_target(qemu-monitor-run
 
 # 调试目标
 add_custom_target(debug
-    COMMAND ${QEMU} -m ${CCOS_QEMU_MEMORY_ARG}
+    COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide
         -serial stdio
         -nographic
@@ -69,7 +78,7 @@ add_custom_target(build-and-vga-run
     COMMAND ${CMAKE_COMMAND} -E echo "Connect with: vncviewer localhost:5900"
     COMMAND ${CMAKE_COMMAND} -E echo "Memory: ${CCOS_MEMORY_SIZE_HUMAN}"
     COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${QEMU} -m ${CCOS_QEMU_MEMORY_ARG}
+    COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
         -vga std
         -display vnc=:0
@@ -88,7 +97,7 @@ add_custom_target(build-and-qemu-monitor-run
     COMMAND ${CMAKE_COMMAND} -E echo "Monitor: telnet localhost 4444"
     COMMAND ${CMAKE_COMMAND} -E echo "Memory: ${CCOS_MEMORY_SIZE_HUMAN}"
     COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
-    COMMAND ${QEMU} -m ${CCOS_QEMU_MEMORY_ARG}
+    COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
         -serial stdio
         -monitor telnet:127.0.0.1:4444,server,nowait
@@ -102,7 +111,7 @@ add_custom_target(build-and-qemu-monitor-run
 
 # 仅运行（不重新构建）
 add_custom_target(run-only
-    COMMAND ${QEMU} -m ${CCOS_QEMU_MEMORY_ARG}
+    COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide
         -serial stdio
     DEPENDS boot_img

@@ -23,6 +23,10 @@
 #    include "cow/cow_demo.h"
 #endif
 
+#ifdef MOCK_SYSCALL_DEMO_ENABLED
+#    include "mock_syscall/mock_syscall_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -54,6 +58,11 @@ void run_possible_demos(void) {
 #    ifdef COW_DEMO_ENABLED
     klog_trace("[Demo Controller] COW Demo is enabled, running...\n");
     cow_run_demo();
+#    endif
+
+#    ifdef MOCK_SYSCALL_DEMO_ENABLED
+    klog_trace("[Demo Controller] Mock Syscall Demo is enabled, running...\n");
+    mock_syscall_run_demo();
 #    endif
 
     // Add more demos here as they are implemented

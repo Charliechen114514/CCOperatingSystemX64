@@ -15,6 +15,9 @@ BOOT_IMG="$BUILD_DIR/boot.img"
 PID_FILE="$SCRIPT_DIR/.qemu_debug.pid"
 SERIAL_LOG="$SCRIPT_DIR/.qemu_serial.log"
 
+# QEMU CPU 配置（需要支持 syscall/sysret，使用 max 启用所有功能）
+QEMU_CPU_FLAG="-cpu max"
+
 # 颜色输出
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -23,12 +26,42 @@ RED='\033[0;31m'
 GRAY='\033[0;90m'
 NC='\033[0m' # No Color
 
+# 解析额外的 CMake -D 选项
+parse_cmake_flags() {
+    EXTRA_CMAKE_FLAGS=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -D*)
+                EXTRA_CMAKE_FLAGS="$EXTRA_CMAKE_FLAGS $1"
+                shift
+                ;;
+            *)
+                echo -e "${RED}未知选项: $1${NC}"
+                echo
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+
+    # 打印传递的额外 flags
+    if [ -n "$EXTRA_CMAKE_FLAGS" ]; then
+        echo -e "${YELLOW}检测到额外的 CMake flags:${NC}"
+        for flag in $EXTRA_CMAKE_FLAGS; do
+            echo -e "${GRAY}  - $flag${NC}"
+        done
+    else
+        echo -e "${GRAY}未提供额外的 CMake flags${NC}"
+    fi
+}
+
 # 显示帮助信息
 show_help() {
     echo "CCOS QEMU 调试服务器启动脚本"
     echo ""
     echo "用法:"
     echo "  $0                          启动 QEMU（自动监控 GDB 连接）"
+    echo "  $0 -D<FLAG>=<VALUE>        启动 QEMU 并传递额外的 CMake 选项"
     echo "  $0 --stop                   停止 QEMU 调试服务器"
     echo "  $0 --status                 查看 QEMU 状态"
     echo "  $0 --help                   显示此帮助信息"
@@ -256,7 +289,12 @@ start_qemu() {
     echo -e "${GREEN}为确保调试的是最新的文件，正在清理build目录:${BUILD_DIR}中${NC}"
     rm -rf ${BUILD_DIR}
     echo -e "${GREEN}清理完成，使用CMake重新构建中...${NC}"
-    cmake -DCMAKE_BUILD_TYPE=Debug -B ${BUILD_DIR} -S ${PROJECT_ROOT} || {
+
+    # 构建完整的 CMake 配置命令
+    CMAKE_CONFIG_CMD="cmake -DCMAKE_BUILD_TYPE=Debug -B ${BUILD_DIR} -S ${PROJECT_ROOT} ${EXTRA_CMAKE_FLAGS}"
+    echo -e "${BLUE}Configuring CMake with command:${NC}"
+    echo -e "${GRAY}  $CMAKE_CONFIG_CMD${NC}"
+    eval $CMAKE_CONFIG_CMD || {
         echo -e "${RED}错误: CMake 配置失败${NC}"
         exit 1
     }
@@ -299,6 +337,7 @@ start_qemu() {
     # 启动 QEMU（在后台运行）
     # 串口输出到文件，同时保存到 fd 3 供 tail 读取
     qemu-system-x86_64 \
+        ${QEMU_CPU_FLAG} \
         -drive format=raw,file="$BOOT_IMG",if=ide \
         -vga std -display vnc=:0 \
         -serial file:"$SERIAL_LOG" \
@@ -363,6 +402,13 @@ case "${1:-}" in
         show_help
         ;;
     "")
+        # 无额外参数，直接启动
+        EXTRA_CMAKE_FLAGS=""
+        start_qemu
+        ;;
+    -D*)
+        # 解析额外的 CMake flags
+        parse_cmake_flags "$@"
         start_qemu
         ;;
     *)
