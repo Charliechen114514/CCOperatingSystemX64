@@ -128,9 +128,10 @@ option(ENABLE_HEAP_DEMO "Enable Heap allocator demo" OFF)
 option(ENABLE_COW_DEMO "Enable Copy-on-Write demo" OFF)
 option(ENABLE_MOCK_SYSCALL_DEMO "Enable System Call mock demo" OFF)
 option(ENABLE_PROCESS_DEMO "Enable Process Management demo" OFF)
+option(ENABLE_SCHED_DEMO "Enable Scheduling Class demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -178,6 +179,10 @@ if(TARGET demo_process)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_process>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_process)
 endif()
+if(TARGET demo_sched)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_sched>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_sched)
+endif()
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -221,6 +226,9 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/syscall/CMakeFiles/syscall.dir/syscall_table.c.o
         # process object files
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/process.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_rr.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_prio.c.o
         # Libraries must come AFTER object files that reference them
         # Use --start-group/--end-group to handle circular dependencies
         # (assert depends on base/driver, but base also calls assert functions)

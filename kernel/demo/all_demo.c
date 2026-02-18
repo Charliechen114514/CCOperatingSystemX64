@@ -31,6 +31,10 @@
 #    include "process_simple/process_demo.h"
 #endif
 
+#ifdef SCHED_DEMO_ENABLED
+#    include "sched/sched_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -72,6 +76,12 @@ void run_possible_demos(void) {
 #    ifdef PROCESS_DEMO_ENABLED
     klog_trace("[Demo Controller] Process Simple Demo is enabled, running...\n");
     process_run_demo();
+#    endif
+
+#    ifdef SCHED_DEMO_ENABLED
+    klog_trace("[Demo Controller] Sched Demo is enabled, running...\n");
+    sched_run_rr_demo();
+    sched_run_prio_demo();
 #    endif
 
     // Add more demos here as they are implemented

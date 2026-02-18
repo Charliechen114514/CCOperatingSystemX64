@@ -4,6 +4,9 @@
  */
 
 #include "process/process.h"
+#include "process/sched.h"
+#include "process/sched_rr.h"
+#include "process/sched_prio.h"
 #include "mm/heap/heap.h"
 #include "mm/vmm/vmm.h"
 #include "mm/vmm/page.h"
@@ -106,6 +109,16 @@ static pcb_t* proc_alloc_pcb(void) {
     INIT_LIST_HEAD(&pcb->siblings);
     INIT_LIST_HEAD(&pcb->children);
     INIT_LIST_HEAD(&pcb->zombie_children);
+    INIT_LIST_HEAD(&pcb->sched_entity.run_list);
+
+    /* Initialize sched_entity with default values */
+    pcb->sched_entity.policy = SCHED_NORMAL;
+    pcb->sched_entity.sched_class = NULL;  /* Will be set during enqueue */
+    pcb->sched_entity.time_slice = DEF_TIMESLICE_MS;
+    pcb->sched_entity.time_slice_total = DEF_TIMESLICE_MS;
+    pcb->sched_entity.priority = PRIO_DEFAULT;
+    pcb->sched_entity.nice = 0;
+    pcb->sched_entity.last_ran = 0;
 
     return pcb;
 }
@@ -197,8 +210,14 @@ void schedule(void) {
     pcb_t* prev = scheduler.current;
     pcb_t* next = NULL;
 
-    /* If run queue is empty, run idle process */
-    if (list_is_empty(&scheduler.run_queue)) {
+    /* Clear reschedule flag */
+    sched_clear_resched();
+
+    /* Pick next task using scheduler classes */
+    next = sched_pick_next_task();
+
+    /* If no task, run idle */
+    if (!next) {
         if (scheduler.idle) {
             next = scheduler.idle;
         } else {
@@ -206,10 +225,6 @@ void schedule(void) {
             klog_warn("[PROC] No process to run!\n");
             return;
         }
-    } else {
-        /* Get first process from run queue */
-        next = list_first_entry(&scheduler.run_queue, pcb_t, run_list);
-        list_del_init(&next->run_list);
     }
 
     if (next == prev) {
@@ -217,19 +232,28 @@ void schedule(void) {
         return;
     }
 
-    /* Update states */
-    if (prev) {
+    /* Dequeue previous task if needed */
+    if (prev && prev != scheduler.idle) {
         if (prev->state == PROC_RUNNING) {
             prev->state = PROC_READY;
         }
-        /* Re-add to run queue if not blocked/zombie */
+        /* Re-enqueue if ready */
         if (prev->state == PROC_READY) {
-            list_add_tail(&prev->run_list, &scheduler.run_queue);
+            sched_enqueue_task(prev, false);
         }
     }
 
+    /* Dequeue next from its run queue */
+    if (next != scheduler.idle) {
+        sched_dequeue_task(next);
+    }
+
+    /* Update state */
     next->state = PROC_RUNNING;
     scheduler.current = next;
+
+    /* Reset time slice for new task */
+    sched_reset_time_slice(next);
 
     /* Perform context switch */
     if (prev == NULL) {
@@ -319,9 +343,11 @@ int32_t proc_fork(void) {
     /* Add to parent's children list */
     list_add_tail(&child->siblings, &parent->children);
 
-    /* Add to run queue */
-    list_add_tail(&child->run_list, &scheduler.run_queue);
-    scheduler.nr_running++;
+    /* Initialize scheduling entity with RR class */
+    sched_set_policy(child, SCHED_NORMAL, 0);
+
+    /* Add to scheduler run queue */
+    sched_enqueue_task(child, false);  /* false = add to tail */
 
     klog_info("[PROC] Forked: parent PID=%d, child PID=%d\n",
               parent->pid, child->pid);
@@ -435,6 +461,27 @@ int32_t proc_wait4(int32_t pid, int* wstatus, int options) {
  */
 int proc_init(void) {
     klog_info("[PROC] Initializing process subsystem...\n");
+
+    /* Initialize scheduler class framework first */
+    int ret = sched_class_init();
+    if (ret != 0) {
+        klog_error("[PROC] Failed to initialize scheduler classes\n");
+        return ret;
+    }
+
+    /* Initialize Round-Robin scheduling class */
+    ret = sched_rr_init();
+    if (ret != 0) {
+        klog_error("[PROC] Failed to initialize RR scheduler class\n");
+        return ret;
+    }
+
+    /* Initialize Priority scheduling class */
+    ret = sched_prio_init();
+    if (ret != 0) {
+        klog_warn("[PROC] Failed to initialize Priority scheduler class (continuing without it)\n");
+        /* Continue without priority class */
+    }
 
     /* Initialize scheduler */
     INIT_LIST_HEAD(&scheduler.run_queue);

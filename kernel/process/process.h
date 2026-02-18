@@ -13,6 +13,7 @@
 #include "list/list.h"
 #include "mm/vmm/vmm_config.h"
 #include "mm/page_config.h"  /* For PAGE_SIZE */
+#include "process/sched.h"   /* Scheduling class framework */
 
 /* ==============================================================================
  * Process Constants
@@ -122,10 +123,13 @@ typedef struct pcb {
     int32_t            exit_code;      /* Exit code (if zombie) */
 
     /* ===== Scheduling ===== */
-    list_head          run_list;       /* Run queue list */
+    list_head          run_list;       /* Run queue list (legacy, for compatibility) */
     list_head          siblings;       /* Sibling list (parent's children) */
     list_head          children;       /* Children list */
     list_head          zombie_children;/* Reapable children */
+
+    /* ===== Scheduler Entity ===== */
+    sched_entity_t     sched_entity;   /* Scheduler class integration */
 
     /* ===== Memory Context ===== */
     memory_context_t   mm;             /* Address space info */
@@ -158,6 +162,8 @@ typedef struct scheduler {
     pcb_t*             idle;           /* Idle process */
     uint32_t           nr_running;     /* Number of running processes */
     bool               need_resched;   /* Reschedule flag */
+    sched_rq_t*        rq;             /* Per-policy run queues array (allocated) */
+    sched_class_t**    classes;        /* Registered scheduling classes array (allocated) */
 } scheduler_t;
 
 /* ==============================================================================
