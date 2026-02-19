@@ -258,6 +258,34 @@ int ext2_mount(vfs_superblock_t* sb, const char* data) {
     sb->s_files = ext2_sb->s_inodes_count;
     sb->s_ffree = ext2_sb->s_free_inodes_count;
 
+    /* Set superblock operations (required for vfs_iget to work) */
+    sb->s_op = &ext2_super_ops;
+
+    /* Read and set root inode (EXT2 root inode is always inode 2) */
+    klog_trace("ext2: Reading root inode (inode %d)...\n", EXT2_ROOT_INO);
+    vfs_inode_t* root_inode = vfs_iget(sb, EXT2_ROOT_INO);
+    if (!root_inode) {
+        klog_error("ext2: Failed to read root inode\n");
+        kfree(ext2_sb);
+        kfree(fs_info);
+        block_device_put(dev);
+        return -1;
+    }
+
+    /* Verify root inode is a directory */
+    if (!vfs_is_dir(root_inode)) {
+        klog_error("ext2: Root inode is not a directory!\n");
+        vfs_iput(root_inode);
+        kfree(ext2_sb);
+        kfree(fs_info);
+        block_device_put(dev);
+        return -1;
+    }
+
+    sb->s_root = root_inode;
+    klog_info("ext2: Root inode set (ino=%lu, size=%lu)\n",
+              root_inode->i_ino, root_inode->i_size);
+
     klog_info("ext2: Mounted EXT2 filesystem\n");
     klog_info("ext2:   Block size: %u bytes\n", fs_info->block_size);
     klog_info("ext2:   Total blocks: %u\n", ext2_sb->s_blocks_count);

@@ -73,7 +73,7 @@ int ext2_lookup(vfs_inode_t* dir, const char* name, vfs_inode_t** result) {
                                       block_data,
                                       sectors_per_block);
 
-    if (read_result != 0) {
+    if (read_result != (int)sectors_per_block) {
         kfree(block_data);
         klog_error("ext2: Failed to read directory block\n");
         return -1;
@@ -171,8 +171,9 @@ int ext2_readdir(file_t* file, void* dirent, filldir_t filldir) {
                                       block_data,
                                       sectors_per_block);
 
-    if (read_result != 0) {
+    if (read_result != (int)sectors_per_block) {
         kfree(block_data);
+        klog_error("ext2: Failed to read directory block\n");
         return -1;
     }
 

@@ -56,18 +56,8 @@ void kernel_init(void) {
     klog_trace("[MEM] Total: %u MB, Usable: %u MB, Entries: %u\n", mem_stats.total_mb,
                mem_stats.usable_mb, mem_stats.entry_count);
 
-    // Phase 2: Initialize interrupt subsystem (PIC + IDT, but interrupts disabled)
-    // NOTE: syscall_init is moved after interrupt_init to ensure IDT is ready
-    // in case any MSR/CR4 operations trigger exceptions.
-    interrupt_init();
-
-    // Phase 3: Register exception handlers
-    exception_init(); /* Register DF, SS, GP handlers */
-
-    // Phase 1: Initialize TSS and GDT (must be before IDT)
-    tss_init(); /* Initialize TSS with IST stacks */
-    gdt_init(); /* Initialize GDT and load TSS */
-
+    virtual_addr_t test_p_ok = KERNEL_GENERAL_BASE;
+    klog_info("%p\n", test_p_ok);
     // Initialize page table management FIRST
     // This establishes the direct physical mapping needed to access .lbss (2MB bitmap)
     page_init();
@@ -81,6 +71,18 @@ void kernel_init(void) {
 
     // Initialize kernel heap (kmalloc/kfree)
     heap_init();
+
+    // Phase 1: Initialize TSS and GDT (must be before IDT)
+    tss_init(); /* Initialize TSS with IST stacks */
+    gdt_init(); /* Initialize GDT and load TSS */
+
+    // Phase 2: Initialize interrupt subsystem (PIC + IDT, but interrupts disabled)
+    // NOTE: syscall_init is moved after interrupt_init to ensure IDT is ready
+    // in case any MSR/CR4 operations trigger exceptions.
+    interrupt_init();
+
+    // Phase 3: Register exception handlers
+    exception_init(); /* Register DF, SS, GP handlers */
 
     // Phase 3.5: Initialize system call framework (after IDT and exception handlers)
     klog_trace("[INIT] Before syscall_init...\n");

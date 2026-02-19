@@ -422,40 +422,91 @@ pm_entry:
 setup_page_tables:
     pusha
 
-    ; Clear PML4 at 0x9000
+    ; ========================================================================
+    ; 4KB Paging Setup
+    ; Memory layout:
+    ;   0x9000: PML4 (4KB)
+    ;   0xA000: PDPT (4KB)
+    ;   0xB000: PD_identity (4KB) - for identity mapping
+    ;   0xC000: PD_kernel (4KB) - for high-half kernel mapping
+    ;   0xD000: PT_identity_0 (4KB) - maps 0x00000000-0x001FFFFF
+    ;   0xE000: PT_identity_1 (4KB) - maps 0x00200000-0x003FFFFF
+    ;   0xF000: PT_kernel (4KB) - maps 0xFFFFFFFF80000000 to low memory
+    ;
+    ; Identity mapping: 0x00000000 - 0x003FFFFF (4MB)
+    ;   Covers: VGA (0xB8000), bootloader, kernel (0x10000), stack (0x80000)
+    ;
+    ; High-half mapping: 0xFFFFFFFF80000000 - 0xFFFFFFFF801FFFFF -> 0x00000000-0x001FFFFF
+    ; ========================================================================
+
+    ; Clear all page table structures (28KB total from 0x9000 to 0xF000)
     mov edi, 0x9000
-    mov ecx, 4096 / 4
+    mov ecx, (4096 * 6) / 4
     xor eax, eax
     rep stosd
 
-    ; Clear PDPT at 0xA000
-    mov edi, 0xA000
-    mov ecx, 4096 / 4
-    xor eax, eax
-    rep stosd
+    ; ---------- PML4 at 0x9000 ----------
+    ; PML4[0] -> PDPT at 0xA000 (identity mapping)
+    mov dword [0x9000], 0x0000A003
+    ; PML4[511] -> PDPT at 0xA000 (kernel high-half mapping)
+    mov dword [0x9FF8], 0x0000A003
 
-    ; Clear PD at 0xB000
-    mov edi, 0xB000
-    mov ecx, 4096 / 4
-    xor eax, eax
-    rep stosd
+    ; ---------- PDPT at 0xA000 ----------
+    ; PDPT[0] -> PD_identity at 0xB000
+    mov dword [0xA000], 0x0000B003
+    ; PDPT[510] -> PD_kernel at 0xC000
+    mov dword [0xAFF0], 0x0000C003
 
-    ; Setup PML4 entries
-    mov dword [0x9000], 0x0000A003    ; PML4[0] -> PDPT at 0xA000
-    mov dword [0x9FF8], 0x0000A003    ; PML4[511] -> PDPT at 0xA000
+    ; ---------- PD_identity at 0xB000 ----------
+    ; PD_identity[0] -> PT_identity_0 at 0xD000 (maps 0x00000000-0x001FFFFF)
+    mov dword [0xB000], 0x0000D003
+    ; PD_identity[1] -> PT_identity_1 at 0xE000 (maps 0x00200000-0x003FFFFF)
+    mov dword [0xB008], 0x0000E003
 
-    ; Setup PDPT entry
-    mov dword [0xA000], 0x0000B003    ; PDPT[0] -> PD at 0xB000
+    ; ---------- PD_kernel at 0xC000 ----------
+    ; PD_kernel[0] -> PT_kernel at 0xF000
+    mov dword [0xC000], 0x0000F003
 
-    ; Map first 2MB using a single 2MB page
-    ; Each 2MB page entry format: [physical_addr_hi(32)][physical_addr_lo(20:12)|flags(12)]
-    ; We map identity: 0x00000000 -> 0x00000000
+    ; ========================================================================
+    ; Setup Page Tables (PTs)
+    ; Each PT has 512 entries of 8 bytes each
+    ; Entry format: [physical_addr_hi(32)][physical_addr_lo(20:0)|flags(12)]
+    ; For 4KB pages: flags = 0x003 (Present + Writable)
+    ; ========================================================================
 
-    ; Page 0: 0x00000000 - 0x001FFFFF
-    mov dword [0xB000], 0x00000083    ; Present, Writable, Huge page
-    mov dword [0xB004], 0x00000000
+    ; ---------- PT_identity_0 at 0xD000 ----------
+    ; Map 0x00000000 - 0x001FFFFF (512 * 4KB = 2MB)
+    mov edi, 0xD000
+    mov esi, 0x00000003           ; Base: 0x00000000 | flags
+    call fill_pt_512_entries
+
+    ; ---------- PT_identity_1 at 0xE000 ----------
+    ; Map 0x00200000 - 0x003FFFFF (512 * 4KB = 2MB)
+    mov edi, 0xE000
+    mov esi, 0x00200003           ; Base: 0x00200000 | flags
+    call fill_pt_512_entries
+
+    ; ---------- PT_kernel at 0xF000 ----------
+    ; Map 0xFFFFFFFF80000000 -> physical 0x10000 (kernel load address)
+    mov edi, 0xF000
+    mov esi, 0x00010003           ; Base: 0x00010000 | flags (kernel at physical 0x10000)
+    call fill_pt_512_entries
 
     popa
+    ret
+
+; fill_pt_512_entries - Fill a page table with 512 entries
+; Input: EDI = PT address, ESI = base physical address | flags
+; Clobbers: EAX, ECX, EDI, ESI
+fill_pt_512_entries:
+    mov ecx, 512                   ; 512 entries
+.fill_loop:
+    mov eax, esi                   ; Get current physical address + flags
+    stosd                          ; Store low 32 bits
+    xor eax, eax                   ; High 32 bits = 0 (for < 4GB physical)
+    stosd                          ; Store high 32 bits
+    add esi, 0x1000                ; Next 4KB page
+    loop .fill_loop
     ret
 
 
@@ -881,13 +932,23 @@ load_kernel_lba:
     add si, bp                      ; Advance LBA
 
     ; Advance buffer pointer (ES:BX += BP * 512)
+    ; Handle segment overflow for kernels > 64KB
     push ax
     push dx
     mov ax, bp
     xor dx, dx
     mov cx, 512
     mul cx                          ; DX:AX = bytes read
+
+    ; Add to BX, check for overflow into segment
     add bx, ax
+    jnc .no_seg_update              ; Jump if no carry
+
+    ; BX overflowed - advance ES by 0x1000 (64KB paragraph)
+    mov ax, es
+    add ax, 0x1000
+    mov es, ax
+.no_seg_update:
     pop dx
     pop ax
 
@@ -1082,15 +1143,25 @@ load_kernel_chs:
     add si, bp                      ; Advance LBA
 
     ; Advance buffer pointer (ES:BX += BP * 512)
-    ; For kernel < 64KB, we can ignore segment overflow
+    ; Handle segment overflow for kernels > 64KB
     push ax
     push dx
     mov ax, bp
     xor dx, dx
     mov cx, 512
     mul cx                          ; DX:AX = bytes read
-    ; Add to BX
+
+    ; Add to BX, check for overflow into segment
     add bx, ax
+    jnc .no_seg_update_chs          ; Jump if no carry
+
+    ; BX overflowed - advance ES by 0x1000 (64KB paragraph)
+    push ax
+    mov ax, es
+    add ax, 0x1000
+    mov es, ax
+    pop ax
+.no_seg_update_chs:
     pop dx
     pop ax
 

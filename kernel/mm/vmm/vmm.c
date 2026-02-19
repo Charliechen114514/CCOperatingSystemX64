@@ -135,6 +135,9 @@ vmm_result_t vmm_init(void) {
 
     /* Get the kernel PML4 from page module */
     s_kernel_pml4 = page_get_pml4();
+    /* Debug: Check s_kernel_virt_hint value before setting initialized flag */
+    const char* should_never_empty = "III\n";
+    klog_info("%p -> %d", should_never_empty, *should_never_empty);
 
     klog_info("[VMM] Kernel PML4 at 0x%016llX\n", s_kernel_pml4);
     klog_info("[VMM] Address space layout:\n");
@@ -160,7 +163,19 @@ vmm_result_t vmm_init(void) {
     add_region(KERNEL_HEAP_BASE, KERNEL_HEAP_MAX, 0, VMAP_FLAG_NONE, "kernel_heap");
 
     /* Debug: Check s_kernel_virt_hint value before setting initialized flag */
-    sync_serial_puts("[VMM] Checking s_kernel_virt_hint...\n");
+    // const char* should_never_empty = "[VMM] Checking s_kernel_virt_hint...\n";
+    // klog_info(should_never_empty);
+
+    klog_info("[VMM] s_kernel_virt_hint addr: %p\n", &s_kernel_virt_hint);
+    klog_info("[VMM] s_kernel_virt_hint value: %p\n", (void*)s_kernel_virt_hint);
+    klog_info("[VMM] s_kernel_pml4: %p\n", (void*)s_kernel_pml4);
+    klog_info("[VMM] s_initialized: %p\n", (void*)s_initialized);
+    klog_info("[VMM] s_region_count: %p\n", (void*)(uint64_t)s_region_count);
+    klog_info("[VMM] Dump nearby bytes:\n");
+    uint8_t* ptr = (uint8_t*)&s_kernel_virt_hint;
+    for (int i = -16; i < 32; i++) {
+        klog_info("[VMM]   [%+2d] %02X\n", i, ptr[i]);
+    }
 
     s_initialized = true;
     klog_info("[VMM] Initialization complete\n");

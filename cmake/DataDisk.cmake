@@ -126,8 +126,9 @@ else()
         endif()
 
         if(MKFS_CMD)
+            # Use bash -c to properly execute the command string with arguments
             execute_process(
-                COMMAND ${MKFS_CMD}
+                COMMAND bash -c "${MKFS_CMD}"
                 OUTPUT_VARIABLE MKFS_OUTPUT
                 ERROR_VARIABLE MKFS_ERROR
                 RESULT_VARIABLE MKFS_RESULT

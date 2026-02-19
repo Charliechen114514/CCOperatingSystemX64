@@ -24,16 +24,28 @@ kernel_start:
     and rsp, -16                ; Align to 16-byte boundary
     mov rbp, rsp                ; Set frame pointer
 
-    ; Clear BSS section (uninitialized data)
-    ; Note: We only clear regular .bss here. The large .lbss section (2MB bitmap)
-    ; extends beyond the bootloader's 2MB identity mapping, so it must be
-    ; cleared later after page_init() establishes proper page tables.
-    ; Linker puts __bss_start and __bss_end symbols
+    ; Clear BSS sections (uninitialized data)
+    ; We clear both regular .bss and large .lbss sections here.
+    ; The bootloader identity maps 4MB, which covers kernel + .bss + .lbss.
+    ; Linker puts __bss_start/__bss_end and __lbss_start/__lbss_end symbols
     extern __bss_start
     extern __bss_end
+    extern __lbss_start
+    extern __lbss_end
+
     cld
+
+    ; Clear regular .bss
     mov rdi, __bss_start
     mov rcx, __bss_end
+    sub rcx, rdi
+    shr rcx, 3  ; Convert to qwords
+    xor eax, eax
+    rep stosq
+
+    ; Clear large .lbss (page frame bitmap, ~2MB)
+    mov rdi, __lbss_start
+    mov rcx, __lbss_end
     sub rcx, rdi
     shr rcx, 3  ; Convert to qwords
     xor eax, eax

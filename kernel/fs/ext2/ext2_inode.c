@@ -146,57 +146,77 @@ int ext2_read_inode(vfs_superblock_t* sb, vfs_inode_t* inode) {
     klog_trace("ext2: Reading inode %lu: group=%u, index=%u, table_block=%u, offset=%u\n",
                ino, group, index, inode_table_block, inode_offset);
 
-    /* Read inode */
-    ext2_inode_t ext2_inode;
-    memset(&ext2_inode, 0, sizeof(ext2_inode_t));
-
+    /* Allocate a block-sized buffer to read the entire block */
     uint32_t block_size = fs_info->block_size;
-    uint32_t sectors_per_block = block_size / 512;
+    uint8_t* block_buffer = (uint8_t*)kmalloc(block_size);
+    if (!block_buffer) {
+        klog_error("ext2: Failed to allocate block buffer\n");
+        return -1;
+    }
+    memset(block_buffer, 0, block_size);
 
     /* Calculate which block within the inode table contains the inode */
     uint32_t table_block_offset = inode_offset / block_size;
     uint32_t inode_block = inode_table_block + table_block_offset;
 
-    /* Calculate sector to read */
+    /* Calculate offset within the block */
+    uint32_t offset_in_block = inode_offset % block_size;
+
+    /* Convert block to sector (block device API uses sectors) */
+    uint32_t sectors_per_block = block_size / 512;
     uint64_t sector = (uint64_t)inode_block * sectors_per_block;
 
-    /* Calculate byte offset within the sector */
-    uint32_t offset_in_block = inode_offset % block_size;
-    uint32_t sector_offset_in_block = offset_in_block / 512;
-    sector += sector_offset_in_block;
+    /* Read the entire block containing the inode */
+    int result = block_read_sync(fs_info->device, sector, block_buffer, sectors_per_block);
 
-    /* Read the sector containing the inode */
-    int result = block_read_sync(fs_info->device, sector, &ext2_inode, 1);
-
-    if (result != 1) {
+    if (result != (int)sectors_per_block) {
         klog_error("ext2: Failed to read inode %lu (sector=%u)\n", ino, (uint32_t)sector);
+        kfree(block_buffer);
         return -1;
     }
 
+    /* Access the inode at the correct offset within the block */
+    ext2_inode_t* ext2_inode = (ext2_inode_t*)(block_buffer + offset_in_block);
+
+    /* Debug: print raw bytes at offset to verify data */
+    klog_trace("ext2: Raw bytes at inode offset: %02X %02X %02X %02X\n",
+               block_buffer[offset_in_block],
+               block_buffer[offset_in_block + 1],
+               block_buffer[offset_in_block + 2],
+               block_buffer[offset_in_block + 3]);
+
     /* Fill VFS inode */
-    inode->i_mode = ext2_inode.i_mode;
+    inode->i_mode = ext2_inode->i_mode;
     /* Note: vfs_inode_t doesn't have i_uid/i_gid, skipping for now */
-    inode->i_size = ext2_inode.i_size;
-    inode->i_blocks = ext2_inode.i_blocks;
-    inode->i_nlink = ext2_inode.i_links_count;
+    inode->i_size = ext2_inode->i_size;
+    inode->i_blocks = ext2_inode->i_blocks;
+    inode->i_nlink = ext2_inode->i_links_count;
 
     /* Allocate private data and copy block pointers */
     ext2_inode_info_t* ei = (ext2_inode_info_t*)kmalloc(sizeof(ext2_inode_info_t));
     if (!ei) {
         klog_error("ext2: Failed to allocate inode private data\n");
+        kfree(block_buffer);
         return -1;
     }
 
-    memcpy(ei->i_data, ext2_inode.i_block, sizeof(ei->i_data));
-    ei->i_flags = ext2_inode.i_flags;
-    ei->i_file_acl = ext2_inode.i_file_acl;
-    ei->i_dir_acl = ext2_inode.i_dir_acl;
-    ei->i_dtime = ext2_inode.i_dtime;
+    memcpy(ei->i_data, ext2_inode->i_block, sizeof(ei->i_data));
+    ei->i_flags = ext2_inode->i_flags;
+    ei->i_file_acl = ext2_inode->i_file_acl;
+    ei->i_dir_acl = ext2_inode->i_dir_acl;
+    ei->i_dtime = ext2_inode->i_dtime;
 
     inode->i_private = ei;
 
+    /* Free the block buffer */
+    kfree(block_buffer);
+
+    /* Debug: print inode mode */
+    klog_trace("ext2: Inode %lu mode: 0x%04X\n", ino, inode->i_mode);
+
     /* Set operations based on file type */
     vtype_t type = vfs_mode_to_type(inode->i_mode);
+    klog_trace("ext2: Inode %lu vfs type: %d\n", ino, type);
 
     if (type == V_DIR) {
         inode->i_op = &ext2_dir_inode_ops;

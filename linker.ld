@@ -1,5 +1,10 @@
 /* CCOS Kernel Linker Script */
 /* Kernel is loaded at 0x10000 by bootloader */
+/*
+ * IMPORTANT: All sections must be contiguous without gaps for objcopy -O binary
+ * to work correctly. The bootloader loads the kernel binary to physical 0x10000,
+ * and the kernel uses identity mapping to access it.
+ */
 
 ENTRY(kernel_start)
 
@@ -12,18 +17,16 @@ SECTIONS
     .text : {
         *(.text)
         *(.text.*)
-    }
-
-    /* Read-only data */
-    .rodata : {
         *(.rodata)
         *(.rodata.*)
+        . = ALIGN(8);
     }
 
-    /* Initialized data */
+    /* Initialized data - immediately after .rodata */
     .data : {
         *(.data)
         *(.data.*)
+        . = ALIGN(8);
     }
 
     /* Uninitialized data - regular BSS */
@@ -32,18 +35,16 @@ SECTIONS
         *(.bss)
         *(.bss.*)
         *(COMMON)
+        . = ALIGN(8);
         __bss_end = .;
     }
 
-    /* Large BSS section for big static arrays (e.g., 2MB bitmap)
-     * This section is placed after regular BSS and uses NOLOAD attribute
-     * to prevent it from being included in the binary file.
-     * The bootloader must ensure enough memory is available for this section.
-     */
-    .lbss (NOLOAD) : {
+    /* Large BSS - for large uninitialized data (e.g., page frame bitmap) */
+    .lbss : {
         __lbss_start = .;
         *(.lbss)
         *(.lbss.*)
+        . = ALIGN(8);
         __lbss_end = .;
     }
 
