@@ -447,89 +447,13 @@ setup_page_tables:
     ; Setup PDPT entry
     mov dword [0xA000], 0x0000B003    ; PDPT[0] -> PD at 0xB000
 
-    ; Map first 40MB using 20 x 2MB pages to cover kernel BSS + .lbss
+    ; Map first 2MB using a single 2MB page
     ; Each 2MB page entry format: [physical_addr_hi(32)][physical_addr_lo(20:12)|flags(12)]
-    ; We map identity: 0x00000000 -> 0x00000000, 0x00200000 -> 0x00200000, etc.
+    ; We map identity: 0x00000000 -> 0x00000000
 
     ; Page 0: 0x00000000 - 0x001FFFFF
     mov dword [0xB000], 0x00000083    ; Present, Writable, Huge page
     mov dword [0xB004], 0x00000000
-
-    ; Page 1: 0x00200000 - 0x003FFFFF
-    mov dword [0xB008], 0x00200083
-    mov dword [0xB00C], 0x00000000
-
-    ; Page 2: 0x00400000 - 0x005FFFFF
-    mov dword [0xB010], 0x00400083
-    mov dword [0xB014], 0x00000000
-
-    ; Page 3: 0x00600000 - 0x007FFFFF
-    mov dword [0xB018], 0x00600083
-    mov dword [0xB01C], 0x00000000
-
-    ; Page 4: 0x00800000 - 0x009FFFFF
-    mov dword [0xB020], 0x00800083
-    mov dword [0xB024], 0x00000000
-
-    ; Page 5: 0x00A00000 - 0x00BFFFFF
-    mov dword [0xB028], 0x00A00083
-    mov dword [0xB02C], 0x00000000
-
-    ; Page 6: 0x00C00000 - 0x00DFFFFF
-    mov dword [0xB030], 0x00C00083
-    mov dword [0xB034], 0x00000000
-
-    ; Page 7: 0x00E00000 - 0x00FFFFFF
-    mov dword [0xB038], 0x00E00083
-    mov dword [0xB03C], 0x00000000
-
-    ; Page 8: 0x01000000 - 0x011FFFFF
-    mov dword [0xB040], 0x01000083
-    mov dword [0xB044], 0x00000000
-
-    ; Page 9: 0x01200000 - 0x013FFFFF
-    mov dword [0xB048], 0x01200083
-    mov dword [0xB04C], 0x00000000
-
-    ; Page 10: 0x01400000 - 0x015FFFFF
-    mov dword [0xB050], 0x01400083
-    mov dword [0xB054], 0x00000000
-
-    ; Page 11: 0x01600000 - 0x017FFFFF
-    mov dword [0xB058], 0x01600083
-    mov dword [0xB05C], 0x00000000
-
-    ; Page 12: 0x01800000 - 0x019FFFFF
-    mov dword [0xB060], 0x01800083
-    mov dword [0xB064], 0x00000000
-
-    ; Page 13: 0x01A00000 - 0x01BFFFFF
-    mov dword [0xB068], 0x01A00083
-    mov dword [0xB06C], 0x00000000
-
-    ; Page 14: 0x01C00000 - 0x01DFFFFF
-    mov dword [0xB070], 0x01C00083
-    mov dword [0xB074], 0x00000000
-
-    ; Page 15: 0x01E00000 - 0x01FFFFFF
-    mov dword [0xB078], 0x01E00083
-    mov dword [0xB07C], 0x00000000
-
-    ; Page 16: 0x02000000 - 0x021FFFFF
-    mov dword [0xB080], 0x02000083
-    mov dword [0xB084], 0x00000000
-
-    ; Page 17: 0x02200000 - 0x023FFFFF
-    mov dword [0xB088], 0x02200083
-    mov dword [0xB08C], 0x00000000
-
-    ; Page 18: 0x02400000 - 0x025FFFFF
-    mov dword [0xB090], 0x02400083
-    mov dword [0xB094], 0x00000000
-
-    ; Page 19: 0x02600000 - 0x027FFFFF
-    mov dword [0xB098], 0x02600083
-    mov dword [0xB09C], 0x00000000
 
     popa
     ret

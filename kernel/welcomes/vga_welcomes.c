@@ -15,12 +15,12 @@
 // ==================== COOL WELCOME SCREEN ====================
 
 // ASCII Art Logo
-static const char* CCOS_LOGO[] = {
+static const char* const CCOS_LOGO[] = {
     "  _____  _____ _____    ___    ",    " /  _  \\/  ___//  __ \\  /   |   ",
     " | | | |\\ `--.| /  \\/ / /| |   ",  " | | | | `--. \\ |    / /_| |   ",
     " | |_| |/\\__/ / \\__/\\____  |   ", "  \\___/ \\____/ \\____/    |_|   "};
 
-static const char* CCOS_NAME = "CCOperating System X64";
+static const char* const CCOS_NAME = "CCOperating System X64";
 
 // Draw a gradient border with animation effect
 static void draw_animated_border(CCOS_VGA* vga) {

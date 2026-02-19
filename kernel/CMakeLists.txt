@@ -142,9 +142,10 @@ option(ENABLE_PROCESS_DEMO "Enable Process Management demo" OFF)
 option(ENABLE_SCHED_DEMO "Enable Scheduling Class demo" OFF)
 option(ENABLE_USER_DEMO "Enable User Mode support demo" OFF)
 option(ENABLE_ATA_DEMO "Enable ATA/IDE disk driver demo" OFF)
+option(ENABLE_VFS_DEMO "Enable VFS demo" ON)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO OR ENABLE_USER_DEMO OR ENABLE_ATA_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO OR ENABLE_USER_DEMO OR ENABLE_ATA_DEMO OR ENABLE_VFS_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -166,6 +167,9 @@ add_subdirectory(process)
 
 # 添加 user 用户态支持模块
 add_subdirectory(user)
+
+# 添加 fs 文件系统模块
+add_subdirectory(fs)
 
 # Demo library is always built and linked (provides run_possible_demos symbol)
 # Collect all sub-demo libraries for explicit linking (static libs don't propagate deps)
@@ -206,6 +210,10 @@ endif()
 if(TARGET demo_ata)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_ata>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_ata)
+endif()
+if(TARGET demo_vfs)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_vfs>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_vfs)
 endif()
 
 # 链接内核ELF
@@ -273,6 +281,7 @@ add_custom_command(
         $<TARGET_FILE:pframe>
         $<TARGET_FILE:kernel_vmm>
         $<TARGET_FILE:kernel_heap>
+        $<TARGET_FILE:fs>
         # Demo libraries (base + any enabled sub-demos)
         ${KERNEL_DEMO_LIBS}
         --end-group
@@ -303,6 +312,7 @@ add_custom_command(
         kernel_heap
         process
         user
+        fs
         uname_test_obj
         ${CMAKE_SOURCE_DIR}/linker.ld
     COMMENT "Linking kernel ELF"

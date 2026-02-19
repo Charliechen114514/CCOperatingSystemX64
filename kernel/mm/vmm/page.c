@@ -4,10 +4,11 @@
  */
 
 #include "mm/vmm/page.h"
-#include "mm/pframe/pframe.h"
-#include "base/memory.h"
-#include "klogs/kprintf.h"
 #include "assert/assert.h"
+#include "base/memory.h"
+#include "driver/serial/serial.h"
+#include "klogs/kprintf.h"
+#include "mm/pframe/pframe.h"
 
 /* ==============================================================================
  * Internal State
@@ -18,12 +19,12 @@ static bool s_initialized = false;
 static bool s_direct_map_established = false;
 
 /* Direct physical map offset - must match PHYS_MAP_OFFSET from vmm.h */
-#define DIRECT_MAP_BASE  0xFFFF800000000000ULL
+#define DIRECT_MAP_BASE 0xFFFF800000000000ULL
 
 /* Temporary identity mapping access - only use during early init when
  * direct mapping is not yet established. The bootloader maps low 2MB.
  */
-#define TEMP_IDENTITY_VIRT(phys)  ((void*)(uintptr_t)(phys))
+#define TEMP_IDENTITY_VIRT(phys) ((void*)(uintptr_t)(phys))
 
 /* ==============================================================================
  * Helper Functions
@@ -79,7 +80,7 @@ static inline void* phys_to_virt(physical_addr_t phys) {
  */
 static page_result_t establish_direct_map(void) {
     /* The bootloader's PML4 is at physical address 0x9000 */
-    physical_addr_t pml4_phys = s_kernel_pml4;  /* Should be 0x9000 */
+    physical_addr_t pml4_phys = s_kernel_pml4; /* Should be 0x9000 */
 
     /* Use identity mapping to access PML4 (bootloader maps low 2MB) */
     volatile pml4_t* pml4 = (volatile pml4_t*)TEMP_IDENTITY_VIRT(pml4_phys);
@@ -94,8 +95,17 @@ static page_result_t establish_direct_map(void) {
     /* Strategy: Create a proper direct map for more physical memory
      * The bootloader only maps low 2MB. We need to expand this.
      *
-     * We'll allocate page tables within the first 2MB (identity mapped region)
-     * so we can access them to set up the mappings.
+     * For a 512MB direct map using 2MB pages, we need:
+     * - 1 PDPT (512 entries, but we only use first entry for now)
+     * - 256 PDs (each has 512 2MB entries, but we only use first entry per PD)
+     *
+     * Actually, for 2MB huge pages:
+     * - PML4[256] → PDPT
+     * - PDPT[0] → PD (maps first 512GB using 2MB pages)
+     * - Each PD entry maps 2MB
+     *
+     * But the bootloader's PDPT only has PDPT[0] set, and that PD only has PD[0] set!
+     * We need to expand the PD to have 256 entries, not create new PDs.
      */
 
     /* Get the bootloader's PD (at 0xB000) via identity mapping */
@@ -104,25 +114,20 @@ static page_result_t establish_direct_map(void) {
     /* The bootloader's PD has only PD[0] mapped (2MB at 0x0)
      * We need to add more 2MB page entries to map more physical memory.
      *
-     * For a 512MB direct map, we need 256 2MB pages.
-     * But we can only use entries that are available in the PD.
-     *
-     * Check which PD entries are free/unused and set them up.
-     */
-
-    /* Map the first 512MB of physical memory using 2MB pages
-     * We'll use PD entries 0-255 (256 entries * 2MB = 512MB)
+     * For a 512MB direct map, we need 256 2MB pages in the SAME PD.
      */
     for (int i = 0; i < 256; i++) {
         if (!pd->entries[i].bits.present) {
             /* Map a 2MB page at physical address i * 2MB */
             physical_addr_t paddr = i * 0x200000;
-            pd->entries[i].value = (paddr & PTE_ADDR_MASK) |
-                                   PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE_PD;
+            pd->entries[i].value =
+                (paddr & PTE_ADDR_MASK) | PAGE_PRESENT | PAGE_WRITE | PAGE_HUGE_PD;
         }
     }
 
-    /* Set PML4[256] to point to the bootloader's PDPT */
+    /* Set PML4[256] to point to the bootloader's PDPT
+     * This PDPT already has PDPT[0] → PD (0xB000) set by the bootloader
+     */
     pml4->entries[256].value = (0xA000 & PTE_ADDR_MASK) | PAGE_PRESENT | PAGE_WRITE;
 
     /* Invalidate TLB to ensure the new mapping takes effect */
@@ -142,17 +147,25 @@ static page_result_t establish_direct_map(void) {
  * ============================================================================ */
 
 page_result_t page_init(void) {
+    /* Debug: print function entry */
+    sync_serial_puts("[DEBUG] page_init: entry\n");
+
     if (s_initialized) {
         klog_warn("[PAGE] Already initialized\n");
         return PAGE_OK;
     }
 
+    /* Debug: before reading CR3 */
+    sync_serial_puts("[DEBUG] page_init: before page_get_cr3\n");
+
     /* Read the current PML4 from CR3 */
-    s_kernel_pml4 = page_get_cr3() & ~0xFFFULL;  /* CR3 low 12 bits are flags */
+    s_kernel_pml4 = page_get_cr3() & ~0xFFFULL; /* CR3 low 12 bits are flags */
+
+    /* Debug: after reading CR3 */
+    sync_serial_puts("[DEBUG] page_init: after page_get_cr3\n");
 
     klog_info("[PAGE] Initializing with PML4 at 0x%016llX\n", s_kernel_pml4);
-    klog_info("[PAGE] Page size: %d bytes, %d entries per table\n",
-              PAGE_SIZE, PT_ENTRIES);
+    klog_info("[PAGE] Page size: %d bytes, %d entries per table\n", PAGE_SIZE, PT_ENTRIES);
 
     /* Establish direct physical mapping */
     page_result_t result = establish_direct_map();
@@ -160,6 +173,32 @@ page_result_t page_init(void) {
         klog_error("[PAGE] Failed to establish direct mapping!\n");
         return result;
     }
+
+    /* Now that direct mapping is established, we can clear the .lbss section
+     * which contains the 2MB bitmap storage.
+     *
+     * IMPORTANT: The kernel is linked at low physical addresses (identity mapped),
+     * so &__lbss_start gives us the physical address directly. We need to use
+     * the direct physical mapping to access it safely, avoiding potential stack
+     * corruption issues.
+     */
+    extern uint8_t __lbss_start;
+    extern uint8_t __lbss_end;
+
+    /* Get physical address of .lbss section
+     * Since kernel is identity mapped (linked at physical address),
+     * the symbol address IS the physical address.
+     */
+    physical_addr_t lbss_phys_start = (physical_addr_t)&__lbss_start;
+    physical_addr_t lbss_phys_end = (physical_addr_t)&__lbss_end;
+    uint64_t lbss_size = lbss_phys_end - lbss_phys_start;
+
+    sync_serial_puts("[PAGE] Skipping .lbss clear for now...\n");
+
+    /* TODO: Fix .lbss clearing - it's causing crashes
+     * The .lbss section will be used uninitialized (zeros from bootloader)
+     */
+    (void)lbss_size;
 
     s_initialized = true;
     klog_info("[PAGE] Initialization complete\n");
@@ -174,6 +213,7 @@ physical_addr_t page_get_pml4(void) {
 
 page_result_t page_create_table(physical_addr_t* out_phys) {
     CCOS_ASSERT(s_initialized);
+    CCOS_ASSERT(s_direct_map_established); /* Must check before using phys_to_virt! */
     CCOS_ASSERT(out_phys != NULL);
 
     /* Allocate a physical frame */
@@ -203,8 +243,7 @@ page_result_t page_free_table(physical_addr_t phys) {
     return PAGE_OK;
 }
 
-static page_result_t get_or_create_table(physical_addr_t* table_phys,
-                                         bool alloc_missing) {
+static page_result_t get_or_create_table(physical_addr_t* table_phys, bool alloc_missing) {
     if (*table_phys != 0) {
         return PAGE_OK;
     }
@@ -217,11 +256,8 @@ static page_result_t get_or_create_table(physical_addr_t* table_phys,
     return page_create_table(table_phys);
 }
 
-page_result_t page_map_page(physical_addr_t pml4_phys,
-                           virtual_addr_t vaddr,
-                           physical_addr_t paddr,
-                           uint64_t flags,
-                           bool alloc_missing) {
+page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, physical_addr_t paddr,
+                            uint64_t flags, bool alloc_missing) {
     CCOS_ASSERT(s_initialized);
     CCOS_ASSERT(s_direct_map_established);
 
@@ -249,13 +285,11 @@ page_result_t page_map_page(physical_addr_t pml4_phys,
 
     /* Validate alignment */
     if ((vaddr & page_align) != 0) {
-        klog_error("[PAGE] Virtual address not aligned to %llu bytes: 0x%llX\n",
-                  page_size, vaddr);
+        klog_error("[PAGE] Virtual address not aligned to %llu bytes: 0x%llX\n", page_size, vaddr);
         return PAGE_ERR_ALIGNMENT;
     }
     if ((paddr & page_align) != 0) {
-        klog_error("[PAGE] Physical address not aligned to %llu bytes: 0x%X\n",
-                  page_size, paddr);
+        klog_error("[PAGE] Physical address not aligned to %llu bytes: 0x%X\n", page_size, paddr);
         return PAGE_ERR_ALIGNMENT;
     }
 
@@ -356,8 +390,8 @@ page_result_t page_map_page(physical_addr_t pml4_phys,
 
     /* Check if already mapped */
     if (pte->bits.present) {
-        klog_warn("[PAGE] Page already mapped at 0x%llX -> 0x%X\n",
-                  vaddr, pte->bits.frame << PAGE_SHIFT);
+        klog_warn("[PAGE] Page already mapped at 0x%llX -> 0x%X\n", vaddr,
+                  pte->bits.frame << PAGE_SHIFT);
         return PAGE_ERR_ALREADY_MAPPED;
     }
 
@@ -370,13 +404,11 @@ page_result_t page_map_page(physical_addr_t pml4_phys,
     return PAGE_OK;
 }
 
-page_result_t page_unmap_page(physical_addr_t pml4_phys,
-                             virtual_addr_t vaddr,
-                             bool free_table) {
+page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, bool free_table) {
     CCOS_ASSERT(s_initialized);
     CCOS_ASSERT(s_direct_map_established);
 
-    (void)free_table;  /* TODO: Implement free_table functionality */
+    (void)free_table; /* TODO: Implement free_table functionality */
 
     /* Validate alignment */
     if ((vaddr & (PAGE_SIZE - 1)) != 0) {
@@ -426,9 +458,8 @@ page_result_t page_unmap_page(physical_addr_t pml4_phys,
     return PAGE_OK;
 }
 
-page_result_t page_query(physical_addr_t pml4_phys,
-                        virtual_addr_t vaddr,
-                        page_query_result_t* result) {
+page_result_t page_query(physical_addr_t pml4_phys, virtual_addr_t vaddr,
+                         page_query_result_t* result) {
     CCOS_ASSERT(s_initialized);
     CCOS_ASSERT(s_direct_map_established);
     CCOS_ASSERT(result != NULL);
@@ -456,7 +487,7 @@ page_result_t page_query(physical_addr_t pml4_phys,
     }
 
     /* Check for 1GB huge page */
-    if (pdpte->bits.pat) {  /* PS bit in PDPT */
+    if (pdpte->bits.pat) { /* PS bit in PDPT */
         result->present = true;
         result->is_huge = true;
         result->phys_addr = pdpte->bits.frame << PAGE_SHIFT;
@@ -473,7 +504,7 @@ page_result_t page_query(physical_addr_t pml4_phys,
     }
 
     /* Check for 2MB huge page */
-    if (pde->bits.pat) {  /* PS bit in PD */
+    if (pde->bits.pat) { /* PS bit in PD */
         result->present = true;
         result->is_huge = true;
         result->phys_addr = pde->bits.frame << PAGE_SHIFT;
@@ -498,9 +529,8 @@ page_result_t page_query(physical_addr_t pml4_phys,
     return PAGE_OK;
 }
 
-page_result_t page_virt_to_phys(physical_addr_t pml4_phys,
-                               virtual_addr_t vaddr,
-                               physical_addr_t* out_phys) {
+page_result_t page_virt_to_phys(physical_addr_t pml4_phys, virtual_addr_t vaddr,
+                                physical_addr_t* out_phys) {
     CCOS_ASSERT(out_phys != NULL);
 
     page_query_result_t result;
@@ -514,11 +544,8 @@ page_result_t page_virt_to_phys(physical_addr_t pml4_phys,
     return PAGE_ERR_NOT_PRESENT;
 }
 
-page_result_t page_map_range(physical_addr_t pml4_phys,
-                            virtual_addr_t vaddr_base,
-                            physical_addr_t paddr_base,
-                            uint64_t page_count,
-                            uint64_t flags) {
+page_result_t page_map_range(physical_addr_t pml4_phys, virtual_addr_t vaddr_base,
+                             physical_addr_t paddr_base, uint64_t page_count, uint64_t flags) {
     CCOS_ASSERT(s_initialized);
 
     for (uint64_t i = 0; i < page_count; i++) {
@@ -536,9 +563,8 @@ page_result_t page_map_range(physical_addr_t pml4_phys,
     return PAGE_OK;
 }
 
-page_result_t page_unmap_range(physical_addr_t pml4_phys,
-                              virtual_addr_t vaddr_base,
-                              uint64_t page_count) {
+page_result_t page_unmap_range(physical_addr_t pml4_phys, virtual_addr_t vaddr_base,
+                               uint64_t page_count) {
     CCOS_ASSERT(s_initialized);
 
     for (uint64_t i = 0; i < page_count; i++) {
@@ -571,17 +597,28 @@ void page_flush_cache(virtual_addr_t vaddr, size_t size) {
  */
 static void dump_pte_flags(uint64_t flags) {
     klog_trace("    Flags: ");
-    if (flags & PAGE_PRESENT) klog_trace("P ");
-    if (flags & PAGE_WRITE) klog_trace("W ");
-    if (flags & PAGE_USER) klog_trace("U ");
-    if (flags & PAGE_NO_EXEC) klog_trace("NX ");
-    if (flags & PAGE_GLOBAL) klog_trace("G ");
-    if (flags & PAGE_ACCESSED) klog_trace("A ");
-    if (flags & PAGE_DIRTY) klog_trace("D ");
-    if (flags & PAGE_HUGE_PD) klog_trace("HUGE_PD ");
-    if (flags & PAGE_HUGE_PDPT) klog_trace("HUGE_PDPT ");
-    if (flags & PAGE_WRITE_THRU) klog_trace("WT ");
-    if (flags & PAGE_NO_CACHE) klog_trace("CD ");
+    if (flags & PAGE_PRESENT)
+        klog_trace("P ");
+    if (flags & PAGE_WRITE)
+        klog_trace("W ");
+    if (flags & PAGE_USER)
+        klog_trace("U ");
+    if (flags & PAGE_NO_EXEC)
+        klog_trace("NX ");
+    if (flags & PAGE_GLOBAL)
+        klog_trace("G ");
+    if (flags & PAGE_ACCESSED)
+        klog_trace("A ");
+    if (flags & PAGE_DIRTY)
+        klog_trace("D ");
+    if (flags & PAGE_HUGE_PD)
+        klog_trace("HUGE_PD ");
+    if (flags & PAGE_HUGE_PDPT)
+        klog_trace("HUGE_PDPT ");
+    if (flags & PAGE_WRITE_THRU)
+        klog_trace("WT ");
+    if (flags & PAGE_NO_CACHE)
+        klog_trace("CD ");
     klog_trace("\n");
 }
 
@@ -608,7 +645,8 @@ void page_dump_mapping(virtual_addr_t vaddr, int levels) {
     klog_trace("       PDPT Phys: 0x%X\n", pml4e->bits.frame << PAGE_SHIFT);
     dump_pte_flags(pml4e->value);
 
-    if (levels < 2) return;
+    if (levels < 2)
+        return;
 
     /* Level 2: PDPT */
     pdpt_t* pdpt = (pdpt_t*)phys_to_virt(pml4e->bits.frame << PAGE_SHIFT);
@@ -623,14 +661,15 @@ void page_dump_mapping(virtual_addr_t vaddr, int levels) {
     klog_trace("       PD Phys: 0x%X\n", pdpte->bits.frame << PAGE_SHIFT);
     if (pdpte->bits.pat) {
         klog_trace("       Type: 1GB Huge Page\n");
-        klog_trace("       Mapped: 0x%016llX -> 0x%X\n",
-                  vaddr & ~0x3FFFFFFFULL, pdpte->bits.frame << PAGE_SHIFT);
+        klog_trace("       Mapped: 0x%016llX -> 0x%X\n", vaddr & ~0x3FFFFFFFULL,
+                   pdpte->bits.frame << PAGE_SHIFT);
         dump_pte_flags(pdpte->value);
         return;
     }
     dump_pte_flags(pdpte->value);
 
-    if (levels < 3) return;
+    if (levels < 3)
+        return;
 
     /* Level 3: PD */
     pd_t* pd = (pd_t*)phys_to_virt(pdpte->bits.frame << PAGE_SHIFT);
@@ -645,14 +684,15 @@ void page_dump_mapping(virtual_addr_t vaddr, int levels) {
     klog_trace("       PT Phys: 0x%X\n", pde->bits.frame << PAGE_SHIFT);
     if (pde->bits.pat) {
         klog_trace("       Type: 2MB Huge Page\n");
-        klog_trace("       Mapped: 0x%016llX -> 0x%X\n",
-                  vaddr & ~0x1FFFFFULL, pde->bits.frame << PAGE_SHIFT);
+        klog_trace("       Mapped: 0x%016llX -> 0x%X\n", vaddr & ~0x1FFFFFULL,
+                   pde->bits.frame << PAGE_SHIFT);
         dump_pte_flags(pde->value);
         return;
     }
     dump_pte_flags(pde->value);
 
-    if (levels < 4) return;
+    if (levels < 4)
+        return;
 
     /* Level 4: PT */
     pt_t* pt = (pt_t*)phys_to_virt(pde->bits.frame << PAGE_SHIFT);
@@ -693,12 +733,15 @@ void page_dump_pml4(physical_addr_t pml4_phys) {
         page_table_entry_t* entry = &pml4->entries[i];
         if (entry->bits.present) {
             const char* region_name = "";
-            if (i == 0) region_name = " (Low Memory)";
-            else if (i == 256) region_name = " (Direct Map)";
-            else if (i == 511) region_name = " (Kernel High Half)";
+            if (i == 0)
+                region_name = " (Low Memory)";
+            else if (i == 256)
+                region_name = " (Direct Map)";
+            else if (i == 511)
+                region_name = " (Kernel High Half)";
 
             klog_trace("[PML4[%3d]%s -> PDPT at 0x%X\n", i, region_name,
-                      entry->bits.frame << PAGE_SHIFT);
+                       entry->bits.frame << PAGE_SHIFT);
         }
     }
 

@@ -15,17 +15,17 @@
 // ==================== COOL SERIAL WELCOME SCREEN ====================
 
 // ASCII Art Logo - bigger and cooler
-static const char* CCOS_LOGO[] = {
+static const char* const CCOS_LOGO[] = {
     "  _____  _____ _____    ___    ",    " /  _  \\/  ___//  __ \\  /   |   ",
     " | | | |\\ `--.| /  \\/ / /| |   ",  " | | | | `--. \\ |    / /_| |   ",
     " | |_| |/\\__/ / \\__/\\____  |   ", "  \\___/ \\____/ \\____/    |_|   "};
 
-static const char* CCOS_NAME = "CCOperating System X64";
+static const char* const CCOS_NAME = "CCOperating System X64";
 
 // ANSI style codes
-static const char* ANSI_BOLD = "\033[1m";
-static const char* ANSI_DIM = "\033[2m";
-static const char* ANSI_RESET = "\033[0m";
+static const char* const ANSI_BOLD = "\033[1m";
+static const char* const ANSI_DIM = "\033[2m";
+static const char* const ANSI_RESET = "\033[0m";
 
 // Print colored text
 static void sync_serial_puts_color(const char* str, serial_color_t color) {

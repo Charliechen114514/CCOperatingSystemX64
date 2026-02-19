@@ -20,6 +20,9 @@ serial.log
 *.img
 *.iso
 
+# 数据磁盘镜像
+disk/
+
 # 编辑器临时文件
 *~
 *.swp

@@ -30,7 +30,7 @@
  * Internal State
  * ============================================================================== */
 
-static byte_t s_frame_bitmap_storage[PFRAME_MAX_BITMAP_SIZE];
+static byte_t s_frame_bitmap_storage[PFRAME_MAX_BITMAP_SIZE] __attribute__((section(".lbss")));
 
 /* Frame allocator state */
 typedef struct {

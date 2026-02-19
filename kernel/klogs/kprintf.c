@@ -15,7 +15,8 @@
 #include "private/format.h"
 
 // Buffer for formatted output
-static char buffer[KPRINTF_BUFFER_SIZE];
+// Explicitly initialized to keep it in .data section (not .bss)
+static char buffer[KPRINTF_BUFFER_SIZE] = {0};
 
 // Current log level filter
 static klog_level_t g_log_level = KPRINTF_DEFAULT_FILTERED_LOGLEVEL;
@@ -46,7 +47,7 @@ void kvprintf(klog_backend_t backend, const char* format, va_list args) {
         return;
     }
 
-    static char buffer[KPRINTF_BUFFER_SIZE];
+    static char buffer[KPRINTF_BUFFER_SIZE] = {0};
     klog_format_string(buffer, KPRINTF_BUFFER_SIZE, format, args);
     // Use level -1 for kprintf (no specific level, default color)
     ops->process(buffer, -1);

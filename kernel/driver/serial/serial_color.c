@@ -19,7 +19,7 @@
 #define ANSI_COLOR_M "m"
 
 // Static ANSI escape sequences
-static const char* g_ansi_colors[] = {
+static const char* const g_ansi_colors[] = {
     "\033[0m",   // RESET
     "\033[30m",  // BLACK
     "\033[31m",  // RED

@@ -9,7 +9,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
-BUILD_DIR="$PROJECT_ROOT/build_debug_demo"
+BUILD_DIR="$PROJECT_ROOT/build_debug"
 KERNEL_ELF="$BUILD_DIR/kernel.elf"
 BOOT_IMG="$BUILD_DIR/boot.img"
 PID_FILE="$SCRIPT_DIR/.qemu_debug.pid"

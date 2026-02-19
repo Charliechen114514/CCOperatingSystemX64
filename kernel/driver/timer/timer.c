@@ -23,11 +23,7 @@ static timer_callback_fn timer_callback = NULL;
  * IRQ Descriptor for Timer
  * ============================================================================ */
 
-static irq_descriptor_t timer_irq_desc = {.name = "PIT Timer",
-                                          .handler = timer_irq_handler,
-                                          .context = NULL,
-                                          .flags = IRQ_FLAG_NONE,
-                                          .invocation_count = 0};
+static irq_descriptor_t timer_irq_desc;
 
 /* ============================================================================
  * Internal Functions
@@ -77,10 +73,20 @@ int timer_init(uint32_t frequency) {
     }
 
     klog_trace("Initializing PIT timer at %u Hz\n", frequency);
+
+    // Initialize the IRQ descriptor
+    timer_irq_desc.name = "PIT Timer";
+    timer_irq_desc.handler = timer_irq_handler;
+    timer_irq_desc.context = NULL;
+    timer_irq_desc.flags = IRQ_FLAG_NONE;
+    timer_irq_desc.invocation_count = 0;
+
     // Save frequency
     timer_frequency = frequency;
+
     // Configure PIT
     pit_set_frequency(frequency);
+
     // Register IRQ handler using the new registration mechanism
     int result = irq_register_handler(0, &timer_irq_desc);
     if (result != 0) {

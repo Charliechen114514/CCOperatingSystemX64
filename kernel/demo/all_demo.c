@@ -43,6 +43,10 @@
 #    include "ata/ata_demo.h"
 #endif
 
+#ifdef VFS_DEMO_ENABLED
+#    include "vfs/vfs_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -100,6 +104,11 @@ void run_possible_demos(void) {
 #    ifdef ATA_DEMO_ENABLED
     klog_trace("[Demo Controller] ATA Demo is enabled, running...\n");
     ata_run_demo();
+#    endif
+
+#    ifdef VFS_DEMO_ENABLED
+    klog_trace("[Demo Controller] VFS Demo is enabled, running...\n");
+    vfs_run_demo();
 #    endif
 
     // Add more demos here as they are implemented

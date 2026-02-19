@@ -25,6 +25,9 @@ kernel_start:
     mov rbp, rsp                ; Set frame pointer
 
     ; Clear BSS section (uninitialized data)
+    ; Note: We only clear regular .bss here. The large .lbss section (2MB bitmap)
+    ; extends beyond the bootloader's 2MB identity mapping, so it must be
+    ; cleared later after page_init() establishes proper page tables.
     ; Linker puts __bss_start and __bss_end symbols
     extern __bss_start
     extern __bss_end

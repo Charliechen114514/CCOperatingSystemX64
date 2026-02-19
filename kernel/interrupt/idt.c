@@ -5,10 +5,10 @@
 
 #include "idt.h"
 #include "base/memory.h"
-#include "idt_constants.h"
 #include "gdt.h"
-#include "tss.h"
+#include "idt_constants.h"
 #include "klogs/kprintf.h"
+#include "tss.h"
 
 /* ============================================================================
  * IDT Entry Structure (implementation-private)
@@ -91,7 +91,7 @@ extern void* const irq_handler_table[]; // Array of 16 IRQ entry points
  * Exception Name Table
  * ============================================================================ */
 
-static const char* exception_names[] = {
+static const char* const exception_names[] = {
     "Divide Error (#DE)",                  // 0
     "Debug (#DB)",                         // 1
     "Non-Maskable Interrupt (NMI)",        // 2
@@ -139,7 +139,7 @@ static void idt_set_entry_internal(uint8_t vector, uint64_t handler, uint8_t typ
     idt[vector].offset_middle = (uint16_t)((handler >> 16) & 0xFFFF);
     idt[vector].offset_high = (uint32_t)((handler >> 32) & 0xFFFFFFFF);
     idt[vector].segment_selector = segment_selector;
-    idt[vector].ist = ist;  /* IST index (0-7, 0 = no IST) */
+    idt[vector].ist = ist; /* IST index (0-7, 0 = no IST) */
     idt[vector].type_attr = type_attr;
     idt[vector].reserved = 0;
 }
@@ -176,9 +176,12 @@ void idt_init(void) {
 
         // Set IST for critical exceptions
         uint8_t ist = 0;
-        if (i == IDT_DF) ist = IST_DF;      /* Double Fault -> IST1 */
-        if (i == IDT_NMI) ist = IST_NMI;    /* NMI -> IST2 */
-        if (i == IDT_SS) ist = IST_SS;      /* Stack Fault -> IST4 */
+        if (i == IDT_DF)
+            ist = IST_DF; /* Double Fault -> IST1 */
+        if (i == IDT_NMI)
+            ist = IST_NMI; /* NMI -> IST2 */
+        if (i == IDT_SS)
+            ist = IST_SS; /* Stack Fault -> IST4 */
 
         idt_set_entry_internal(i, (uint64_t)isr_handler_table[i], type, kernel_cs, ist);
     }
@@ -193,8 +196,7 @@ void idt_init(void) {
     idt_load((uint64_t)&idt_ptr);
 
     klog_trace("IDT initialized with %d entries at 0x%016lx\n", IDT_ENTRIES, (uint64_t)&idt);
-    klog_trace("IDT IST configuration: DF=%d, NMI=%d, SS=%d\n",
-               IST_DF, IST_NMI, IST_SS);
+    klog_trace("IDT IST configuration: DF=%d, NMI=%d, SS=%d\n", IST_DF, IST_NMI, IST_SS);
 }
 
 void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr, uint16_t segment_selector) {
@@ -213,7 +215,7 @@ void idt_set_gate_ist(uint8_t vector, uint64_t handler, uint8_t type_attr,
     idt[vector].offset_middle = (uint16_t)((handler >> 16) & 0xFFFF);
     idt[vector].offset_high = (uint32_t)((handler >> 32) & 0xFFFFFFFF);
     idt[vector].segment_selector = segment_selector;
-    idt[vector].ist = ist;  /* Set IST index */
+    idt[vector].ist = ist; /* Set IST index */
     idt[vector].type_attr = type_attr;
     idt[vector].reserved = 0;
 }
@@ -354,7 +356,7 @@ void interrupt_handler(uint64_t vector, uint64_t error_code, interrupt_frame_t* 
             pic_send_eoi(irq);
         } else {
             klog_warn("Meeting One IRQ: %d occurred but no handler registered, that might be "
-                      "unexpected...",
+                      "unexpected...\n",
                       irq);
             pic_send_eoi(irq);
         }

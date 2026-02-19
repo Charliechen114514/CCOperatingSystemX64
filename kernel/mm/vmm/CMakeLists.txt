@@ -21,6 +21,18 @@ target_include_directories(kernel_vmm PUBLIC
     ${CMAKE_SOURCE_DIR}/kernel
 )
 
+# Apply freestanding flags (required for kernel code model)
+target_compile_options(kernel_vmm PUBLIC ${CCOS_FREESTANDING_FLAGS})
+
+# Apply frame pointer flags if enabled
+if(CCOS_ENABLE_FRAME_POINTER)
+    target_compile_options(kernel_vmm PUBLIC ${CCOS_FRAME_POINTER_FLAGS})
+endif()
+
+set_target_properties(kernel_vmm PROPERTIES
+    POSITION_INDEPENDENT_CODE FALSE
+)
+
 # Link required dependencies
 target_link_libraries(kernel_vmm PUBLIC
     kernel_pframe
@@ -30,18 +42,6 @@ target_link_libraries(kernel_vmm PUBLIC
     kernel_assert
 )
 
-# Set compiler flags
-target_compile_options(kernel_vmm PRIVATE
-    -Wall
-    -Wextra
-    -O2
-    -ffreestanding
-    -mcmodel=large
-    -mno-red-zone
-    -mno-mmx
-    -mno-sse
-    -mno-sse2
-)
 
 # Add debug symbols if debug build
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

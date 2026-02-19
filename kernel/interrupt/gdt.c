@@ -4,9 +4,10 @@
  */
 
 #include "interrupt/gdt.h"
-#include "interrupt/tss.h"
 #include "base/memory.h"
+#include "interrupt/tss.h"
 #include "klogs/kprintf.h"
+#include "serial/serial.h"
 
 /* ============================================================================
  * Internal State
@@ -25,8 +26,8 @@
  * 6: TSS (high 64 bits, for x86_64)
  */
 static struct {
-    gdt_entry_t entries[5];       /* First 5 entries */
-    gdt_tss_entry_t tss_entry;    /* TSS entry (16 bytes) */
+    gdt_entry_t entries[5];    /* First 5 entries */
+    gdt_tss_entry_t tss_entry; /* TSS entry (16 bytes) */
 } __attribute__((aligned(16))) s_gdt = {0};
 
 /**
@@ -44,8 +45,8 @@ static bool s_initialized = false;
 /**
  * @brief Set a GDT entry
  */
-static void gdt_set_entry(int index, uint32_t base, uint32_t limit,
-                          uint8_t access, uint8_t granularity) {
+static void gdt_set_entry(int index, uint32_t base, uint32_t limit, uint8_t access,
+                          uint8_t granularity) {
     if (index < 0 || index >= 5) {
         klog_error("[GDT] Invalid index: %d\n", index);
         return;
@@ -71,8 +72,8 @@ static void gdt_set_tss(tss_t* tss) {
     s_gdt.tss_entry.limit_low = limit & 0xFFFF;
     s_gdt.tss_entry.base_low = base & 0xFFFF;
     s_gdt.tss_entry.base_middle = (base >> 16) & 0xFF;
-    s_gdt.tss_entry.access = 0x89;  /* Present, DPL0, Type=64-bit TSS */
-    s_gdt.tss_entry.granularity = ((limit >> 16) & 0x0F) | 0x80;  /* 4KB granularity */
+    s_gdt.tss_entry.access = 0x89; /* Present, DPL0, Type=64-bit TSS */
+    s_gdt.tss_entry.granularity = ((limit >> 16) & 0x0F) | 0x80; /* 4KB granularity */
     s_gdt.tss_entry.base_high = (base >> 24) & 0xFF;
 
     /* Set high 64 bits (x86_64 extension) */
@@ -93,11 +94,11 @@ extern void tss_load(void);
 
 void gdt_init(void) {
     if (s_initialized) {
-        klog_warn("[GDT] Already initialized\n");
+        sync_serial_puts("[GDT] Already initialized\n");
         return;
     }
 
-    klog_info("[GDT] Setting up kernel GDT...\n");
+    sync_serial_puts("[GDT] Setting up kernel GDT...\n");
 
     /* Clear GDT */
     for (int i = 0; i < 5; i++) {
@@ -114,32 +115,28 @@ void gdt_init(void) {
 
     /* Entry 1: Kernel 64-bit code */
     gdt_set_entry(1, 0, 0xFFFFFFFF,
-                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL0 |
-                  GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_CODE,
+                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL0 | GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_CODE,
                   GDT_GRANULARITY_4K | GDT_GRANULARITY_64BIT);
 
     /* Entry 2: Kernel data */
     gdt_set_entry(2, 0, 0xFFFFFFFF,
-                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL0 |
-                  GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_DATA,
+                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL0 | GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_DATA,
                   GDT_GRANULARITY_4K | GDT_GRANULARITY_32BIT);
 
     /* Entry 3: User 64-bit code */
     gdt_set_entry(3, 0, 0xFFFFFFFF,
-                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL3 |
-                  GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_CODE,
+                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL3 | GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_CODE,
                   GDT_GRANULARITY_4K | GDT_GRANULARITY_64BIT);
 
     /* Entry 4: User data */
     gdt_set_entry(4, 0, 0xFFFFFFFF,
-                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL3 |
-                  GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_DATA,
+                  GDT_ACCESS_PRESENT | GDT_ACCESS_DPL3 | GDT_ACCESS_SYSTEM | GDT_ACCESS_TYPE_DATA,
                   GDT_GRANULARITY_4K | GDT_GRANULARITY_32BIT);
 
     /* Entry 5: TSS */
     tss_t* tss = tss_get();
     if (tss == NULL) {
-        klog_error("[GDT] TSS not initialized!\n");
+        sync_serial_puts("[GDT] TSS not initialized!\n");
         return;
     }
     gdt_set_tss(tss);
@@ -150,13 +147,13 @@ void gdt_init(void) {
     /* Load TSS */
     tss_load();
 
-    klog_info("[GDT] Kernel GDT loaded:\n");
-    klog_info("[GDT]   NULL:        0x00\n");
-    klog_info("[GDT]   Kernel Code: 0x08 (64-bit)\n");
-    klog_info("[GDT]   Kernel Data: 0x10\n");
-    klog_info("[GDT]   User Code:   0x18 (64-bit)\n");
-    klog_info("[GDT]   User Data:   0x20\n");
-    klog_info("[GDT]   TSS:         0x28\n");
+    sync_serial_puts("[GDT] Kernel GDT loaded:\n");
+    sync_serial_puts("[GDT]   NULL:        0x00\n");
+    sync_serial_puts("[GDT]   Kernel Code: 0x08 (64-bit)\n");
+    sync_serial_puts("[GDT]   Kernel Data: 0x10\n");
+    sync_serial_puts("[GDT]   User Code:   0x18 (64-bit)\n");
+    sync_serial_puts("[GDT]   User Data:   0x20\n");
+    sync_serial_puts("[GDT]   TSS:         0x28\n");
 
     s_initialized = true;
 }
@@ -176,13 +173,13 @@ void gdt_dump(void) {
         const gdt_entry_t* e = &s_gdt.entries[i];
         uint32_t base = e->base_low | (e->base_middle << 16) | (e->base_high << 24);
         uint32_t limit = e->limit_low | ((e->granularity & 0x0F) << 16);
-        klog_info("[GDT]   [%d] Base=0x%08X Limit=0x%08X Access=0x%02X Gran=0x%02X\n",
-                 i, base, limit, e->access, e->granularity);
+        klog_info("[GDT]   [%d] Base=0x%08X Limit=0x%08X Access=0x%02X Gran=0x%02X\n", i, base,
+                  limit, e->access, e->granularity);
     }
 
     const gdt_tss_entry_t* tss = &s_gdt.tss_entry;
-    uint64_t tss_base = tss->base_low | (tss->base_middle << 16) |
-                        (tss->base_high << 24) | ((uint64_t)tss->base_upper << 32);
+    uint64_t tss_base = tss->base_low | (tss->base_middle << 16) | (tss->base_high << 24) |
+                        ((uint64_t)tss->base_upper << 32);
     uint32_t tss_limit = tss->limit_low | ((tss->granularity & 0x0F) << 16);
     klog_info("[GDT]   [5] TSS Base=0x%016llX Limit=0x%08X\n", tss_base, tss_limit);
 }

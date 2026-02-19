@@ -9,7 +9,8 @@
 
 // Format buffer for number conversion (shared across the module)
 // Size is configured via KPRINTF_FORMAT_BUFFER_SIZE
-static char g_format_buffer[KPRINTF_FORMAT_BUFFER_SIZE];
+// Explicitly initialized to keep it in .data section (not .bss)
+static char g_format_buffer[KPRINTF_FORMAT_BUFFER_SIZE] = {0};
 
 /**
  * @brief Format string to buffer (internal vsnprintf implementation)

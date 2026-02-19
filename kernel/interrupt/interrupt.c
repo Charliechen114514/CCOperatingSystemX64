@@ -8,6 +8,7 @@
 #include "idt.h"
 #include "idt_constants.h"
 #include "klogs/kprintf.h"
+#include "serial/serial.h"
 
 /* ============================================================================
  * Interrupt Subsystem Initialization
@@ -27,23 +28,19 @@ static void interrupt_enable_all_irqs(void) {
 }
 
 void interrupt_init(void) {
-    klog_trace("Initializing interrupt subsystem...\n");
+    sync_serial_puts("Initializing interrupt subsystem...\n");
 
     // Step 1: Initialize and remap the PIC
     // Remap IRQs 0-15 to vectors 32-47 to avoid CPU exceptions (0-31)
     pic_init(0x20, 0x28); // offset1=32, offset2=40
-    klog_trace("PIC initialized: IRQs remapped to vectors 32-47\n");
+    sync_serial_puts("PIC initialized: IRQs remapped to vectors 32-47\n");
 
     // Step 2: Disable all IRQs first
     pic_disable_all();
 
     // Step 3: Initialize the IDT
     idt_init();
-    klog_trace("IDT initialized\n");
-
-    // Note: Interrupts are NOT enabled yet.
-    // All interrupt-dependent devices should be initialized first,
-    // then call interrupt_finalize() to enable interrupts.
+    sync_serial_puts("IDT initialized\n");
 }
 
 /**

@@ -89,7 +89,7 @@ void double_fault_handler(interrupt_frame_t* frame, uint64_t error_code) {
  * ============================================================================ */
 
 const char* ss_parse_error_code(uint64_t error_code) {
-    static char buffer[128];
+    static char buffer[128] = {0};
 
     bool external = (error_code & 0x01) != 0;
     bool not_present = (error_code & 0x02) != 0;

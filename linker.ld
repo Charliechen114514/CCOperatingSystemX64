@@ -26,28 +26,25 @@ SECTIONS
         *(.data.*)
     }
 
-    /* User programs embedded as binary data
-     * These must be placed after .got.plt and before .bss to maintain
-     * consistent memory layout regardless of whether user demos are enabled.
-     * The linker will place them here only when ENABLE_USER_DEMO=ON.
-     * IMPORTANT: User programs must be 4KB-aligned for proper page mapping.
-     */
-    . = ALIGN(4096);
-    .user_uname_test : {
-        *(.user_uname_test)
-    }
-    /* Catch-all for any future .user_* sections */
-    .user (NOLOAD) : {
-        *(.user_*)
-    }
-
-    /* Uninitialized data */
+    /* Uninitialized data - regular BSS */
     .bss : {
         __bss_start = .;
         *(.bss)
         *(.bss.*)
         *(COMMON)
         __bss_end = .;
+    }
+
+    /* Large BSS section for big static arrays (e.g., 2MB bitmap)
+     * This section is placed after regular BSS and uses NOLOAD attribute
+     * to prevent it from being included in the binary file.
+     * The bootloader must ensure enough memory is available for this section.
+     */
+    .lbss (NOLOAD) : {
+        __lbss_start = .;
+        *(.lbss)
+        *(.lbss.*)
+        __lbss_end = .;
     }
 
     /* Discard sections we don't need */

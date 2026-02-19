@@ -60,7 +60,7 @@ add_compile_options(
 
 # Debug/Release 特定标志（仅当未设置时才使用默认值）
 if(NOT CMAKE_C_FLAGS_DEBUG)
-    set(CMAKE_C_FLAGS_DEBUG "-g -O0")
+    set(CMAKE_C_FLAGS_DEBUG "-g -O1")  # Use -O1 instead of -O0 to avoid memory layout issues
 endif()
 if(NOT CMAKE_C_FLAGS_RELEASE)
     set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
@@ -87,7 +87,7 @@ set(CCOS_FREESTANDING_FLAGS
     -nostdinc
     -nostartfiles
     -nodefaultlibs
-    -mcmodel=large
+    -mcmodel=medium
     -fno-pic
     -fno-pie
     -fno-plt
@@ -99,7 +99,7 @@ set(CCOS_FREESTANDING_COMPILE_FLAGS
     -ffreestanding
     -fno-builtin
     -fno-stack-protector
-    -mcmodel=large
+    -mcmodel=medium
 )
 
 # ============================================================================
@@ -206,6 +206,11 @@ add_custom_command(TARGET boot_img POST_BUILD
         ${CMAKE_BINARY_DIR}/bootloader.bin
         ${CMAKE_BINARY_DIR}/kernel.bin
 )
+
+# ============================================================================
+# Data Disk Configuration (must be before QemuTargets)
+# ============================================================================
+include(cmake/DataDisk.cmake)
 
 # ============================================================================
 # QEMU 运行目标配置

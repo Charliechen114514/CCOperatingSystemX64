@@ -309,6 +309,37 @@ else()
     message(STATUS "ATA Demo: DISABLED")
 endif()
 
+# VFS Demo
+if(ENABLE_VFS_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "VFS")
+    message(STATUS "VFS Demo: ENABLED")
+
+    add_library(demo_vfs STATIC vfs/vfs_demo.c)
+
+    target_include_directories(demo_vfs PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_vfs PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_vfs PUBLIC VFS_DEMO_ENABLED=1)
+
+    # VFS demo 依赖 fs, klogs, heap, base
+    target_link_libraries(demo_vfs PUBLIC fs klogs kernel_heap base)
+
+    set_target_properties(demo_vfs PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 VFS demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_vfs)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC VFS_DEMO_ENABLED=1)
+else()
+    message(STATUS "VFS Demo: DISABLED")
+endif()
+
 # 根据 CCOS_ENABLE_DEMO 定义编译宏
 # 只有在启用时才定义宏，这样 #ifdef CCOS_ENABLE_DEMO 才能正确工作
 if(CCOS_ENABLE_DEMO)

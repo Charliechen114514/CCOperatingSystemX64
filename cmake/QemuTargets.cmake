@@ -22,7 +22,8 @@ set(CCOS_QEMU_CPU_FLAG -cpu max CACHE STRING "QEMU CPU flags")
 add_custom_target(run
     COMMAND ${QEMU} -cpu max -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide
-        -serial stdio
+        -drive format=raw,file=${CCOS_DATA_DISK_IMAGE},if=ide,index=1
+        -serial stdio -d int,cpu_reset -D qemu_crash.log --no-reboot
     DEPENDS boot_img
     COMMENT "Running CCOS in QEMU with ${CCOS_MEMORY_SIZE_HUMAN} memory (text mode)"
     VERBATIM
@@ -32,6 +33,7 @@ add_custom_target(run
 add_custom_target(vga-run
     COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
+        -drive format=raw,file=${CCOS_DATA_DISK_IMAGE},if=ide,index=1
         -serial stdio
         -vga std
         -display vnc=:0
@@ -44,6 +46,7 @@ add_custom_target(vga-run
 add_custom_target(qemu-monitor-run
     COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
+        -drive format=raw,file=${CCOS_DATA_DISK_IMAGE},if=ide,index=1
         -serial stdio
         -monitor telnet:127.0.0.1:4444,server,nowait
     DEPENDS boot_img
@@ -55,6 +58,7 @@ add_custom_target(qemu-monitor-run
 add_custom_target(debug
     COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide
+        -drive format=raw,file=${CCOS_DATA_DISK_IMAGE},if=ide,index=1
         -serial stdio
         -nographic
         -s -S
@@ -80,6 +84,7 @@ add_custom_target(build-and-vga-run
     COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
     COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
+        -drive format=raw,file=${CCOS_DATA_DISK_IMAGE},if=ide,index=1
         -vga std
         -display vnc=:0
     COMMENT "Build and run CCOS with VGA graphics"
@@ -99,6 +104,7 @@ add_custom_target(build-and-qemu-monitor-run
     COMMAND ${CMAKE_COMMAND} -E echo "=========================================="
     COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img
+        -drive format=raw,file=${CCOS_DATA_DISK_IMAGE},if=ide,index=1
         -serial stdio
         -monitor telnet:127.0.0.1:4444,server,nowait
     COMMENT "Build and run CCOS with QEMU Monitor"
@@ -113,6 +119,7 @@ add_custom_target(build-and-qemu-monitor-run
 add_custom_target(run-only
     COMMAND ${QEMU} ${CCOS_QEMU_CPU_FLAG} -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide
+        -drive format=raw,file=${CCOS_DATA_DISK_IMAGE},if=ide,index=1
         -serial stdio
     DEPENDS boot_img
     COMMENT "Running CCOS without rebuild"

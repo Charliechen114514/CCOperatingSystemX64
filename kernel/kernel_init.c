@@ -7,6 +7,7 @@
 #include "driver/serial/serial_intr.h"
 #include "driver/timer/timer.h"
 #include "driver/vga/vga.h"
+#include "fs/fs.h"
 #include "interrupt/exception.h"
 #include "interrupt/gdt.h"
 #include "interrupt/interrupt.h"
@@ -55,22 +56,6 @@ void kernel_init(void) {
     klog_trace("[MEM] Total: %u MB, Usable: %u MB, Entries: %u\n", mem_stats.total_mb,
                mem_stats.usable_mb, mem_stats.entry_count);
 
-    // Initialize physical frame allocator
-    pframe_init();
-
-    // Initialize page table management
-    page_init();
-
-    // Initialize virtual memory manager
-    vmm_init();
-
-    // Initialize kernel heap (kmalloc/kfree)
-    heap_init();
-
-    // Phase 1: Initialize TSS and GDT (must be before IDT)
-    tss_init(); /* Initialize TSS with IST stacks */
-    gdt_init(); /* Initialize GDT and load TSS */
-
     // Phase 2: Initialize interrupt subsystem (PIC + IDT, but interrupts disabled)
     // NOTE: syscall_init is moved after interrupt_init to ensure IDT is ready
     // in case any MSR/CR4 operations trigger exceptions.
@@ -78,6 +63,24 @@ void kernel_init(void) {
 
     // Phase 3: Register exception handlers
     exception_init(); /* Register DF, SS, GP handlers */
+
+    // Phase 1: Initialize TSS and GDT (must be before IDT)
+    tss_init(); /* Initialize TSS with IST stacks */
+    gdt_init(); /* Initialize GDT and load TSS */
+
+    // Initialize page table management FIRST
+    // This establishes the direct physical mapping needed to access .lbss (2MB bitmap)
+    page_init();
+
+    // Now initialize physical frame allocator
+    // The .lbss section has been cleared by page_init(), so bitmap_init can safely use it
+    pframe_init();
+
+    // Initialize virtual memory manager
+    vmm_init();
+
+    // Initialize kernel heap (kmalloc/kfree)
+    heap_init();
 
     // Phase 3.5: Initialize system call framework (after IDT and exception handlers)
     klog_trace("[INIT] Before syscall_init...\n");
@@ -98,7 +101,8 @@ void kernel_init(void) {
     rtc_init();            // Initialize RTC (periodic interrupt disabled by default)
     uart_init_intr_mode(); // Initialize UART interrupt mode for interactive communication
     keyboard_init();       // Initialize keyboard driver for VGA shell
-    ata_init();
+    // Initialize filesystem subsystem (must be after heap)
+    fs_init();
     // Phase 7: Finalize interrupt initialization (enable IRQs + CPU interrupts)
     interrupt_finalize();
 

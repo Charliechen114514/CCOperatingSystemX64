@@ -5,6 +5,7 @@
 
 #include "mm/vmm/vmm.h"
 #include "assert/assert.h"
+#include "driver/serial/serial.h"
 #include "klogs/kprintf.h"
 #include "mm/pframe/pframe.h"
 
@@ -122,8 +123,11 @@ static memory_region_t* find_region(virtual_addr_t addr) {
  * ============================================================================ */
 
 vmm_result_t vmm_init(void) {
+    klog_info("[VMM] Start Virtual Memory Manager Inits...\n");
+
     if (s_initialized) {
-        klog_warn("[VMM] Already initialized\n");
+        /* Use sync_serial_puts for debugging instead of klog_warn */
+        sync_serial_puts("[VMM] Already initialized (debug check)\n");
         return VMM_OK;
     }
 
@@ -140,7 +144,8 @@ vmm_result_t vmm_init(void) {
     klog_info("[VMM]   Kernel data: 0x%016llX - 0x%016llX\n", KERNEL_DATA_BASE,
               KERNEL_DATA_BASE + KERNEL_DATA_SIZE);
     klog_info("[VMM]   Kernel heap: 0x%016llX - 0x%016llX\n", KERNEL_HEAP_BASE, KERNEL_HEAP_MAX);
-    klog_info("[VMM]   General alloc: 0x%016llX - 0x%016llX\n", KERNEL_GENERAL_BASE, KERNEL_GENERAL_MAX);
+    klog_info("[VMM]   General alloc: 0x%016llX - 0x%016llX\n", KERNEL_GENERAL_BASE,
+              KERNEL_GENERAL_MAX);
     klog_info("[VMM]   User space:  0x%016llX - 0x%016llX\n", USER_BASE, USER_END);
 
     /* Register fixed kernel regions */
@@ -154,9 +159,13 @@ vmm_result_t vmm_init(void) {
      * within this region, ensuring heap contiguity */
     add_region(KERNEL_HEAP_BASE, KERNEL_HEAP_MAX, 0, VMAP_FLAG_NONE, "kernel_heap");
 
+    /* Debug: Check s_kernel_virt_hint value before setting initialized flag */
+    sync_serial_puts("[VMM] Checking s_kernel_virt_hint...\n");
+
     s_initialized = true;
     klog_info("[VMM] Initialization complete\n");
-    klog_info("[VMM] General page allocation starts at 0x%016llX\n", s_kernel_virt_hint);
+    /* Use %p instead of %016llX to avoid potential formatting issues */
+    klog_info("[VMM] General page allocation starts at %p\n", (void*)s_kernel_virt_hint);
 
     /* Dump the memory map for debugging */
     // vmm_dump_memory_map(0, 64);
