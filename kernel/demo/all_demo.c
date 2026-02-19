@@ -39,6 +39,10 @@
 #    include "sched/sched_demo.h"
 #endif
 
+#ifdef ATA_DEMO_ENABLED
+#    include "ata/ata_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -91,6 +95,11 @@ void run_possible_demos(void) {
     klog_trace("[Demo Controller] Sched Demo is enabled, running...\n");
     sched_run_rr_demo();
     sched_run_prio_demo();
+#    endif
+
+#    ifdef ATA_DEMO_ENABLED
+    klog_trace("[Demo Controller] ATA Demo is enabled, running...\n");
+    ata_run_demo();
 #    endif
 
     // Add more demos here as they are implemented

@@ -255,13 +255,17 @@ CCOS_VGA* vga_instance() {
 }
 
 void system_vga_init() {
-    internal_vga_instance.height = VGA_HEIGHT;
-    internal_vga_instance.width = VGA_WIDTH;
-    internal_vga_instance.base_addr =
-        (char*)(uintptr_t)VGA_BASE_ADDR;           // NOLINT(performance-no-int-to-ptr)
-    internal_vga_instance.native_cursor_pos = 0;   // start at (0, 0)
-    internal_vga_instance.font_color = 0x0F;       // white font
-    internal_vga_instance.background_color = 0x00; // black background
+    // Initialize each field individually to prevent compiler bugs
+    // Use inline assembly for problematic fields
+    internal_vga_instance.base_addr = (char*)0xB8000;
+    __asm__ volatile("movb $0x50, %0" : "=m"(internal_vga_instance.width) : : "memory");
+    __asm__ volatile("movb $0x19, %0" : "=m"(internal_vga_instance.height) : : "memory");
+    internal_vga_instance.native_cursor_pos = 0;
+    internal_vga_instance.font_color = 0x0F;
+    internal_vga_instance.background_color = 0x00;
+
+    // Prevent compiler from reordering or optimizing these writes
+    __asm__ volatile("" ::: "memory");
 
     // Enable hardware cursor by default (will be disabled if software cursor is used)
     // Note: vga_shell_init() will disable hardware cursor when software cursor is initialized

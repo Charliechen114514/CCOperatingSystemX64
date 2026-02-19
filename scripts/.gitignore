@@ -1,2 +1,3 @@
 .qemu_monitor.log
 .qemu_serial.log
+.qemu_debug.pid

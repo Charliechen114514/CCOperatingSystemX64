@@ -7,6 +7,8 @@ force_rebuild_with_vga_run.sh
 REQUEST.md
 # 构建目录
 build/
+build_debug/
+build_release/
 iso/
 
 # QEMU 日志

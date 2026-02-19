@@ -14,6 +14,7 @@ add_library(driver STATIC
     pic/pic.c
     timer/timer.c
     rtc/rtc.c
+    ata/ata.c
 )
 
 target_include_directories(driver PUBLIC

@@ -1,5 +1,6 @@
 #include "kernel_init.h"
 #include "base/hashmap.h"
+#include "driver/ata/ata.h"
 #include "driver/keyboard/keyboard.h"
 #include "driver/rtc/rtc.h"
 #include "driver/serial/serial.h"
@@ -97,7 +98,7 @@ void kernel_init(void) {
     rtc_init();            // Initialize RTC (periodic interrupt disabled by default)
     uart_init_intr_mode(); // Initialize UART interrupt mode for interactive communication
     keyboard_init();       // Initialize keyboard driver for VGA shell
-
+    ata_init();
     // Phase 7: Finalize interrupt initialization (enable IRQs + CPU interrupts)
     interrupt_finalize();
 

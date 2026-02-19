@@ -19,9 +19,10 @@ kernel_start:
     ; The bootloader's 'call rdi' pushed 8 bytes (return address), so we need to
     ; account for that. We want the stack to be 16-byte aligned BEFORE we call
     ; kernel_main (which will push another 8 bytes).
-    mov rsp, 0x80000 - 8  ; Adjust for bootloader's call
-    and rsp, -16           ; Align to 16-byte boundary
-    mov rbp, rsp
+    mov eax, 0x80000 - 8        ; Load stack address into eax
+    mov rsp, rax                ; Move to 64-bit stack pointer
+    and rsp, -16                ; Align to 16-byte boundary
+    mov rbp, rsp                ; Set frame pointer
 
     ; Clear BSS section (uninitialized data)
     ; Linker puts __bss_start and __bss_end symbols

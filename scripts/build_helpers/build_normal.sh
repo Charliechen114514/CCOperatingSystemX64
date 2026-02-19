@@ -12,7 +12,7 @@ echo -e "${GREEN} You are selecting Release typical builds...${NC}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-BUILD_DIR="${PROJECT_ROOT}/build_release"
+BUILD_DIR="${PROJECT_ROOT}/build"
 
 echo -e "${GREEN} Where is the Project? ${PROJECT_ROOT} ${NC}"
 echo -e "${GREEN} Where is the Build Dir? ${BUILD_DIR} ${NC}"

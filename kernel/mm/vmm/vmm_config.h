@@ -30,6 +30,9 @@
 #define KERNEL_DATA_BASE        (KERNEL_TEXT_BASE + KERNEL_TEXT_SIZE)
 #define KERNEL_DATA_SIZE        (2 * 1024 * 1024)     /* 2MB */
 
+/* Kernel physical load address (from linker.ld) */
+#define KERNEL_PHYS_BASE        0x10000ULL             /* 64KB - where bootloader loads kernel */
+
 /* Kernel heap region */
 #define KERNEL_HEAP_BASE        0xFFFFFFFF81000000ULL
 #define KERNEL_HEAP_SIZE        (128 * 1024 * 1024)   /* 128MB */

@@ -12,7 +12,7 @@ echo -e "${GREEN} You are selecting Release build with QEMU Monitor...${NC}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-BUILD_DIR="${PROJECT_ROOT}/build"
+BUILD_DIR="${PROJECT_ROOT}/build_debug_demo"
 
 echo -e "${GREEN} Where is the Project? ${PROJECT_ROOT} ${NC}"
 echo -e "${GREEN} Where is the Build Dir? ${BUILD_DIR} ${NC}"
