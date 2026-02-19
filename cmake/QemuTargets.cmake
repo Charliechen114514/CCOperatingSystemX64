@@ -22,7 +22,7 @@ set(CCOS_QEMU_CPU_FLAG -cpu max CACHE STRING "QEMU CPU flags")
 add_custom_target(run
     COMMAND ${QEMU} -cpu max -m ${CCOS_QEMU_MEMORY_ARG}
         -drive format=raw,file=${CMAKE_BINARY_DIR}/boot.img,if=ide
-        -serial stdio -no-reboot
+        -serial stdio
     DEPENDS boot_img
     COMMENT "Running CCOS in QEMU with ${CCOS_MEMORY_SIZE_HUMAN} memory (text mode)"
     VERBATIM
