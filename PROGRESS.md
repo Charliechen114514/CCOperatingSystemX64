@@ -4,15 +4,66 @@
 
 ---
 
-#### 7.2 文件系统
+## 📊 整体进度
+
+| 模块 | 完成度 | 状态 |
+|:----:|:------:|:----:|
+| 中断处理 | 90% | 🟢 部分完成 |
+| 进程管理 | 90% | 🟢 部分完成 |
+| 系统调用框架 | 95% | 🟢 部分完成 |
+| 用户态支持 | 85% | 🟢 部分完成 |
+| ATA 磁盘驱动 | 95% | 🟢 已完成 |
+| VFS 虚拟文件系统 | 90% | 🟢 已完成 |
+| EXT2 文件系统 | 85% | 🟢 已完成 |
+
+---
+
+## 🔄 已完成阶段
+
+### Stage 24: ATA 磁盘驱动
+```
+kernel/driver/ata/
+├── ata.h            - ATA 驱动接口
+└── ata.c            - ATA 驱动实现
+```
+- ✅ ATA/ATAPI PIO 模式
+- ✅ LBA28/LBA48 寻址
+- ✅ 基础磁盘读写功能
+
+### Stage 25: EXT2 文件系统与 VFS
 ```
 kernel/fs/
-└── vfs.h/c          - 虚拟文件系统
+├── fs.c/h               - 文件系统主接口
+├── block/
+│   ├── block.h          - 块设备接口
+│   └── block.c          - 块设备实现
+├── vfs/
+│   ├── vfs.h            - VFS 核心头文件
+│   ├── vfs_superblock.c - 超级块管理
+│   ├── vfs_inode.c      - inode 操作
+│   ├── vfs_file.c       - 文件读写
+│   ├── vfs_dentry.c     - 目录项缓存
+│   ├── vfs_open.c       - 文件打开
+│   ├── vfs_mount.c      - 文件系统挂载
+│   └── vfs_path.c       - 路径解析
+└── ext2/
+    ├── ext2.h           - EXT2 公共接口
+    ├── ext2_internal.h  - EXT2 内部结构
+    ├── ext2.c           - EXT2 主入口
+    ├── ext2_superblock.c - EXT2 超级块
+    ├── ext2_inode.c     - EXT2 inode 操作
+    ├── ext2_file.c      - EXT2 文件读写
+    └── ext2_dir.c       - EXT2 目录操作
 ```
-- [ ] ext2 支持
-- [ ] 文件操作接口
-- [ ] 目录操作
-- [ ] 路径解析
+- ✅ 通用块设备层 (block.c/h)
+- ✅ VFS 核心功能 (超级块、inode、文件、目录项)
+- ✅ EXT2 文件系统驱动
+- ✅ 文件操作接口 (open/read/write/lseek/close)
+- ✅ 目录操作 (readdir)
+- ✅ 路径解析 (path_lookup)
+- ✅ VFS 演示程序 (vfs_demo.c)
+- ✅ 数据磁盘自动创建/格式化 (DataDisk.cmake)
+- ✅ 修复 >64KB 内核加载问题 (bootloader)
 
 ---
 
