@@ -177,6 +177,18 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | **用户态 C 库** | printf/malloc/exit 等标准库函数 |
 | **用户程序构建** | freestanding 编译、符号重命名、内核嵌入 |
 
+### 文件系统
+
+| 模块 | 功能 |
+|------|------|
+| **ATA 磁盘驱动** | ATA/ATAPI PIO 模式、LBA28/LBA48 寻址 |
+| **块设备层** | 通用块设备接口、请求队列管理 |
+| **VFS 虚拟文件系统** | 超级块、inode、文件、目录项抽象 |
+| **EXT2 文件系统** | EXT2 超级块解析、inode 管理、块寻址 |
+| **文件操作** | open/read/write/lseek/close 系统调用 |
+| **目录操作** | readdir、路径解析、目录遍历 |
+| **数据磁盘管理** | 自动创建、格式化 ext2 磁盘镜像 |
+
 ---
 
 ## 📚 学习路径
@@ -210,6 +222,8 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | [21 简单进程](tutorial/21_process_simple/) | 进程控制块与上下文切换 |
 | [22 调度器类](tutorial/22_sched_class/) | 调度器抽象类与多策略支持 |
 | [23 用户态进程](tutorial/23_usr_proc/) | Ring 3 切换与用户态 C 库 |
+| [24 ATA 磁盘驱动](tutorial/24_ata_driver/) | ATA/ATAPI PIO 模式、LBA 寻址 |
+| [25 EXT2 文件系统](tutorial/25_ext2_vfs/) | VFS 与 EXT2 文件系统实现 |
 
 ### 文档 (Document)
 
@@ -244,8 +258,9 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | 调度器框架 | 100% | ✅ 完成 |
 | 系统调用 | 95% | 🟢 部分完成 |
 | 用户态支持 | 85% | 🟢 部分完成 |
-| 用户态 C 库 | 80% | 🟢 部分完成 |
-| 文件系统 | 0% | 🔴 未开始 |
+| ATA 磁盘驱动 | 95% | 🟢 已完成 |
+| VFS 虚拟文件系统 | 90% | 🟢 已完成 |
+| EXT2 文件系统 | 85% | 🟢 已完成 |
 
 ---
 
