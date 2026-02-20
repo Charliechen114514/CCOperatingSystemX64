@@ -8,8 +8,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Progress](https://img.shields.io/badge/progress-90%_for_base_stage-blue)]()
+[![Progress](https://img.shields.io/badge/progress-100%20completed-blue)]()
 [![Platform](https://img.shields.io/badge/platform-x86__64-orange)]()
+[![LOC](https://img.shields.io/badge/LOC-14K%2B-brightgreen)]()
 
 **升级到X64，全新的[CCOperateSystem](https://github.com/Charliechen114514/CCOperateSystem)**
 
@@ -39,6 +40,9 @@
 | **调度器框架** | Round-Robin、优先级调度、抢占式 |
 | **系统调用** | syscall/sysret、完整的 POSIX 接口 |
 | **用户态支持** | Ring 3 进程、用户态 C 库 |
+| **同步原语** | Spinlock、Mutex、Semaphore、CondVar、RWLock |
+| **文件系统** | VFS、EXT2、ATA 磁盘驱动 |
+| **多线程支持** | 内核线程与用户线程 |
 
 ---
 
@@ -95,6 +99,7 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | 模块 | 功能 |
 |------|------|
 | **VGA 文本模式** | 80x25 显示、16 色支持、硬件/软件光标 |
+| **GUI 辅助** | 进度条、布局辅助 |
 | **格式化输出** | printf 风格输出、多后端支持 |
 | **欢迎界面** | ASCII 艺术 logo、模块化设计 |
 
@@ -105,6 +110,7 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | **字符串库** | 完整字符串操作 (strlen/strcpy/strcmp/strtok 等) |
 | **内存操作** | memset/memcpy/memmove/memcmp |
 | **双向链表** | Linux kernel 风格链表操作 |
+| **哈希表** | 开放寻址哈希表 |
 | **位图操作** | 位图管理、位查找、位图运算 |
 | **数学工具** | 对齐、幂运算、除法变体、位操作宏 |
 
@@ -115,6 +121,7 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | **E820 内存检测** | BIOS E820/E801/88h 内存地图解析 |
 | **物理帧分配器** | Bitmap 物理帧分配/释放 |
 | **虚拟内存管理** | 页表管理、地址映射、权限控制 |
+| **堆内存管理** | kmalloc/kfree、块合并算法 |
 | **页错误处理** | 缺页异常、按需分页框架、Copy-on-Write 框架 |
 
 ### 中断与设备驱动
@@ -127,6 +134,7 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | **键盘驱动** | PS/2 控制器、扫描码解析、环形缓冲区 |
 | **串口中断** | RX/TX 中断、串口 Shell |
 | **RTC 时钟** | CMOS RTC、周期性中断、闹钟功能 |
+| **ATA 磁盘驱动** | ATA/ATAPI PIO 模式、LBA28/LBA48 寻址 |
 
 ### 开发工具
 
@@ -142,6 +150,7 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | 模块 | 功能 |
 |------|------|
 | **进程控制块** | PCB 结构定义、进程状态管理、PID 分配器 |
+| **线程控制** | TCB 结构、线程创建与退出 |
 | **上下文切换** | switch_context/switch_to_first 汇编实现 |
 | **进程操作** | fork/exit/wait4 系统调用、Copy-on-Write 支持 |
 | **内核栈管理** | 每进程独立内核栈、栈溢出保护 |
@@ -157,6 +166,18 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | **抢占式调度** | 时间片到期、优先级抢占支持 |
 | **调度器注册** | 动态注册、运行时切换 |
 
+### 同步原语
+
+| 模块 | 功能 |
+|------|------|
+| **Spinlock** | 自旋锁、Ticket Lock、关闭抢占支持 |
+| **Mutex** | 互斥锁、基于等待队列实现 |
+| **Semaphore** | 信号量、资源计数 |
+| **CondVar** | 条件变量、等待/通知机制 |
+| **RWLock** | 读写锁、读者优先策略 |
+| **WaitQueue** | 等待队列、可中断等待 |
+| **Atomic** | 原子操作、GCC 内建原子 |
+
 ### 系统调用
 
 | 模块 | 功能 |
@@ -164,7 +185,9 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | **syscall/sysret** | 快速系统调用指令支持 |
 | **系统调用分发** | 统一入口、参数解析、错误处理 |
 | **进程管理** | fork/exit/wait/getpid/getppid/yield |
-| **I/O 操作** | write/read/open/close |
+| **线程管理** | thread_create/thread_exit |
+| **同步操作** | mutex_lock/unlock、sem_wait/post |
+| **I/O 操作** | write/read/open/close/lseek |
 | **系统信息** | uname/getuid/kill/execve |
 
 ### 用户态支持
@@ -224,55 +247,7 @@ cmake -B build && cmake --build build --target build-and-vga-run
 | [23 用户态进程](tutorial/23_usr_proc/) | Ring 3 切换与用户态 C 库 |
 | [24 ATA 磁盘驱动](tutorial/24_ata_driver/) | ATA/ATAPI PIO 模式、LBA 寻址 |
 | [25 EXT2 文件系统](tutorial/25_ext2_vfs/) | VFS 与 EXT2 文件系统实现 |
-
-### 文档 (Document)
-
-深入理解各模块设计与实现细节：
-
-| 文档 | 说明 |
-|------|------|
-| [Bootloader 设计](document/01_bootloader/) | 引导程序原理与实现 |
-| [内核加载](document/02_load_asm_kernel/) | 内核加载流程 |
-| [大内核支持](document/05_load_large_kernel/) | 超大内核加载方案 |
-| [构建指南](document/build.md) | CMake 构建系统详解 |
-| [调试教程](document/debug_tutorial/) | 调试技巧与工具使用 |
-| [开发经验](document/experience/) | 开发过程中的经验总结 |
-
----
-
-## 🎯 进度与规划
-
-当前项目已完成进程管理、调度器框架和用户态支持阶段，详见 [PROGRESS.md](PROGRESS.md)
-
-| 模块 | 完成度 | 状态 |
-|:----:|:------:|:----:|
-| 构建系统 | 100% | ✅ 完成 |
-| Bootloader | 100% | ✅ 完成 |
-| 内核启动 | 100% | ✅ 完成 |
-| VGA 驱动 | 100% | ✅ 完成 |
-| 串口驱动 | 100% | ✅ 完成 |
-| 日志系统 | 100% | ✅ 完成 |
-| 内存管理 | 100% | ✅ 完成 |
-| 中断处理 | 90% | 🟢 部分完成 |
-| 进程管理 | 90% | 🟢 部分完成 |
-| 调度器框架 | 100% | ✅ 完成 |
-| 系统调用 | 95% | 🟢 部分完成 |
-| 用户态支持 | 85% | 🟢 部分完成 |
-| ATA 磁盘驱动 | 95% | 🟢 已完成 |
-| VFS 虚拟文件系统 | 90% | 🟢 已完成 |
-| EXT2 文件系统 | 85% | 🟢 已完成 |
-
----
-
-## 🛠️ 技术栈
-
-| 类别 | 技术 |
-|------|------|
-| **汇编** | NASM (x86_64) |
-| **C 语言** | GCC (freestanding) |
-| **构建** | CMake 4.2+ |
-| **调试** | QEMU + GDB |
-| **版本控制** | Git |
+| [26 同步原语](tutorial/26_sync_primitives/) | Spinlock/Mutex/Semaphore 实现 |
 
 ---
 
