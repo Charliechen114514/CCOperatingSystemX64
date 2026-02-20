@@ -47,6 +47,14 @@
 #    include "vfs/vfs_demo.h"
 #endif
 
+#ifdef SYNC_DEMO_ENABLED
+#    include "sync/sync_demo.h"
+#endif
+
+#ifdef THREAD_DEMO_ENABLED
+#    include "thread/thread_demo.h"
+#endif
+
 /**
  * @brief Run all enabled demos
  *
@@ -109,6 +117,16 @@ void run_possible_demos(void) {
 #    ifdef VFS_DEMO_ENABLED
     klog_trace("[Demo Controller] VFS Demo is enabled, running...\n");
     vfs_run_demo();
+#    endif
+
+#    ifdef SYNC_DEMO_ENABLED
+    klog_trace("[Demo Controller] Sync Demo is enabled, running...\n");
+    sync_run_demo();
+#    endif
+
+#    ifdef THREAD_DEMO_ENABLED
+    klog_trace("[Demo Controller] Thread Demo is enabled, running...\n");
+    thread_run_demo();
 #    endif
 
     // Add more demos here as they are implemented

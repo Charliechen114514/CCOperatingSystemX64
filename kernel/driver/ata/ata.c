@@ -141,11 +141,13 @@ ata_result_t ata_wait_drq(uint16_t io_base) {
 
     while (timeout-- > 0) {
         uint8_t status = inb(io_base + ATA_REG_STATUS);
-        if ((status & ATA_STATUS_DRQ) && !(status & ATA_STATUS_BSY)) {
-            return ATA_OK;
-        }
+        // Check for error first
         if (status & ATA_STATUS_ERR) {
             return ATA_ERR_IO_ERROR;
+        }
+        // Check for DRQ and not BSY
+        if ((status & ATA_STATUS_DRQ) && !(status & ATA_STATUS_BSY)) {
+            return ATA_OK;
         }
         __asm__ volatile("pause");
     }
@@ -320,16 +322,26 @@ ata_result_t ata_read_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t 
     // 256 sectors is encoded as 0
     uint8_t sec_count = (sectors == 256) ? 0 : sectors;
 
-    // Select device
-    if (ata_select_device(ctrl, device) != ATA_OK) {
-        return ATA_ERR_IO_ERROR;
+    // Save interrupt state and disable interrupts for this controller
+    // This prevents the async IRQ handler from interfering with PIO polling
+    bool interrupts_were_enabled = ctrl->interrupts_enabled;
+    if (interrupts_were_enabled) {
+        ata_disable_interrupts(ctrl);
     }
 
-    // Wait for device to be ready
-    ata_result_t result = ata_wait_bsy(ctrl->io_base);
-    if (result != ATA_OK) {
-        return result;
+    // Also mask the IRQ at the PIC level to prevent the IRQ handler from running
+    // This is necessary because the IRQ handler may read status registers
+    // and interfere with the PIO polling loop
+    bool irq_was_masked = pic_is_irq_masked(ctrl->irq);
+    if (!irq_was_masked) {
+        pic_disable_irq(ctrl->irq);
+        // Add a small delay to ensure the IRQ mask takes effect
+        ata_delay();
     }
+
+    // Clear any pending interrupt by reading the status register once
+    // This ensures we start with a clean state
+    (void)inb(ctrl->io_base + ATA_REG_STATUS);
 
     // Setup LBA address
     uint8_t lba_lo = lba & 0xFF;
@@ -337,13 +349,28 @@ ata_result_t ata_read_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t 
     uint8_t lba_hi = (lba >> 16) & 0xFF;
     uint8_t lba_highest = (lba >> 24) & 0x0F; // Only 4 bits in device register
 
-    // Set device/head register with LBA bits
+    // Set device/head register with LBA bits - this also selects the device
     uint8_t dev_byte = ATA_DEV_LBA;
     if (device == ATA_DEVICE_SLAVE) {
         dev_byte |= ATA_DEV_SLAVE;
     }
     dev_byte |= lba_highest;
     outb(ctrl->io_base + ATA_REG_DEVICE, dev_byte);
+
+    // Wait for device selection to complete
+    ata_delay();
+
+    // Wait for device to be ready
+    ata_result_t result = ata_wait_bsy(ctrl->io_base);
+    if (result != ATA_OK) {
+        if (!irq_was_masked) {
+            pic_enable_irq(ctrl->irq);
+        }
+        if (interrupts_were_enabled) {
+            ata_enable_interrupts(ctrl);
+        }
+        return result;
+    }
 
     // Set sector count and LBA
     outb(ctrl->io_base + ATA_REG_SECCOUNT, sec_count);
@@ -361,7 +388,14 @@ ata_result_t ata_read_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t 
         // Wait for BSY to clear and DRQ to set
         result = ata_wait_drq(ctrl->io_base);
         if (result != ATA_OK) {
+            klog_error("ATA read: DRQ timeout at sector %d/%u\n", sec, sectors);
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return result;
         }
 
@@ -371,6 +405,12 @@ ata_result_t ata_read_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t 
             uint8_t error = inb(ctrl->io_base + ATA_REG_ERROR);
             klog_error("ATA read error: status=0x%02X, error=0x%02X\n", status, error);
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return ATA_ERR_IO_ERROR;
         }
 
@@ -378,6 +418,37 @@ ata_result_t ata_read_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t 
         for (int i = 0; i < 256; i++) {
             buf16[sec * 256 + i] = inw(ctrl->io_base + ATA_REG_DATA);
         }
+
+        // After reading data, for multi-sector reads we need to ensure
+        // the device has time to prepare the next sector
+        if (sec < sectors - 1) {
+            // Give device a moment to start preparing next sector
+            ata_delay();
+            // Wait for BSY to be set (device preparing) then cleared (ready)
+            // Some drives need this explicit wait for proper multi-sector timing
+            uint32_t check_count = 0;
+            while (check_count++ < 1000) {
+                status = inb(ctrl->io_base + ATA_REG_STATUS);
+                // If BSY is set, wait for it to clear
+                if (status & ATA_STATUS_BSY) {
+                    ata_wait_bsy(ctrl->io_base);
+                    break;
+                }
+                // If DRQ is already ready, device is fast, proceed
+                if (status & ATA_STATUS_DRQ) {
+                    break;
+                }
+                __asm__ volatile("pause");
+            }
+        }
+    }
+
+    // Restore interrupt state
+    if (!irq_was_masked) {
+        pic_enable_irq(ctrl->irq);
+    }
+    if (interrupts_were_enabled) {
+        ata_enable_interrupts(ctrl);
     }
 
     ctrl->read_count++;
@@ -400,15 +471,19 @@ ata_result_t ata_write_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t
     // 256 sectors is encoded as 0
     uint8_t sec_count = (sectors == 256) ? 0 : sectors;
 
-    // Select device
-    if (ata_select_device(ctrl, device) != ATA_OK) {
-        return ATA_ERR_IO_ERROR;
+    // Save interrupt state and disable interrupts for this controller
+    // This prevents the async IRQ handler from interfering with PIO polling
+    bool interrupts_were_enabled = ctrl->interrupts_enabled;
+    if (interrupts_were_enabled) {
+        ata_disable_interrupts(ctrl);
     }
 
-    // Wait for device to be ready
-    ata_result_t result = ata_wait_bsy(ctrl->io_base);
-    if (result != ATA_OK) {
-        return result;
+    // Also mask the IRQ at the PIC level to prevent the IRQ handler from running
+    // This is necessary because the IRQ handler may read status registers
+    // and interfere with the PIO polling loop
+    bool irq_was_masked = pic_is_irq_masked(ctrl->irq);
+    if (!irq_was_masked) {
+        pic_disable_irq(ctrl->irq);
     }
 
     // Setup LBA address
@@ -417,13 +492,28 @@ ata_result_t ata_write_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t
     uint8_t lba_hi = (lba >> 16) & 0xFF;
     uint8_t lba_highest = (lba >> 24) & 0x0F;
 
-    // Set device/head register with LBA bits
+    // Set device/head register with LBA bits - this also selects the device
     uint8_t dev_byte = ATA_DEV_LBA;
     if (device == ATA_DEVICE_SLAVE) {
         dev_byte |= ATA_DEV_SLAVE;
     }
     dev_byte |= lba_highest;
     outb(ctrl->io_base + ATA_REG_DEVICE, dev_byte);
+
+    // Wait for device selection to complete
+    ata_delay();
+
+    // Wait for device to be ready
+    ata_result_t result = ata_wait_bsy(ctrl->io_base);
+    if (result != ATA_OK) {
+        if (!irq_was_masked) {
+            pic_enable_irq(ctrl->irq);
+        }
+        if (interrupts_were_enabled) {
+            ata_enable_interrupts(ctrl);
+        }
+        return result;
+    }
 
     // Set sector count and LBA
     outb(ctrl->io_base + ATA_REG_SECCOUNT, sec_count);
@@ -442,6 +532,12 @@ ata_result_t ata_write_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t
         result = ata_wait_drq(ctrl->io_base);
         if (result != ATA_OK) {
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return result;
         }
 
@@ -451,6 +547,12 @@ ata_result_t ata_write_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t
             uint8_t error = inb(ctrl->io_base + ATA_REG_ERROR);
             klog_error("ATA write error: status=0x%02X, error=0x%02X\n", status, error);
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return ATA_ERR_IO_ERROR;
         }
 
@@ -467,6 +569,14 @@ ata_result_t ata_write_pio(ata_controller_t* ctrl, ata_device_t device, uint32_t
             outb(ctrl->io_base + ATA_REG_COMMAND, ATA_CMD_FLUSH_CACHE);
             ata_wait_bsy(ctrl->io_base);
         }
+    }
+
+    // Restore interrupt state
+    if (!irq_was_masked) {
+        pic_enable_irq(ctrl->irq);
+    }
+    if (interrupts_were_enabled) {
+        ata_enable_interrupts(ctrl);
     }
 
     ctrl->write_count++;
@@ -517,15 +627,19 @@ ata_result_t ata_read_pio_lba48(ata_controller_t* ctrl, ata_device_t device, uin
     }
     // Note: uint16_t max is 65535, so sectors is naturally <= 65535 < 65536
 
-    // Select device
-    if (ata_select_device(ctrl, device) != ATA_OK) {
-        return ATA_ERR_IO_ERROR;
+    // Save interrupt state and disable interrupts for this controller
+    // This prevents the async IRQ handler from interfering with PIO polling
+    bool interrupts_were_enabled = ctrl->interrupts_enabled;
+    if (interrupts_were_enabled) {
+        ata_disable_interrupts(ctrl);
     }
 
-    // Wait for device to be ready
-    ata_result_t result = ata_wait_bsy(ctrl->io_base);
-    if (result != ATA_OK) {
-        return result;
+    // Also mask the IRQ at the PIC level to prevent the IRQ handler from running
+    // This is necessary because the IRQ handler may read status registers
+    // and interfere with the PIO polling loop
+    bool irq_was_masked = pic_is_irq_masked(ctrl->irq);
+    if (!irq_was_masked) {
+        pic_disable_irq(ctrl->irq);
     }
 
     // Setup LBA48 address - extract all 48 bits
@@ -545,6 +659,21 @@ ata_result_t ata_read_pio_lba48(ata_controller_t* ctrl, ata_device_t device, uin
         dev_byte |= ATA_DEV_SLAVE;
     }
     outb(ctrl->io_base + ATA_REG_DEVICE, dev_byte);
+
+    // Wait for device selection to complete
+    ata_delay();
+
+    // Wait for device to be ready
+    ata_result_t result = ata_wait_bsy(ctrl->io_base);
+    if (result != ATA_OK) {
+        if (!irq_was_masked) {
+            pic_enable_irq(ctrl->irq);
+        }
+        if (interrupts_were_enabled) {
+            ata_enable_interrupts(ctrl);
+        }
+        return result;
+    }
 
     // Write LO bytes for sector count and LBA
     outb(ctrl->io_base + ATA_REG_SECCOUNT, sec_count_lo);
@@ -569,6 +698,12 @@ ata_result_t ata_read_pio_lba48(ata_controller_t* ctrl, ata_device_t device, uin
         result = ata_wait_drq(ctrl->io_base);
         if (result != ATA_OK) {
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return result;
         }
 
@@ -578,6 +713,12 @@ ata_result_t ata_read_pio_lba48(ata_controller_t* ctrl, ata_device_t device, uin
             uint8_t error = inb(ctrl->io_base + ATA_REG_ERROR);
             klog_error("ATA LBA48 read error: status=0x%02X, error=0x%02X\n", status, error);
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return ATA_ERR_IO_ERROR;
         }
 
@@ -585,6 +726,34 @@ ata_result_t ata_read_pio_lba48(ata_controller_t* ctrl, ata_device_t device, uin
         for (int i = 0; i < 256; i++) {
             buf16[sec * 256 + i] = inw(ctrl->io_base + ATA_REG_DATA);
         }
+
+        // After reading data, for multi-sector reads we need to ensure
+        // the device has time to prepare the next sector
+        if (sec < sectors - 1) {
+            // Give device a moment to start preparing next sector
+            ata_delay();
+            // Wait for BSY to be set (device preparing) then cleared (ready)
+            uint32_t check_count = 0;
+            while (check_count++ < 1000) {
+                status = inb(ctrl->io_base + ATA_REG_STATUS);
+                if (status & ATA_STATUS_BSY) {
+                    ata_wait_bsy(ctrl->io_base);
+                    break;
+                }
+                if (status & ATA_STATUS_DRQ) {
+                    break;
+                }
+                __asm__ volatile("pause");
+            }
+        }
+    }
+
+    // Restore interrupt state
+    if (!irq_was_masked) {
+        pic_enable_irq(ctrl->irq);
+    }
+    if (interrupts_were_enabled) {
+        ata_enable_interrupts(ctrl);
     }
 
     ctrl->read_count++;
@@ -605,15 +774,19 @@ ata_result_t ata_write_pio_lba48(ata_controller_t* ctrl, ata_device_t device, ui
     }
     // Note: uint16_t max is 65535, so sectors is naturally <= 65535 < 65536
 
-    // Select device
-    if (ata_select_device(ctrl, device) != ATA_OK) {
-        return ATA_ERR_IO_ERROR;
+    // Save interrupt state and disable interrupts for this controller
+    // This prevents the async IRQ handler from interfering with PIO polling
+    bool interrupts_were_enabled = ctrl->interrupts_enabled;
+    if (interrupts_were_enabled) {
+        ata_disable_interrupts(ctrl);
     }
 
-    // Wait for device to be ready
-    ata_result_t result = ata_wait_bsy(ctrl->io_base);
-    if (result != ATA_OK) {
-        return result;
+    // Also mask the IRQ at the PIC level to prevent the IRQ handler from running
+    // This is necessary because the IRQ handler may read status registers
+    // and interfere with the PIO polling loop
+    bool irq_was_masked = pic_is_irq_masked(ctrl->irq);
+    if (!irq_was_masked) {
+        pic_disable_irq(ctrl->irq);
     }
 
     // Setup LBA48 address - extract all 48 bits
@@ -633,6 +806,21 @@ ata_result_t ata_write_pio_lba48(ata_controller_t* ctrl, ata_device_t device, ui
         dev_byte |= ATA_DEV_SLAVE;
     }
     outb(ctrl->io_base + ATA_REG_DEVICE, dev_byte);
+
+    // Wait for device selection to complete
+    ata_delay();
+
+    // Wait for device to be ready
+    ata_result_t result = ata_wait_bsy(ctrl->io_base);
+    if (result != ATA_OK) {
+        if (!irq_was_masked) {
+            pic_enable_irq(ctrl->irq);
+        }
+        if (interrupts_were_enabled) {
+            ata_enable_interrupts(ctrl);
+        }
+        return result;
+    }
 
     // Write LO bytes for sector count and LBA
     outb(ctrl->io_base + ATA_REG_SECCOUNT, sec_count_lo);
@@ -657,6 +845,12 @@ ata_result_t ata_write_pio_lba48(ata_controller_t* ctrl, ata_device_t device, ui
         result = ata_wait_drq(ctrl->io_base);
         if (result != ATA_OK) {
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return result;
         }
 
@@ -666,6 +860,12 @@ ata_result_t ata_write_pio_lba48(ata_controller_t* ctrl, ata_device_t device, ui
             uint8_t error = inb(ctrl->io_base + ATA_REG_ERROR);
             klog_error("ATA LBA48 write error: status=0x%02X, error=0x%02X\n", status, error);
             ctrl->error_count++;
+            if (!irq_was_masked) {
+                pic_enable_irq(ctrl->irq);
+            }
+            if (interrupts_were_enabled) {
+                ata_enable_interrupts(ctrl);
+            }
             return ATA_ERR_IO_ERROR;
         }
 
@@ -684,6 +884,14 @@ ata_result_t ata_write_pio_lba48(ata_controller_t* ctrl, ata_device_t device, ui
                 klog_warn("ATA LBA48 flush cache failed: %s\n", ata_error_string(result));
             }
         }
+    }
+
+    // Restore interrupt state
+    if (!irq_was_masked) {
+        pic_enable_irq(ctrl->irq);
+    }
+    if (interrupts_were_enabled) {
+        ata_enable_interrupts(ctrl);
     }
 
     ctrl->write_count++;

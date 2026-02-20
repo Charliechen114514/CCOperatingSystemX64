@@ -41,7 +41,7 @@ static int load_and_execute_user_program(const uint8_t* program, size_t program_
 
     klog_trace("[USER_DEMO] load_and_execute_user_program: entry\n");
     klog_info("[USER_DEMO] Creating user mode process...\n");
-    klog_info("[USER_DEMO] Program size: %zu bytes\n", program_size);
+    klog_info("[USER_DEMO] Program size: %lu bytes\n", (unsigned long)program_size);
 
     klog_trace("[USER_DEMO] About to allocate PCB...\n");
     /* Create a new PCB for the user process */
@@ -227,7 +227,7 @@ int user_run_demo(void) {
     /* Create and execute user mode program */
     klog_trace("[USER_DEMO] About to load user program...\n");
     size_t program_size = (size_t)_binary_user_programs_demo_uname_test_size;
-    klog_trace("[USER_DEMO] Program size: %zu bytes, start addr: %p\n", program_size, _binary_user_programs_demo_uname_test_start);
+    klog_trace("[USER_DEMO] Program size: %lu bytes, start addr: %p\n", (unsigned long)program_size, _binary_user_programs_demo_uname_test_start);
     int exec_result = load_and_execute_user_program(
         _binary_user_programs_demo_uname_test_start,
         program_size

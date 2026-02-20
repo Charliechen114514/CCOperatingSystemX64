@@ -340,6 +340,71 @@ else()
     message(STATUS "VFS Demo: DISABLED")
 endif()
 
+# Sync Demo
+if(ENABLE_SYNC_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "SYNC")
+    message(STATUS "Sync Demo: ENABLED")
+
+    add_library(demo_sync STATIC
+        sync/sync_demo.c
+        sync/sync_thread_test.c
+    )
+
+    target_include_directories(demo_sync PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_sync PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_sync PUBLIC SYNC_DEMO_ENABLED=1)
+
+    # Sync demo 依赖 process, klogs, base (sync is OBJECT library, linked via object files)
+    target_link_libraries(demo_sync PUBLIC process klogs base)
+
+    set_target_properties(demo_sync PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 sync demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_sync)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC SYNC_DEMO_ENABLED=1)
+else()
+    message(STATUS "Sync Demo: DISABLED")
+endif()
+
+# Thread Demo
+if(ENABLE_THREAD_DEMO AND CCOS_ENABLE_DEMO)
+    list(APPEND DEMO_ENABLED_LIST "THREAD")
+    message(STATUS "Thread Demo: ENABLED")
+
+    add_library(demo_thread STATIC thread/thread_demo.c)
+
+    target_include_directories(demo_thread PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/..
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_options(demo_thread PUBLIC ${CCOS_FREESTANDING_FLAGS})
+    target_compile_definitions(demo_thread PUBLIC THREAD_DEMO_ENABLED=1)
+
+    # Thread demo 依赖 process, klogs, base (sync is OBJECT library, linked via object files)
+    target_link_libraries(demo_thread PUBLIC process klogs base)
+
+    set_target_properties(demo_thread PROPERTIES
+        POSITION_INDEPENDENT_CODE FALSE
+    )
+
+    # 将 thread demo 链接到基础 demo 库
+    target_link_libraries(demo PUBLIC demo_thread)
+    # 将宏定义传递到基础 demo 库
+    target_compile_definitions(demo PUBLIC THREAD_DEMO_ENABLED=1)
+else()
+    message(STATUS "Thread Demo: DISABLED")
+endif()
+
 # 根据 CCOS_ENABLE_DEMO 定义编译宏
 # 只有在启用时才定义宏，这样 #ifdef CCOS_ENABLE_DEMO 才能正确工作
 if(CCOS_ENABLE_DEMO)

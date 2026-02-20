@@ -13,10 +13,14 @@
 #include "backends/serial_backends.h"
 #include "kprintf_config.h"
 #include "private/format.h"
+#include "sync/spinlock.h"
 
 // Buffer for formatted output
 // Explicitly initialized to keep it in .data section (not .bss)
 static char buffer[KPRINTF_BUFFER_SIZE] = {0};
+
+// Spinlock protecting the buffer and log_level
+static spinlock_t g_klog_lock = SPIN_LOCK_INIT;
 
 // Current log level filter
 static klog_level_t g_log_level = KPRINTF_DEFAULT_FILTERED_LOGLEVEL;
@@ -47,10 +51,15 @@ void kvprintf(klog_backend_t backend, const char* format, va_list args) {
         return;
     }
 
+    spinlock_flags_t flags;
+    spin_lock_irqsave_raw(&g_klog_lock, &flags);
+
     static char buffer[KPRINTF_BUFFER_SIZE] = {0};
     klog_format_string(buffer, KPRINTF_BUFFER_SIZE, format, args);
     // Use level -1 for kprintf (no specific level, default color)
     ops->process(buffer, -1);
+
+    spin_unlock_irqrestore_raw(&g_klog_lock, flags);
 }
 
 void kprintf(klog_backend_t backend, const char* format, ...) {
@@ -61,11 +70,18 @@ void kprintf(klog_backend_t backend, const char* format, ...) {
 }
 
 void klog_set_level(klog_level_t level) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave_raw(&g_klog_lock, &flags);
     g_log_level = level;
+    spin_unlock_irqrestore_raw(&g_klog_lock, flags);
 }
 
 klog_level_t klog_get_level(void) {
-    return g_log_level;
+    spinlock_flags_t flags;
+    spin_lock_irqsave_raw(&g_klog_lock, &flags);
+    klog_level_t level = g_log_level;
+    spin_unlock_irqrestore_raw(&g_klog_lock, flags);
+    return level;
 }
 
 const char* klog_level_name(klog_level_t level) {
@@ -86,7 +102,7 @@ const char* klog_level_name(klog_level_t level) {
 }
 
 void klog_log(klog_level_t level, const char* format, ...) {
-    // Check log level
+    // Check log level (no lock needed for read, atomic read is safe)
     if (level < g_log_level) {
         return;
     }
@@ -96,6 +112,9 @@ void klog_log(klog_level_t level, const char* format, ...) {
     if (ops == NULL || !ops->is_ready()) {
         return;
     }
+
+    spinlock_flags_t flags;
+    spin_lock_irqsave_raw(&g_klog_lock, &flags);
 
     // Format: "[LEVEL] message\n"
     int pos = 0;
@@ -119,4 +138,6 @@ void klog_log(klog_level_t level, const char* format, ...) {
     buffer[pos] = '\0';
 
     ops->process(buffer, level);
+
+    spin_unlock_irqrestore_raw(&g_klog_lock, flags);
 }

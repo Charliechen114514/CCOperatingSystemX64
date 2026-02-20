@@ -282,6 +282,126 @@ static int64_t sys_uname(syscall_frame_t* frame) {
 }
 
 /* ============================================================================
+ * Thread Management Syscalls
+ * ============================================================================ */
+
+/**
+ * @brief Create a new thread
+ *
+ * Arguments:
+ *   arg0 - Thread entry point (function pointer)
+ *   arg1 - Argument to pass to thread function
+ *   arg2 - User stack address (0 to auto-allocate)
+ *   arg3 - Stack size in bytes
+ *
+ * Returns:
+ *   New thread ID on success, negative error code on failure
+ */
+static int64_t sys_thread_create(syscall_frame_t* frame) {
+    virtual_addr_t entry = frame->arg0;
+    virtual_addr_t arg = frame->arg1;
+    virtual_addr_t stack = frame->arg2;
+    size_t stack_size = (size_t)frame->arg3;
+
+    pcb_t* current = proc_current();
+    if (!current) {
+        return SYS_ERR_INVAL;
+    }
+
+    /* Validate entry point */
+    if (entry == 0) {
+        return SYS_ERR_INVAL;
+    }
+
+    int32_t tid = proc_create_user_thread(current, entry, arg, stack, stack_size);
+    if (tid < 0) {
+        return SYS_ERR_NOMEM;  /* Most likely error */
+    }
+
+    return (int64_t)tid;
+}
+
+/**
+ * @brief Exit current thread
+ *
+ * Arguments:
+ *   arg0 - Return value
+ *
+ * Does not return.
+ */
+static int64_t sys_thread_exit(syscall_frame_t* frame) {
+    void* retval = (void*)frame->arg0;
+    proc_thread_exit(retval);
+    __builtin_unreachable();  /* proc_thread_exit never returns */
+}
+
+/**
+ * @brief Wait for a thread to exit
+ *
+ * Arguments:
+ *   arg0 - Thread ID to wait for
+ *   arg1 - Pointer to store return value (can be NULL)
+ *
+ * Returns:
+ *   0 on success, negative error code on failure
+ */
+static int64_t sys_thread_join(syscall_frame_t* frame) {
+    int32_t tid = (int32_t)frame->arg0;
+    void** retval = (void**)frame->arg1;
+
+    pcb_t* current = proc_current();
+    if (!current) {
+        return SYS_ERR_INVAL;
+    }
+
+    /* Validate retval pointer if provided */
+    if (retval != NULL) {
+        if (!user_validate_pointer(retval, sizeof(void*), true)) {
+            return SYS_ERR_INVAL;
+        }
+    }
+
+    int32_t result = proc_thread_join(tid, retval);
+
+    if (result < 0) {
+        return SYS_ERR_INVAL;
+    }
+
+    /* Copy return value to user space if provided and thread has returned */
+    if (retval != NULL && result == 0) {
+        /* Return value is already copied by proc_thread_join */
+    }
+
+    return SYS_OK;
+}
+
+/**
+ * @brief Detach a thread
+ *
+ * Arguments:
+ *   arg0 - Thread ID to detach
+ *
+ * Returns:
+ *   0 on success, negative error code on failure
+ */
+static int64_t sys_thread_detach(syscall_frame_t* frame) {
+    int32_t tid = (int32_t)frame->arg0;
+
+    pcb_t* current = proc_current();
+    if (!current) {
+        return SYS_ERR_INVAL;
+    }
+
+    int32_t result = proc_thread_detach(tid);
+
+    if (result < 0) {
+        return SYS_ERR_INVAL;
+    }
+
+    return SYS_OK;
+}
+
+/* ============================================================================
  * Initialization Function
  * ============================================================================ */
 
@@ -298,6 +418,12 @@ void syscall_register_all(void) {
     syscall_register_handler(SYS_WAIT4, sys_wait4, "wait4");
     syscall_register_handler(SYS_GETPID, sys_getpid, "getpid");
     syscall_register_handler(SYS_GETPPID, sys_getppid, "getppid");
+
+    /* Thread management */
+    syscall_register_handler(SYS_THREAD_CREATE, sys_thread_create, "thread_create");
+    syscall_register_handler(SYS_THREAD_EXIT, sys_thread_exit, "thread_exit");
+    syscall_register_handler(SYS_THREAD_JOIN, sys_thread_join, "thread_join");
+    syscall_register_handler(SYS_THREAD_DETACH, sys_thread_detach, "thread_detach");
 
     /* File I/O */
     syscall_register_handler(SYS_WRITE, sys_write, "write");

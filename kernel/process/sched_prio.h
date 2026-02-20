@@ -29,11 +29,18 @@
 #define PRIO_LEVELS   128
 
 /**
- * @brief Time slice for each priority level
- * Higher priority (lower number) gets shorter time slice
+ * @brief Time slice for each priority level (in ticks, at 1000Hz)
+ *
+ * Priority 0 (highest): 100ms - for init/kernel tasks that need to complete work
+ * Priority 1-63: 50ms - high priority user tasks
+ * Priority 64-127: 20ms - normal/low priority tasks
+ *
+ * Note: Higher priority (lower number) gets LONGER time slice because
+ * these tasks are more important and should complete their work faster.
  */
 #define PRIO_TIMESLICE(prio) \
-    ((prio) < 64 ? 5 : 20)   /* High priority: 5ms, Low: 20ms */
+    ((prio) == 0 ? 100 : \
+     (prio) < 64 ? 50 : 20)
 
 /* ==============================================================================
  * Priority Run Queue Data

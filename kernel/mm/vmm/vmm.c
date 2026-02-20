@@ -8,6 +8,7 @@
 #include "driver/serial/serial.h"
 #include "klogs/kprintf.h"
 #include "mm/pframe/pframe.h"
+#include "sync/spinlock.h"
 
 /* ==============================================================================
  * Internal State
@@ -29,6 +30,9 @@ static virtual_addr_t s_kernel_virt_hint = KERNEL_GENERAL_BASE;
 
 /* Initialization flag */
 static bool s_initialized = false;
+
+/* Spinlock protecting VMM state (regions, stats, virt_hint) */
+static spinlock_t s_vmm_lock = SPIN_LOCK_INIT;
 
 /* ============================================================================
  * Internal Helper Functions
@@ -53,6 +57,8 @@ static bool check_region_collision(virtual_addr_t start, virtual_addr_t end) {
  * @param size Size of the range to find (determines alignment requirement)
  * @param out_vaddr Output pointer for the found virtual address
  * @return VMM_OK on success, error code otherwise
+ *
+ * NOTE: Caller must hold s_vmm_lock
  */
 static vmm_result_t find_free_virt_range(uint64_t size, virtual_addr_t* out_vaddr) {
     virtual_addr_t hint = s_kernel_virt_hint;
@@ -82,6 +88,8 @@ static vmm_result_t find_free_virt_range(uint64_t size, virtual_addr_t* out_vadd
 
 /**
  * add_region - Add a memory region to the tracking list
+ *
+ * NOTE: Caller must hold s_vmm_lock
  */
 static void add_region(virtual_addr_t start, virtual_addr_t end, physical_addr_t phys_start,
                        uint64_t flags, const char* name) {
@@ -204,18 +212,25 @@ void vmm_load_pml4(physical_addr_t pml4_phys) {
     /* Load PML4 into CR3, switching address space */
     /* Clear lower 12 bits to ensure alignment */
     uint64_t cr3 = pml4_phys & ~0xFFFULL;
+    klog_trace("[VMM] Loading CR3: 0x%016llX (from pml4_phys=0x%016llX)\n", cr3, pml4_phys);
     page_set_cr3(cr3);
 }
 
 virtual_addr_t vmm_map_physical(physical_addr_t phys, uint64_t flags) {
     CCOS_ASSERT(s_initialized);
 
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     /* Find a free virtual address */
     virtual_addr_t vaddr;
     vmm_result_t result = find_free_virt_range(PAGE_SIZE, &vaddr);
     if (result != VMM_OK) {
+        spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
         return 0;
     }
+
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     /* Map the page */
     page_result_t page_result =
@@ -225,6 +240,9 @@ virtual_addr_t vmm_map_physical(physical_addr_t phys, uint64_t flags) {
         return 0;
     }
 
+    /* Re-acquire lock for region tracking and stats update */
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     /* Track the region */
     add_region(vaddr, vaddr + PAGE_SIZE, phys, flags, "temp_mapping");
 
@@ -232,18 +250,26 @@ virtual_addr_t vmm_map_physical(physical_addr_t phys, uint64_t flags) {
     s_stats.mapped_pages++;
     s_stats.kernel_pages++;
 
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
+
     return vaddr;
 }
 
 vmm_result_t vmm_unmap_physical(virtual_addr_t virt) {
     CCOS_ASSERT(s_initialized);
 
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     /* Find and remove the region */
     memory_region_t* region = find_region(virt);
     if (region == NULL) {
+        spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
         klog_warn("[VMM] Attempted to unmap untracked region at 0x%llX\n", virt);
         return VMM_ERR_NOT_MAPPED;
     }
+
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     /* Unmap the page */
     page_result_t result = page_unmap_page(s_kernel_pml4, virt, false);
@@ -251,9 +277,14 @@ vmm_result_t vmm_unmap_physical(virtual_addr_t virt) {
         return VMM_ERR_INVALID;
     }
 
+    /* Re-acquire lock for stats update */
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     /* Update statistics */
     s_stats.mapped_pages--;
     s_stats.kernel_pages--;
+
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     return VMM_OK;
 }
@@ -277,12 +308,18 @@ virtual_addr_t vmm_alloc_pages(uint64_t count, uint64_t flags) {
         page_type = "2MB";
     }
 
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     /* Find a free virtual address range */
     virtual_addr_t vaddr;
     vmm_result_t result = find_free_virt_range(count * page_size, &vaddr);
     if (result != VMM_OK) {
+        spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
         return 0;
     }
+
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     /* Allocate and map each page */
     for (uint64_t i = 0; i < count; i++) {
@@ -369,6 +406,9 @@ virtual_addr_t vmm_alloc_pages(uint64_t count, uint64_t flags) {
         }
     }
 
+    /* Re-acquire lock for region tracking and stats update */
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     /* Track the region */
     add_region(vaddr, vaddr + (count * page_size), 0, flags, "allocated_pages");
 
@@ -377,7 +417,13 @@ virtual_addr_t vmm_alloc_pages(uint64_t count, uint64_t flags) {
     s_stats.kernel_pages += count;
     s_stats.total_pages += count;
 
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
+
     klog_trace("[VMM] Allocated %llu %s pages at 0x%016llX\n", count, page_type, vaddr);
+
+    /* Perform a full TLB flush to ensure all mappings are active. */
+    uint64_t current_cr3 = page_get_cr3();
+    __asm__ volatile("mov %0, %%cr3" : : "r"(current_cr3) : "memory");
 
     return vaddr;
 }
@@ -412,6 +458,12 @@ vmm_result_t vmm_alloc_pages_at(virtual_addr_t vaddr, uint64_t count, uint64_t f
         klog_error("[VMM] Address 0x%llX is not in kernel space\n", vaddr);
         return VMM_ERR_INVALID;
     }
+
+    /* Acquire VMM lock early to protect the entire allocation and mapping process.
+     * This prevents race conditions where multiple threads/interrupts try to
+     * allocate or map pages concurrently, which could corrupt page tables. */
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
 
     /* Allocate and map each page */
     for (uint64_t i = 0; i < count; i++) {
@@ -467,6 +519,8 @@ vmm_result_t vmm_alloc_pages_at(virtual_addr_t vaddr, uint64_t count, uint64_t f
             if (!found_aligned) {
                 klog_error("[VMM] Failed to allocate aligned %s page after %d retries\n", page_type,
                            retry_count);
+                /* Rollback and unlock */
+                spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
                 vmm_free_pages(vaddr, i);
                 return VMM_ERR_OOM;
             }
@@ -477,6 +531,7 @@ vmm_result_t vmm_alloc_pages_at(virtual_addr_t vaddr, uint64_t count, uint64_t f
         if (pf_result != PFRAME_OK) {
             /* Out of memory - rollback */
             klog_error("[VMM] Out of memory allocating %s pages\n", page_type);
+            spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
             vmm_free_pages(vaddr, i);
             return VMM_ERR_OOM;
         }
@@ -490,12 +545,13 @@ vmm_result_t vmm_alloc_pages_at(virtual_addr_t vaddr, uint64_t count, uint64_t f
             } else {
                 pframe_free(paddr);
             }
+            spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
             vmm_free_pages(vaddr, i);
             return VMM_ERR_OOM;
         }
     }
 
-    /* Track the region */
+    /* Track the region (still holding lock) */
     add_region(vaddr, vaddr + (count * page_size), 0, flags, "allocated_pages");
 
     /* Update allocation hint to avoid allocating in this range again */
@@ -509,7 +565,15 @@ vmm_result_t vmm_alloc_pages_at(virtual_addr_t vaddr, uint64_t count, uint64_t f
     s_stats.kernel_pages += count;
     s_stats.total_pages += count;
 
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
+
     klog_trace("[VMM] Allocated %llu %s pages at 0x%016llX\n", count, page_type, vaddr);
+
+    /* Perform a full TLB flush to ensure all mappings are active.
+     * This is necessary because INVLPG only invalidates individual entries,
+     * and there might be timing issues with concurrent accesses. */
+    uint64_t current_cr3 = page_get_cr3();
+    __asm__ volatile("mov %0, %%cr3" : : "r"(current_cr3) : "memory");
 
     return VMM_OK;
 }
@@ -525,6 +589,11 @@ vmm_result_t vmm_free_pages(virtual_addr_t virt, uint64_t count) {
     if ((virt & (PAGE_SIZE - 1)) != 0) {
         return VMM_ERR_INVALID;
     }
+
+    /* Acquire VMM lock to protect the entire free operation.
+     * This prevents race conditions with concurrent allocations. */
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
 
     /* Unmap and free each page */
     for (uint64_t i = 0; i < count; i++) {
@@ -543,9 +612,11 @@ vmm_result_t vmm_free_pages(virtual_addr_t virt, uint64_t count) {
         page_unmap_page(s_kernel_pml4, vaddr, false);
     }
 
-    /* Update statistics */
+    /* Update statistics (still holding lock) */
     s_stats.mapped_pages -= count;
     s_stats.kernel_pages -= count;
+
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     klog_trace("[VMM] Freed %llu pages at 0x%016llX\n", count, virt);
 
@@ -556,12 +627,22 @@ vmm_result_t vmm_get_stats(vmm_stats_t* stats) {
     CCOS_ASSERT(s_initialized);
     CCOS_ASSERT(stats != NULL);
 
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     *stats = s_stats;
+
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
+
     return VMM_OK;
 }
 
 void vmm_dump(void) {
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
+
     if (!s_initialized) {
+        spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
         klog_error("[VMM] Not initialized\n");
         return;
     }
@@ -581,6 +662,8 @@ void vmm_dump(void) {
         klog_info("[VMM]   Region %u: 0x%016llX - 0x%016llX %s\n", i, region->start, region->end,
                   region->name);
     }
+
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 }
 
 vmm_result_t vmm_create_user_space(physical_addr_t* out_pml4) {
@@ -604,7 +687,10 @@ vmm_result_t vmm_create_user_space(physical_addr_t* out_pml4) {
     }
 
     /* Update statistics */
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
     s_stats.page_tables++;
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     klog_trace("[VMM] Created user address space with PML4 at 0x%X\n", *out_pml4);
 
@@ -681,7 +767,10 @@ vmm_result_t vmm_destroy_user_space(physical_addr_t pml4) {
     page_free_table(pml4);
 
     /* Update statistics */
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
     s_stats.page_tables--;
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     klog_trace("[VMM] Destroyed user address space with PML4 at 0x%X\n", pml4);
 
@@ -713,8 +802,11 @@ vmm_result_t vmm_map_to_user(physical_addr_t pml4, virtual_addr_t vaddr, physica
     }
 
     /* Update statistics */
+    spinlock_flags_t flags_lock;
+    spin_lock_irqsave(&s_vmm_lock, &flags_lock);
     s_stats.mapped_pages += count;
     s_stats.user_pages += count;
+    spin_unlock_irqrestore(&s_vmm_lock, flags_lock);
 
     return VMM_OK;
 }

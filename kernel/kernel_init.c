@@ -1,6 +1,4 @@
 #include "kernel_init.h"
-#include "base/hashmap.h"
-#include "driver/ata/ata.h"
 #include "driver/keyboard/keyboard.h"
 #include "driver/rtc/rtc.h"
 #include "driver/serial/serial.h"
@@ -21,13 +19,8 @@
 #include "mm/vmm/fault.h"
 #include "mm/vmm/page.h"
 #include "mm/vmm/vmm.h"
-#include "shell/backends/serial_shell.h"
-#include "shell/backends/vga_shell.h"
+#include "process/process.h"
 #include "syscall/syscall.h"
-#include "welcomes/welcome.h"
-
-// Forward declaration for demo controller (always available, checks internally)
-void run_possible_demos(void);
 
 static void driver_subsystem_inits(void) {
     // Initialize serial port first for early debug output
@@ -55,9 +48,6 @@ void kernel_init(void) {
     e820_get_stats(&mem_stats);
     klog_trace("[MEM] Total: %u MB, Usable: %u MB, Entries: %u\n", mem_stats.total_mb,
                mem_stats.usable_mb, mem_stats.entry_count);
-
-    virtual_addr_t test_p_ok = KERNEL_GENERAL_BASE;
-    klog_info("%p\n", test_p_ok);
     // Initialize page table management FIRST
     // This establishes the direct physical mapping needed to access .lbss (2MB bitmap)
     page_init();
@@ -103,6 +93,10 @@ void kernel_init(void) {
     rtc_init();            // Initialize RTC (periodic interrupt disabled by default)
     uart_init_intr_mode(); // Initialize UART interrupt mode for interactive communication
     keyboard_init();       // Initialize keyboard driver for VGA shell
+
+    // Initialize process subsystem (must be after timer for scheduler ticks)
+    proc_init();
+
     // Initialize filesystem subsystem (must be after heap)
     fs_init();
     // Phase 7: Finalize interrupt initialization (enable IRQs + CPU interrupts)
@@ -112,8 +106,23 @@ void kernel_init(void) {
     // serial_shell_init_commands();  // Serial shell commands (time, ticks, echo, uart)
     // vga_shell_init_commands();     // VGA shell commands (cls, color, goto, keyboard)
     /* One must Ensure the backends have been bootified, else sucks! */
-    klog_trace("[INIT] Before bootAllWelcomes...\n");
-    bootAllWelcomes();
-    klog_trace("[INIT] After bootAllWelcomes...\n");
+
     klog_info("kernel init finished!\n");
+
+    /* NOTE: bootAllWelcomes() and run_possible_demos() are now called from init_thread
+     * which is created in proc_init() and runs with high priority after scheduling starts.
+     * This ensures they run in a proper scheduling context.
+     *
+     * IMPORTANT: We need to trigger the first schedule to start the scheduler.
+     * The init_thread (PID=1) is already enqueued with high priority.
+     */
+    klog_info("[INIT] Triggering first schedule to start init_thread...\n");
+
+    /* Trigger the first schedule - this will switch to init_thread
+     * Note: interrupts are already enabled by interrupt_finalize() above */
+    extern void schedule(void);
+    schedule();
+
+    /* Should never reach here - init_thread will take over */
+    klog_error("[INIT] schedule() returned unexpectedly!\n");
 }

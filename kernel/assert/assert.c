@@ -16,6 +16,14 @@ typedef __builtin_va_list va_list;
 #define va_arg(ap, type) __builtin_va_arg(ap, type)
 #define va_end(ap) __builtin_va_end(ap)
 
+void panic(const char* expr_str, const char* file, int line, const char* func) {
+    /* Print assertion failure message to VGA */
+    assert_backend_to_vga(file, line, func, expr_str);
+
+    /* Halt the system */
+    assert_failed_action();
+}
+
 void ccos_assert_impl(bool condition, const char* expr_str, const char* file, int line,
                       const char* func) {
     if (condition) {
@@ -23,8 +31,5 @@ void ccos_assert_impl(bool condition, const char* expr_str, const char* file, in
     }
 
     /* Print assertion failure message to VGA */
-    assert_backend_to_vga(file, line, func, expr_str);
-
-    /* Halt the system */
-    assert_failed_action();
+    panic(expr_str, file, line, func);
 }

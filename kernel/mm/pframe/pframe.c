@@ -10,6 +10,7 @@
 #include "klogs/ksnprintf.h"
 #include "memory_detect/e820.h"
 #include "memory_detect/memory_state_helper.h"
+#include "sync/spinlock.h"
 
 /* ==============================================================================
  * Constants
@@ -43,6 +44,9 @@ typedef struct {
 } pframe_state_t;
 
 static pframe_state_t s_pframe_state = {0};
+
+/* Spinlock protecting the frame allocator state */
+static spinlock_t s_pframe_lock = SPIN_LOCK_INIT;
 
 /* ==============================================================================
  * Internal Helper Functions
@@ -173,7 +177,7 @@ pframe_result_t pframe_init(void) {
     size_t bitmap_bytes = (s_pframe_state.total_frames + 7) / 8;
 
     if (bitmap_bytes > PFRAME_MAX_BITMAP_SIZE) {
-        klog_error("[PFRAME] Bitmap size %zu exceeds maximum %u\n", bitmap_bytes,
+        klog_error("[PFRAME] Bitmap size %lu exceeds maximum %u\n", (unsigned long)bitmap_bytes,
                    PFRAME_MAX_BITMAP_SIZE);
         return PFRAME_ERR_INVALID;
     }
@@ -214,7 +218,7 @@ pframe_result_t pframe_init(void) {
     s_pframe_state.initialized = true;
 
     /* Print initialization summary */
-    pframe_stats_t stats;
+    pframe_stats_t stats = {0};
     pframe_get_stats(&stats);
 
     klog_info(
@@ -234,8 +238,12 @@ pframe_result_t pframe_init(void) {
 pframe_result_t pframe_alloc(physical_addr_t* out_addr) {
     CCOS_ASSERT(out_addr != NULL);
 
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_pframe_lock, &flags);
+
     if (!s_pframe_state.initialized) {
         klog_error("[PFRAME] Allocator not initialized\n");
+        spin_unlock_irqrestore(&s_pframe_lock, flags);
         return PFRAME_ERR_NOT_INIT;
     }
 
@@ -250,6 +258,7 @@ pframe_result_t pframe_alloc(physical_addr_t* out_addr) {
 
     if (frame_idx < 0) {
         klog_warn("[PFRAME] Out of memory: no free frames\n");
+        spin_unlock_irqrestore(&s_pframe_lock, flags);
         return PFRAME_ERR_OOM;
     }
 
@@ -264,6 +273,8 @@ pframe_result_t pframe_alloc(physical_addr_t* out_addr) {
 
     *out_addr = frame_to_addr(frame_idx);
 
+    spin_unlock_irqrestore(&s_pframe_lock, flags);
+
     return PFRAME_OK;
 }
 
@@ -273,16 +284,22 @@ pframe_result_t pframe_alloc(physical_addr_t* out_addr) {
 pframe_result_t pframe_alloc_n(physical_addr_t* out_addr, uint64_t frame_count) {
     CCOS_ASSERT(out_addr != NULL);
 
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_pframe_lock, &flags);
+
     if (!s_pframe_state.initialized) {
         klog_error("[PFRAME] Allocator not initialized\n");
+        spin_unlock_irqrestore(&s_pframe_lock, flags);
         return PFRAME_ERR_NOT_INIT;
     }
 
     if (frame_count == 0) {
+        spin_unlock_irqrestore(&s_pframe_lock, flags);
         return PFRAME_ERR_INVALID;
     }
 
     if (frame_count > s_pframe_state.total_frames) {
+        spin_unlock_irqrestore(&s_pframe_lock, flags);
         return PFRAME_ERR_OOM;
     }
 
@@ -342,6 +359,7 @@ pframe_result_t pframe_alloc_n(physical_addr_t* out_addr, uint64_t frame_count) 
     if (!found) {
         klog_warn("[PFRAME] Out of memory: cannot allocate %llu contiguous frames\n",
                   (unsigned long long)frame_count);
+        spin_unlock_irqrestore(&s_pframe_lock, flags);
         return PFRAME_ERR_OOM;
     }
 
@@ -356,6 +374,8 @@ pframe_result_t pframe_alloc_n(physical_addr_t* out_addr, uint64_t frame_count) 
 
     *out_addr = frame_to_addr(run_start);
 
+    spin_unlock_irqrestore(&s_pframe_lock, flags);
+
     return PFRAME_OK;
 }
 
@@ -363,13 +383,17 @@ pframe_result_t pframe_alloc_n(physical_addr_t* out_addr, uint64_t frame_count) 
  * pframe_free - Free a single physical frame
  */
 pframe_result_t pframe_free(physical_addr_t addr) {
+    spin_lock(&s_pframe_lock);
+
     if (!s_pframe_state.initialized) {
         klog_error("[PFRAME] Allocator not initialized\n");
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_NOT_INIT;
     }
 
     if (!is_page_aligned(addr)) {
         klog_error("[PFRAME] Invalid address to free: not page aligned (0x%X)\n", addr);
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
@@ -377,16 +401,20 @@ pframe_result_t pframe_free(physical_addr_t addr) {
 
     if (frame >= s_pframe_state.total_frames) {
         klog_error("[PFRAME] Invalid address to free: out of range (0x%X)\n", addr);
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
     /* Check for double-free */
     if (!bitmap_test(&s_pframe_state.frame_map, frame)) {
         klog_warn("[PFRAME] Double-free detected: 0x%X\n", addr);
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
     bitmap_clear(&s_pframe_state.frame_map, frame);
+
+    spin_unlock(&s_pframe_lock);
 
     return PFRAME_OK;
 }
@@ -395,17 +423,22 @@ pframe_result_t pframe_free(physical_addr_t addr) {
  * pframe_free_n - Free multiple contiguous physical frames
  */
 pframe_result_t pframe_free_n(physical_addr_t addr, uint64_t frame_count) {
+    spin_lock(&s_pframe_lock);
+
     if (!s_pframe_state.initialized) {
         klog_error("[PFRAME] Allocator not initialized\n");
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_NOT_INIT;
     }
 
     if (frame_count == 0) {
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
     if (!is_page_aligned(addr)) {
         klog_error("[PFRAME] Invalid address to free: not page aligned (0x%X)\n", addr);
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
@@ -413,16 +446,20 @@ pframe_result_t pframe_free_n(physical_addr_t addr, uint64_t frame_count) {
 
     if (start_frame >= s_pframe_state.total_frames) {
         klog_error("[PFRAME] Invalid address to free: out of range (0x%X)\n", addr);
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
     if (start_frame + frame_count > s_pframe_state.total_frames) {
         klog_error("[PFRAME] Free range exceeds managed memory\n");
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
     /* Clear the range */
     bitmap_clear_range(&s_pframe_state.frame_map, start_frame, frame_count);
+
+    spin_unlock(&s_pframe_lock);
 
     return PFRAME_OK;
 }
@@ -431,11 +468,15 @@ pframe_result_t pframe_free_n(physical_addr_t addr, uint64_t frame_count) {
  * pframe_get_stats - Get frame allocator statistics
  */
 pframe_result_t pframe_get_stats(pframe_stats_t* stats) {
+    spin_lock(&s_pframe_lock);
+
     if (!s_pframe_state.initialized) {
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_NOT_INIT;
     }
 
     if (stats == NULL) {
+        spin_unlock(&s_pframe_lock);
         return PFRAME_ERR_INVALID;
     }
 
@@ -453,6 +494,8 @@ pframe_result_t pframe_get_stats(pframe_stats_t* stats) {
     uint64_t min_alloc_frame = addr_to_frame(PFRAME_MIN_ALLOC_BASE);
     stats->reserved_frames = min_alloc_frame;
 
+    spin_unlock(&s_pframe_lock);
+
     return PFRAME_OK;
 }
 
@@ -465,7 +508,7 @@ void pframe_dump(void) {
         return;
     }
 
-    pframe_stats_t stats;
+    pframe_stats_t stats = {0};
     pframe_get_stats(&stats);
 
     klog_info("[PFRAME] Allocator State:\n");
@@ -485,27 +528,40 @@ void pframe_dump(void) {
  * pframe_is_allocated - Check if a physical address is currently allocated
  */
 bool pframe_is_allocated(physical_addr_t addr) {
+    spin_lock(&s_pframe_lock);
+
     if (!s_pframe_state.initialized) {
+        spin_unlock(&s_pframe_lock);
         return false;
     }
 
     uint64_t frame = addr_to_frame(addr);
 
     if (frame >= s_pframe_state.total_frames) {
+        spin_unlock(&s_pframe_lock);
         return false;
     }
 
-    return bitmap_test(&s_pframe_state.frame_map, frame);
+    bool result = bitmap_test(&s_pframe_state.frame_map, frame);
+
+    spin_unlock(&s_pframe_lock);
+
+    return result;
 }
 
 /**
  * pframe_get_total_frames - Get total number of frames managed
  */
 uint64_t pframe_get_total_frames(void) {
-    if (!s_pframe_state.initialized) {
+    spin_lock(&s_pframe_lock);
+    bool initialized = s_pframe_state.initialized;
+    uint64_t total = s_pframe_state.total_frames;
+    spin_unlock(&s_pframe_lock);
+
+    if (!initialized) {
         return 0;
     }
-    return s_pframe_state.total_frames;
+    return total;
 }
 
 /**
@@ -516,7 +572,7 @@ uint64_t pframe_get_free_frames(void) {
         return 0;
     }
 
-    pframe_stats_t stats;
+    pframe_stats_t stats = {0};
     pframe_get_stats(&stats);
     return stats.free_frames;
 }

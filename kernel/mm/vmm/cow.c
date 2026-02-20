@@ -174,7 +174,7 @@ cow_result_t cow_add_page(physical_addr_t phys) {
     }
 
     block->orig_phys = phys;
-    block->refcount = 1;
+    atomic_write(&block->refcount, 1);
 
     /* Add to hash map using block pointer as both key and value */
     int result = hashmap_put(s_cow_state.page_map, block, block);
@@ -201,12 +201,13 @@ cow_result_t cow_inc_refcount(physical_addr_t phys) {
         return COW_ERR_NOT_COW;
     }
 
-    if (block->refcount >= COW_MAX_REFCOUNT) {
+    /* Check if incrementing would exceed max refcount */
+    if (atomic_read(&block->refcount) >= COW_MAX_REFCOUNT) {
         klog_warn("[COW] Max refcount reached for phys=0x%016llX\n", phys);
         return COW_ERR_MAX_REFCOUNT;
     }
 
-    block->refcount++;
+    atomic_inc(&block->refcount);
     return COW_OK;
 }
 
@@ -222,11 +223,10 @@ cow_result_t cow_dec_refcount(physical_addr_t phys) {
         return COW_ERR_NOT_COW;
     }
 
-    block->refcount--;
-
-    if (block->refcount == 0) {
+    /* Decrement and check if refcount reached zero */
+    if (atomic_dec_and_test(&block->refcount)) {
         /* Remove from tracking */
-        hashmap_remove(s_cow_state.page_map, &phys);
+        hashmap_remove(s_cow_state.page_map, block);
         kfree(block);
 
         s_cow_state.stats.cow_pages_freed++;
@@ -252,7 +252,7 @@ cow_result_t cow_get_refcount(physical_addr_t phys, uint16_t* out_refcount) {
         return COW_ERR_NOT_COW;
     }
 
-    *out_refcount = block->refcount;
+    *out_refcount = (uint16_t)atomic_read(&block->refcount);
     return COW_OK;
 }
 
@@ -395,7 +395,7 @@ cow_result_t cow_handle_fault(physical_addr_t pml4, virtual_addr_t fault_addr) {
     }
 
     /* Handle based on refcount */
-    if (block->refcount == 1) {
+    if (atomic_read(&block->refcount) == 1) {
         /* Exclusive access - just make writable */
         s_cow_state.stats.cow_coalesced++;
         return cow_make_writable(pml4, fault_addr, orig_phys);

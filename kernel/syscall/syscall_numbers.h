@@ -26,6 +26,12 @@ typedef enum syscall_number {
     SYS_GETPID     = 4,    /* Get process ID */
     SYS_GETPPID    = 5,    /* Get parent process ID */
 
+    /* Thread management */
+    SYS_THREAD_CREATE = 6,     /* Create a new thread */
+    SYS_THREAD_EXIT   = 7,     /* Exit current thread */
+    SYS_THREAD_JOIN   = 8,     /* Wait for thread to exit */
+    SYS_THREAD_DETACH = 9,     /* Detach a thread */
+
     /* File I/O */
     SYS_OPEN       = 10,   /* Open a file */
     SYS_CLOSE      = 11,   /* Close a file descriptor */

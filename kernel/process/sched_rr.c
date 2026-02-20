@@ -4,10 +4,10 @@
  */
 
 #include "process/sched_rr.h"
+#include "assert/assert.h"
+#include "klogs/kprintf.h"
 #include "process/process.h"
 #include "process/sched.h"
-#include "klogs/kprintf.h"
-#include "assert/assert.h"
 
 /* ==============================================================================
  * Forward Declarations
@@ -67,15 +67,15 @@ static uint32_t rr_get_time_slice(const struct pcb* pcb);
  */
 
 static sched_class_t rr_sched_class = {
-    .name            = "RR",
-    .policy          = SCHED_NORMAL,
-    .enqueue_task    = rr_enqueue_task,
-    .dequeue_task    = rr_dequeue_task,
-    .pick_next_task  = rr_pick_next_task,
-    .should_preempt  = rr_should_preempt,
-    .task_tick       = rr_task_tick,
-    .task_fork       = rr_task_fork,
-    .get_time_slice  = rr_get_time_slice,
+    .name = "RR",
+    .policy = SCHED_NORMAL,
+    .enqueue_task = rr_enqueue_task,
+    .dequeue_task = rr_dequeue_task,
+    .pick_next_task = rr_pick_next_task,
+    .should_preempt = rr_should_preempt,
+    .task_tick = rr_task_tick,
+    .task_fork = rr_task_fork,
+    .get_time_slice = rr_get_time_slice,
 };
 
 /* ==============================================================================
@@ -108,7 +108,7 @@ static void rr_dequeue_task(struct sched_rq* rq, struct pcb* pcb) {
  * @brief Pick the next task from RR queue
  */
 static struct pcb* rr_pick_next_task(struct sched_rq* rq, struct pcb* prev) {
-    (void)prev;  /* RR doesn't care about previous task */
+    (void)prev; /* RR doesn't care about previous task */
 
     if (list_is_empty(&rq->queue)) {
         return NULL;
@@ -124,7 +124,7 @@ static struct pcb* rr_pick_next_task(struct sched_rq* rq, struct pcb* prev) {
  * Only preempt if current task exhausted its time slice
  */
 static bool rr_should_preempt(struct pcb* p, struct pcb* curr) {
-    (void)p;  /* Not used in RR */
+    (void)p; /* Not used in RR */
 
     /* Only preempt if current has no time left */
     return (curr->sched_entity.time_slice == 0);
@@ -134,16 +134,11 @@ static bool rr_should_preempt(struct pcb* p, struct pcb* curr) {
  * @brief Handle timer tick for RR task
  */
 static void rr_task_tick(struct sched_rq* rq, struct pcb* pcb) {
-    (void)rq;  /* Not needed for RR */
+    (void)rq; /* Not needed for RR */
 
     /* Decrement time slice */
     if (pcb->sched_entity.time_slice > 0) {
         pcb->sched_entity.time_slice--;
-    }
-
-    /* If time slice expired, trigger reschedule */
-    if (pcb->sched_entity.time_slice == 0) {
-        sched_set_resched();
     }
 }
 
@@ -151,11 +146,11 @@ static void rr_task_tick(struct sched_rq* rq, struct pcb* pcb) {
  * @brief Initialize a new task for RR
  */
 static void rr_task_fork(struct pcb* pcb, int nice) {
-    (void)nice;  /* Not used yet */
+    (void)nice; /* Not used yet */
 
     pcb->sched_entity.sched_class = &rr_sched_class;
     pcb->sched_entity.policy = SCHED_NORMAL;
-    pcb->sched_entity.priority = 0;  /* Default priority */
+    pcb->sched_entity.priority = 0; /* Default priority */
     pcb->sched_entity.time_slice = RR_TIMESLICE_DEFAULT;
     pcb->sched_entity.time_slice_total = RR_TIMESLICE_DEFAULT;
     pcb->sched_entity.nice = 0;
@@ -165,7 +160,7 @@ static void rr_task_fork(struct pcb* pcb, int nice) {
  * @brief Get time slice for RR task
  */
 static uint32_t rr_get_time_slice(const struct pcb* pcb) {
-    (void)pcb;  /* RR uses fixed time slice */
+    (void)pcb; /* RR uses fixed time slice */
     return RR_TIMESLICE_DEFAULT;
 }
 
@@ -190,8 +185,7 @@ int sched_rr_init(void) {
         return ret;
     }
 
-    klog_info("[SCHED] Round-Robin class initialized (timeslice=%d ms)\n",
-              RR_TIMESLICE_DEFAULT);
+    klog_info("[SCHED] Round-Robin class initialized (timeslice=%d ms)\n", RR_TIMESLICE_DEFAULT);
     return 0;
 }
 

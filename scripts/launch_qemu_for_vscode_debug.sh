@@ -12,6 +12,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_ROOT/build"
 KERNEL_ELF="$BUILD_DIR/kernel.elf"
 BOOT_IMG="$BUILD_DIR/boot.img"
+CCOS_DATA_DISK_IMAGE="disk/disk.img"
 PID_FILE="$SCRIPT_DIR/.qemu_debug.pid"
 SERIAL_LOG="$SCRIPT_DIR/.qemu_serial.log"
 
@@ -339,12 +340,12 @@ start_qemu() {
     qemu-system-x86_64 \
         ${QEMU_CPU_FLAG} \
         -drive format=raw,file="$BOOT_IMG",if=ide \
+        -drive format=raw,file=$CCOS_DATA_DISK_IMAGE,if=ide,index=1 \
         -vga std -display vnc=:0 \
         -serial file:"$SERIAL_LOG" \
         -s \
         -S \
         > /dev/null 2>&1 &
-
     QEMU_PID=$!
 
     # 保存 PID

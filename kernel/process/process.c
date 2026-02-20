@@ -17,6 +17,8 @@
 #include "process/sched.h"
 #include "process/sched_prio.h"
 #include "process/sched_rr.h"
+#include "sync/spinlock.h"
+#include "sync/waitqueue.h"
 
 /* ==============================================================================
  * Global Scheduler State
@@ -38,6 +40,9 @@ scheduler_t scheduler = {
 static byte_t s_pid_bitmap_buffer[PID_BITMAP_SIZE];
 static struct bitmap s_pid_bitmap;
 
+/* Spinlock protecting PID bitmap allocation */
+static spinlock_t s_pid_lock = SPIN_LOCK_INIT;
+
 /**
  * @brief Initialize PID allocator
  */
@@ -51,11 +56,18 @@ void pid_alloc_init(void) {
  * @return Allocated PID, or negative on error
  */
 int32_t pid_alloc(void) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_pid_lock, &flags);
+
     int pid = bitmap_find_first_zero(&s_pid_bitmap);
     if (pid < 0 || pid >= PID_MAX) {
+        spin_unlock_irqrestore(&s_pid_lock, flags);
         return -1;
     }
     bitmap_set(&s_pid_bitmap, pid);
+
+    spin_unlock_irqrestore(&s_pid_lock, flags);
+
     return pid;
 }
 
@@ -65,7 +77,10 @@ int32_t pid_alloc(void) {
  */
 void pid_free(int32_t pid) {
     if (pid > 0 && pid < PID_MAX) {
+        spinlock_flags_t flags;
+        spin_lock_irqsave(&s_pid_lock, &flags);
         bitmap_clear(&s_pid_bitmap, pid);
+        spin_unlock_irqrestore(&s_pid_lock, flags);
     }
 }
 
@@ -77,7 +92,7 @@ void pid_free(int32_t pid) {
  * @brief Allocate a new PCB
  * @return Pointer to new PCB, or NULL on failure
  */
-static pcb_t* proc_alloc_pcb(void) {
+pcb_t* proc_alloc_pcb(void) {
     pcb_t* pcb = (pcb_t*)kmalloc(sizeof(pcb_t));
     if (!pcb) {
         return NULL;
@@ -125,6 +140,18 @@ static pcb_t* proc_alloc_pcb(void) {
     pcb->user_stack = 0;
     pcb->user_stack_size = 0;
 
+    /* Initialize thread fields */
+    pcb->tgid = 0;
+    pcb->is_thread = false;
+    INIT_LIST_HEAD(&pcb->thread_list);
+    INIT_LIST_HEAD(&pcb->thread_group);
+    atomic_write(&pcb->mm_refcount, 1);
+    pcb->join_waiters = NULL;
+    pcb->detached = false;
+    pcb->return_value = NULL;
+    pcb->thread_entry = 0;
+    pcb->thread_arg = 0;
+
     return pcb;
 }
 
@@ -132,7 +159,7 @@ static pcb_t* proc_alloc_pcb(void) {
  * @brief Free a PCB
  * @param pcb PCB to free
  */
-static void proc_free_pcb(pcb_t* pcb) {
+void proc_free_pcb(pcb_t* pcb) {
     if (!pcb) {
         return;
     }
@@ -166,9 +193,17 @@ static void proc_free_pcb(pcb_t* pcb) {
         }
     }
 
-    /* Destroy address space if it's a user process */
+    /* Destroy address space using reference counting */
+    /* For threads sharing address space, only destroy when refcount reaches 0 */
     if (pcb->mm.pml4_phys != 0) {
-        vmm_destroy_user_space(pcb->mm.pml4_phys);
+        if (atomic_dec_and_test(&pcb->mm_refcount)) {
+            vmm_destroy_user_space(pcb->mm.pml4_phys);
+        }
+    }
+
+    /* Free join waiters if allocated */
+    if (pcb->join_waiters) {
+        kfree(pcb->join_waiters);
     }
 
     kfree(pcb);
@@ -346,6 +381,13 @@ int32_t proc_fork(void) {
     child->parent = parent;
     child->state = PROC_READY;
     child->start_time = 0; /* TODO: Get actual time */
+
+    /* Set up thread group ID - new process is its own thread group leader */
+    child->tgid = child->pid;
+    child->is_thread = false;
+
+    /* Reset mm_refcount for new address space */
+    atomic_write(&child->mm_refcount, 1);
 
     /* Copy command name */
     for (int i = 0; i < 16; i++) {

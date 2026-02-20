@@ -7,6 +7,7 @@
 #include "driver/timer/timer.h"
 #include "klogs/kprintf.h"
 #include "process/process.h"
+#include "sync/spinlock.h"
 
 /* ==============================================================================
  * Global Scheduler State
@@ -20,6 +21,9 @@ extern scheduler_t scheduler;
 static sched_rq_t s_run_queues[SCHED_MAX];
 static sched_class_t* s_classes[SCHED_MAX];
 
+/* Global scheduler lock - exported for use in process.c */
+spinlock_t g_scheduler_lock = SPIN_LOCK_INIT;
+
 /* ==============================================================================
  * Timer Tick Handler
  * ==============================================================================
@@ -28,9 +32,14 @@ static sched_class_t* s_classes[SCHED_MAX];
 /**
  * @brief Timer tick callback for scheduling
  * Called from timer_irq_handler at 1000Hz
+ *
+ * NOTE: Runs in interrupt context, must use irqsave variants
  */
 static void sched_timer_tick_handler(uint64_t ticks) {
     (void)ticks;
+
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&g_scheduler_lock, &flags);
 
     /* Only tick if we have a running process with a scheduling class */
     if (scheduler.current && scheduler.rq != NULL) {
@@ -39,6 +48,8 @@ static void sched_timer_tick_handler(uint64_t ticks) {
             scheduler.current->sched_entity.sched_class->task_tick(rq, scheduler.current);
         }
     }
+
+    spin_unlock_irqrestore(&g_scheduler_lock, flags);
 }
 
 /* ==============================================================================
@@ -142,6 +153,9 @@ void sched_enqueue_task(struct pcb* pcb, bool head) {
         return;
     }
 
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&g_scheduler_lock, &flags);
+
     sched_rq_t* rq = &scheduler.rq[pcb->sched_entity.policy];
 
     pcb->sched_entity.sched_class->enqueue_task(rq, pcb, head);
@@ -151,6 +165,8 @@ void sched_enqueue_task(struct pcb* pcb, bool head) {
 
     /* Also add to legacy run_queue for compatibility */
     list_add_tail(&pcb->run_list, &scheduler.run_queue);
+
+    spin_unlock_irqrestore(&g_scheduler_lock, flags);
 }
 
 /**
@@ -160,6 +176,9 @@ void sched_dequeue_task(struct pcb* pcb) {
     if (!pcb || !pcb->sched_entity.sched_class) {
         return;
     }
+
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&g_scheduler_lock, &flags);
 
     sched_rq_t* rq = &scheduler.rq[pcb->sched_entity.policy];
 
@@ -172,6 +191,8 @@ void sched_dequeue_task(struct pcb* pcb) {
 
     /* Also remove from legacy run_queue */
     list_del_init(&pcb->run_list);
+
+    spin_unlock_irqrestore(&g_scheduler_lock, flags);
 }
 
 /* ==============================================================================
@@ -186,6 +207,8 @@ void sched_dequeue_task(struct pcb* pcb) {
  * 1. If current is still runnable and has time slice, keep it
  * 2. Otherwise, pick from priority queues first
  * 3. Then pick from normal RR queue
+ *
+ * NOTE: Caller must hold g_scheduler_lock
  */
 struct pcb* sched_pick_next_task(void) {
     struct pcb* prev = scheduler.current;
@@ -239,21 +262,31 @@ struct pcb* sched_pick_next_task(void) {
  * @brief Check if we need to reschedule
  */
 bool sched_needs_reschedule(void) {
-    return scheduler.need_resched;
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&g_scheduler_lock, &flags);
+    bool needs = scheduler.need_resched;
+    spin_unlock_irqrestore(&g_scheduler_lock, flags);
+    return needs;
 }
 
 /**
  * @brief Set the need_resched flag
  */
 void sched_set_resched(void) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&g_scheduler_lock, &flags);
     scheduler.need_resched = true;
+    spin_unlock_irqrestore(&g_scheduler_lock, flags);
 }
 
 /**
  * @brief Clear the need_resched flag
  */
 void sched_clear_resched(void) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&g_scheduler_lock, &flags);
     scheduler.need_resched = false;
+    spin_unlock_irqrestore(&g_scheduler_lock, flags);
 }
 
 /* ==============================================================================

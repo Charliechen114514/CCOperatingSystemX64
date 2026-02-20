@@ -14,6 +14,7 @@
 #include "mm/vmm/vmm_config.h"
 #include "mm/page_config.h"  /* For PAGE_SIZE */
 #include "process/sched.h"   /* Scheduling class framework */
+#include "sync/atomic.h"     /* For atomic_t (mm_refcount) */
 
 /* ==============================================================================
  * Process Constants
@@ -22,6 +23,13 @@
 #define PID_MAX           32768
 #define KERNEL_STACK_SIZE (16 * 1024)  /* 16KB */
 #define USER_STACK        (USER_END - PAGE_SIZE)
+
+/* ==============================================================================
+ * Thread Constants
+ * ============================================================================== */
+
+#define THREAD_STACK_BASE    (USER_END - 64 * 1024 * 1024)  /* 64MB region for thread stacks */
+#define THREAD_STACK_SIZE    (256 * 1024)                    /* 256KB per thread */
 
 /* ==============================================================================
  * Process State Enumeration
@@ -54,6 +62,7 @@ typedef struct PACKED cpu_context {
     uint64_t r13;
     uint64_t r14;
     uint64_t r15;
+    uint64_t rsp;        /* Stack pointer */
     uint64_t rip;        /* Return address */
 } cpu_context_t;
 
@@ -152,6 +161,24 @@ typedef struct pcb {
     uint64_t           start_time;     /* Process creation time */
     char               comm[16];       /* Command name */
 
+    /* ===== Thread Identification ===== */
+    int32_t            tgid;           /* Thread Group ID (PID of thread leader) */
+    bool               is_thread;      /* true = this is a thread, not a process */
+    list_head          thread_list;    /* List of threads in this thread group */
+    list_head          thread_group;   /* Node in leader's thread_list */
+
+    /* ===== Address Space Reference Counting ===== */
+    atomic_t           mm_refcount;    /* Reference count for shared mm */
+
+    /* ===== Thread Join Support ===== */
+    void*              join_waiters;    /* Opaque pointer to wait_queue_head_t */
+    bool               detached;       /* true = thread cannot be joined */
+    void*              return_value;   /* Thread return value */
+
+    /* ===== Thread Entry Point ===== */
+    virtual_addr_t     thread_entry;   /* User space function pointer */
+    virtual_addr_t     thread_arg;     /* Argument to thread function */
+
 } pcb_t;
 
 /* ==============================================================================
@@ -203,6 +230,18 @@ void proc_exit(int exit_code) __attribute__((noreturn));
 int32_t proc_wait4(int32_t pid, int* wstatus, int options);
 
 /**
+ * @brief Allocate a new PCB
+ * @return Pointer to new PCB, or NULL on failure
+ */
+pcb_t* proc_alloc_pcb(void);
+
+/**
+ * @brief Free a PCB
+ * @param pcb PCB to free
+ */
+void proc_free_pcb(pcb_t* pcb);
+
+/**
  * @brief Get current process
  * @return Pointer to current PCB, or NULL if no current process
  */
@@ -243,3 +282,64 @@ int32_t pid_alloc(void);
  * @param pid PID to free
  */
 void pid_free(int32_t pid);
+
+/* ==============================================================================
+ * Thread Management API
+ * ==============================================================================
+ */
+
+/**
+ * @brief Thread function type
+ */
+typedef void (*thread_fn_t)(void* arg);
+
+/**
+ * @brief Create a new kernel thread
+ * @param fn Thread entry point function
+ * @param arg Argument to pass to thread function
+ * @param name Thread name for debugging
+ * @return Pointer to new PCB, or NULL on failure
+ */
+pcb_t* proc_create_kernel_thread(thread_fn_t fn, void* arg, const char* name);
+
+/**
+ * @brief Create a new user thread
+ * @param parent Parent thread (current process)
+ * @param entry User-space function pointer
+ * @param arg User-space argument
+ * @param stack_addr User stack address (0 to auto-allocate)
+ * @param stack_size Stack size in bytes
+ * @return TID on success, negative on error
+ */
+int32_t proc_create_user_thread(pcb_t* parent, virtual_addr_t entry,
+                                virtual_addr_t arg,
+                                virtual_addr_t stack_addr,
+                                size_t stack_size);
+
+/**
+ * @brief Exit current thread
+ * @param retval Return value
+ */
+void proc_thread_exit(void* retval) __attribute__((noreturn));
+
+/**
+ * @brief Wait for a thread to exit
+ * @param tid Thread ID to wait for
+ * @param retval Pointer to store return value
+ * @return 0 on success, negative on error
+ */
+int32_t proc_thread_join(int32_t tid, void** retval);
+
+/**
+ * @brief Detach a thread (cannot be joined)
+ * @param tid Thread ID to detach
+ * @return 0 on success, negative on error
+ */
+int32_t proc_thread_detach(int32_t tid);
+
+/**
+ * @brief Find thread by TID
+ * @param tid Thread ID to find
+ * @return Pointer to PCB, or NULL if not found
+ */
+pcb_t* proc_find_by_tid(int32_t tid);

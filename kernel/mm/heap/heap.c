@@ -11,6 +11,7 @@
 #include "math/bits.h"
 #include "mm/pframe/pframe.h"
 #include "mm/vmm/vmm.h"
+#include "sync/spinlock.h"
 
 /* ==============================================================================
  * Internal Constants
@@ -55,6 +56,9 @@ typedef struct {
  * ============================================================================== */
 
 static heap_state_t s_heap = {0};
+
+/* Spinlock protecting the heap allocator state */
+static spinlock_t s_heap_lock = SPIN_LOCK_INIT;
 
 /* ==============================================================================
  * Internal Helper Functions
@@ -333,9 +337,12 @@ static void coalesce_block(heap_block_t* block) {
 }
 
 /**
- * expand_heap - Expand heap by allocating more pages
+ * expand_heap_locked - Expand heap by allocating more pages (caller must hold lock)
+ *
+ * IMPORTANT: Caller must hold s_heap_lock when calling this function!
+ * This function assumes the lock is already held to prevent race conditions.
  */
-static heap_result_t expand_heap(size_t min_needed) {
+static heap_result_t expand_heap_locked(size_t min_needed) {
     /* Calculate pages needed */
     size_t page_count = (min_needed + PAGE_SIZE - 1) / PAGE_SIZE;
     if (page_count < 4) {
@@ -361,6 +368,12 @@ static heap_result_t expand_heap(size_t min_needed) {
 
     klog_trace("[HEAP] Attempting to allocate %lu pages at 0x%llX\n", page_count, target_vaddr);
 
+    /*
+     * NOTE: vmm_alloc_pages_at now acquires its own lock internally.
+     * The heap lock remains held, which prevents concurrent heap operations
+     * while we're expanding the heap.
+     */
+
     vmm_result_t vmm_result = vmm_alloc_pages_at(target_vaddr, page_count, VMAP_FLAG_WRITE);
     if (vmm_result != VMM_OK) {
         klog_error("[HEAP] Failed to allocate pages at 0x%llX for expansion\n", target_vaddr);
@@ -379,7 +392,7 @@ static heap_result_t expand_heap(size_t min_needed) {
     memset((void*)(target_vaddr + sizeof(heap_block_t)), 0,
            new_block->size - sizeof(heap_block_t));
 
-    /* Insert to free list */
+    /* Insert to free list (heap lock is still held) */
     insert_to_free_list(new_block);
 
     /* Update heap break (should always be page-aligned after this) */
@@ -422,8 +435,9 @@ heap_result_t heap_init(void) {
     s_heap.heap_brk = 0; /* Will be set on first allocation */
     s_heap.free_list = NULL;
 
-    /* Allocate initial pages - this will set heap_brk */
-    heap_result_t result = expand_heap(HEAP_INIT_PAGES * PAGE_SIZE);
+    /* Allocate initial pages - this will set heap_brk.
+     * Note: No need to acquire lock here since we're in single-threaded init. */
+    heap_result_t result = expand_heap_locked(HEAP_INIT_PAGES * PAGE_SIZE);
     if (result != HEAP_OK) {
         klog_error("[HEAP] Initial heap expansion failed\n");
         return result;
@@ -446,12 +460,17 @@ heap_result_t heap_init(void) {
  * kmalloc - Allocate memory from kernel heap
  */
 void* kmalloc(size_t size) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_heap_lock, &flags);
+
     if (!s_heap.initialized) {
         klog_error("[HEAP] Not initialized\n");
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return NULL;
     }
 
     if (size == 0) {
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return NULL;
     }
 
@@ -462,19 +481,26 @@ void* kmalloc(size_t size) {
     heap_block_t* block = find_best_fit(total_size);
 
     if (block == NULL) {
-        /* Need to expand heap */
+        /* Need to expand heap - heap lock is already held */
         klog_trace("[HEAP] No free block found, expanding heap\n");
 
-        heap_result_t result = expand_heap(total_size);
+        /*
+         * IMPORTANT: expand_heap_locked expects the heap lock to be held.
+         * We keep the lock held during expansion to prevent race conditions.
+         * The VMM lock is acquired internally by vmm_alloc_pages_at.
+         */
+        heap_result_t result = expand_heap_locked(total_size);
         if (result != HEAP_OK) {
             klog_error("[HEAP] Out of memory\n");
+            spin_unlock_irqrestore(&s_heap_lock, flags);
             return NULL;
         }
 
-        /* Try again */
+        /* Try again after expansion (still holding lock) */
         block = find_best_fit(total_size);
         if (block == NULL) {
             klog_error("[HEAP] Still no free block after expansion\n");
+            spin_unlock_irqrestore(&s_heap_lock, flags);
             return NULL;
         }
     }
@@ -495,22 +521,31 @@ void* kmalloc(size_t size) {
     s_heap.stats.free_blocks--;
     s_heap.stats.alloc_count++;
 
-    klog_trace("[HEAP] Allocated %lu bytes at 0x%llX (block size: %lu)\n", size,
-               (virtual_addr_t)block_to_ptr(block), block->size);
+    void* result = block_to_ptr(block);
 
-    return block_to_ptr(block);
+    spin_unlock_irqrestore(&s_heap_lock, flags);
+
+    klog_trace("[HEAP] Allocated %lu bytes at 0x%llX (block size: %lu)\n", size,
+               (virtual_addr_t)result, block->size);
+
+    return result;
 }
 
 /**
  * kfree - Free memory allocated from kernel heap
  */
 void kfree(void* ptr) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_heap_lock, &flags);
+
     if (!s_heap.initialized) {
         klog_error("[HEAP] Not initialized\n");
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return;
     }
 
     if (ptr == NULL) {
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return;
     }
 
@@ -520,11 +555,13 @@ void kfree(void* ptr) {
     /* Validate block */
     if (!validate_block(block)) {
         klog_error("[HEAP] Invalid pointer or corrupted block: 0x%llX\n", (virtual_addr_t)ptr);
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return;
     }
 
     if (!block->used) {
         klog_warn("[HEAP] Double free detected at 0x%llX\n", (virtual_addr_t)ptr);
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return;
     }
 
@@ -538,25 +575,27 @@ void kfree(void* ptr) {
     s_heap.stats.free_blocks++;
     s_heap.stats.free_count++;
 
+    spin_unlock_irqrestore(&s_heap_lock, flags);
+
     klog_trace("[HEAP] Freed %lu bytes at 0x%llX\n", block->size - sizeof(heap_block_t),
                (virtual_addr_t)ptr);
+
+    /* Re-acquire lock for list operations */
+    spin_lock_irqsave(&s_heap_lock, &flags);
 
     /* Insert to free list */
     insert_to_free_list(block);
 
     /* Coalesce with adjacent blocks */
     coalesce_block(block);
+
+    spin_unlock_irqrestore(&s_heap_lock, flags);
 }
 
 /**
  * krealloc - Reallocate memory with new size
  */
 void* krealloc(void* ptr, size_t new_size) {
-    if (!s_heap.initialized) {
-        klog_error("[HEAP] Not initialized\n");
-        return NULL;
-    }
-
     /* Handle NULL pointer - equivalent to kmalloc */
     if (ptr == NULL) {
         return kmalloc(new_size);
@@ -568,11 +607,21 @@ void* krealloc(void* ptr, size_t new_size) {
         return NULL;
     }
 
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_heap_lock, &flags);
+
+    if (!s_heap.initialized) {
+        klog_error("[HEAP] Not initialized\n");
+        spin_unlock_irqrestore(&s_heap_lock, flags);
+        return NULL;
+    }
+
     /* Get current block */
     heap_block_t* old_block = ptr_to_block(ptr);
 
     if (!validate_block(old_block) || !old_block->used) {
         klog_error("[HEAP] Invalid pointer in krealloc\n");
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return NULL;
     }
 
@@ -582,8 +631,11 @@ void* krealloc(void* ptr, size_t new_size) {
     size_t new_total = total_block_size(new_size);
     if (new_total <= old_block->size) {
         /* Shrink or same size - could split here but skip for simplicity */
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return ptr;
     }
+
+    spin_unlock_irqrestore(&s_heap_lock, flags);
 
     /* Need to allocate new block */
     void* new_ptr = kmalloc(new_size);
@@ -608,18 +660,24 @@ void* krealloc(void* ptr, size_t new_size) {
  * The original pointer is stored just before the returned pointer.
  */
 void* kmalloc_aligned(size_t size, size_t alignment) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_heap_lock, &flags);
+
     if (!s_heap.initialized) {
         klog_error("[HEAP] Not initialized\n");
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return NULL;
     }
 
     if (size == 0) {
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return NULL;
     }
 
     /* Validate alignment */
     if (alignment == 0 || (alignment & (alignment - 1)) != 0) {
         klog_error("[HEAP] Invalid alignment: %lu\n", alignment);
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return NULL;
     }
 
@@ -627,6 +685,8 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
     if (alignment < HEAP_ALIGN) {
         alignment = HEAP_ALIGN;
     }
+
+    spin_unlock_irqrestore(&s_heap_lock, flags);
 
     /* Allocate extra space: alignment + sizeof(virtual_addr_t*) for storing original pointer */
     size_t total_size = total_block_size(size) + alignment + sizeof(virtual_addr_t*);
@@ -655,11 +715,16 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
  * heap_get_stats - Get heap statistics
  */
 heap_result_t heap_get_stats(heap_stats_t* stats) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_heap_lock, &flags);
+
     if (!s_heap.initialized) {
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return HEAP_ERR_NOT_INIT;
     }
 
     if (stats == NULL) {
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         return HEAP_ERR_INVALID;
     }
 
@@ -694,6 +759,8 @@ heap_result_t heap_get_stats(heap_stats_t* stats) {
         block = (heap_block_t*)((virtual_addr_t)block + block->size);
     }
 
+    spin_unlock_irqrestore(&s_heap_lock, flags);
+
     return HEAP_OK;
 }
 
@@ -701,7 +768,11 @@ heap_result_t heap_get_stats(heap_stats_t* stats) {
  * heap_dump - Dump heap state for debugging
  */
 void heap_dump(void) {
+    spinlock_flags_t flags;
+    spin_lock_irqsave(&s_heap_lock, &flags);
+
     if (!s_heap.initialized) {
+        spin_unlock_irqrestore(&s_heap_lock, flags);
         klog_error("[HEAP] Not initialized\n");
         return;
     }
@@ -732,4 +803,6 @@ void heap_dump(void) {
     if (curr) {
         klog_info("[HEAP]   ... and more\n");
     }
+
+    spin_unlock_irqrestore(&s_heap_lock, flags);
 }

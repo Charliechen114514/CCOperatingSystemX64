@@ -9,6 +9,7 @@
 #include "driver/serial/serial.h"
 #include "klogs/kprintf.h"
 #include "mm/pframe/pframe.h"
+#include "sync/spinlock.h"
 
 /* ==============================================================================
  * Internal State
@@ -17,6 +18,16 @@
 static physical_addr_t s_kernel_pml4 = 0;
 static bool s_initialized = false;
 static bool s_direct_map_established = false;
+
+/* Spinlock protecting page table operations
+ * This lock must be held when modifying page tables to prevent
+ * concurrent modifications from multiple CPUs or interrupt handlers.
+ */
+static spinlock_t s_page_lock = SPIN_LOCK_INIT;
+
+/* Helper macros for locking page table operations */
+#define PAGE_LOCK(lock_flags) spin_lock_irqsave(&s_page_lock, &(lock_flags))
+#define PAGE_UNLOCK(lock_flags) spin_unlock_irqrestore(&s_page_lock, (lock_flags))
 
 /* Direct physical map offset - must match PHYS_MAP_OFFSET from vmm.h */
 #define DIRECT_MAP_BASE 0xFFFF800000000000ULL
@@ -261,6 +272,12 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     CCOS_ASSERT(s_initialized);
     CCOS_ASSERT(s_direct_map_established);
 
+    page_result_t ret = PAGE_OK;
+    spinlock_flags_t lock_flags;
+
+    /* Lock to protect concurrent page table modifications */
+    PAGE_LOCK(lock_flags);
+
     /* Determine page size from flags */
     bool use_2mb = (flags & VMAP_FLAG_HUGE_2MB) != 0;
     bool use_1gb = (flags & VMAP_FLAG_HUGE_1GB) != 0;
@@ -268,7 +285,8 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     /* Validate only one huge page flag is set */
     if (use_2mb && use_1gb) {
         klog_error("[PAGE] Cannot set both HUG_2MB and HUG_1GB flags\n");
-        return PAGE_ERR_INVALID;
+        ret = PAGE_ERR_INVALID;
+        goto unlock;
     }
 
     /* Determine alignment requirements */
@@ -286,11 +304,13 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     /* Validate alignment */
     if ((vaddr & page_align) != 0) {
         klog_error("[PAGE] Virtual address not aligned to %llu bytes: 0x%llX\n", page_size, vaddr);
-        return PAGE_ERR_ALIGNMENT;
+        ret = PAGE_ERR_ALIGNMENT;
+        goto unlock;
     }
     if ((paddr & page_align) != 0) {
         klog_error("[PAGE] Physical address not aligned to %llu bytes: 0x%X\n", page_size, paddr);
-        return PAGE_ERR_ALIGNMENT;
+        ret = PAGE_ERR_ALIGNMENT;
+        goto unlock;
     }
 
     /* Convert flags to PTE format */
@@ -304,7 +324,8 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     physical_addr_t pdpt_phys = pml4e->bits.frame << PAGE_SHIFT;
     page_result_t result = get_or_create_table(&pdpt_phys, alloc_missing);
     if (result != PAGE_OK) {
-        return result;
+        ret = result;
+        goto unlock;
     }
 
     /* Update PML4 entry if we created a new PDPT */
@@ -320,7 +341,8 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     if (use_1gb) {
         if (pdpte->bits.present) {
             klog_error("[PAGE] PDPT entry already present at 0x%llX\n", vaddr);
-            return PAGE_ERR_ALREADY_MAPPED;
+            ret = PAGE_ERR_ALREADY_MAPPED;
+            goto unlock;
         }
 
         /* Create 1GB huge page mapping at PDPT level */
@@ -329,14 +351,15 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
         /* Invalidate TLB */
         page_invalidate_tlb(vaddr);
 
-        return PAGE_OK;
+        goto unlock;
     }
 
     /* Walk or create PD */
     physical_addr_t pd_phys = pdpte->bits.frame << PAGE_SHIFT;
     result = get_or_create_table(&pd_phys, alloc_missing);
     if (result != PAGE_OK) {
-        return result;
+        ret = result;
+        goto unlock;
     }
 
     /* Update PDPT entry if we created a new PD */
@@ -352,7 +375,8 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     if (use_2mb) {
         if (pde->bits.present) {
             klog_error("[PAGE] PD entry already present at 0x%llX\n", vaddr);
-            return PAGE_ERR_ALREADY_MAPPED;
+            ret = PAGE_ERR_ALREADY_MAPPED;
+            goto unlock;
         }
 
         /* Create 2MB huge page mapping at PD level */
@@ -361,7 +385,7 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
         /* Invalidate TLB */
         page_invalidate_tlb(vaddr);
 
-        return PAGE_OK;
+        goto unlock;
     }
 
     /* Check if PD entry is a huge page */
@@ -369,14 +393,16 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
         /* PD entry is a 2MB huge page. We need to break it into 4KB pages. */
         /* For now, return an error as this is a complex operation. */
         klog_error("[PAGE] Cannot map 4KB page in 2MB huge page region at 0x%llX\n", vaddr);
-        return PAGE_ERR_INVALID;
+        ret = PAGE_ERR_INVALID;
+        goto unlock;
     }
 
     /* Walk or create PT */
     physical_addr_t pt_phys = pde->bits.frame << PAGE_SHIFT;
     result = get_or_create_table(&pt_phys, alloc_missing);
     if (result != PAGE_OK) {
-        return result;
+        ret = result;
+        goto unlock;
     }
 
     /* Update PD entry if we created a new PT */
@@ -392,7 +418,8 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     if (pte->bits.present) {
         klog_warn("[PAGE] Page already mapped at 0x%llX -> 0x%X\n", vaddr,
                   pte->bits.frame << PAGE_SHIFT);
-        return PAGE_ERR_ALREADY_MAPPED;
+        ret = PAGE_ERR_ALREADY_MAPPED;
+        goto unlock;
     }
 
     /* Set the 4KB page PTE */
@@ -401,7 +428,9 @@ page_result_t page_map_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, phy
     /* Invalidate TLB for this address */
     page_invalidate_tlb(vaddr);
 
-    return PAGE_OK;
+unlock:
+    PAGE_UNLOCK(lock_flags);
+    return ret;
 }
 
 page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, bool free_table) {
@@ -410,9 +439,16 @@ page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, b
 
     (void)free_table; /* TODO: Implement free_table functionality */
 
+    page_result_t ret = PAGE_OK;
+    spinlock_flags_t lock_flags;
+
+    /* Lock to protect concurrent page table modifications */
+    PAGE_LOCK(lock_flags);
+
     /* Validate alignment */
     if ((vaddr & (PAGE_SIZE - 1)) != 0) {
-        return PAGE_ERR_ALIGNMENT;
+        ret = PAGE_ERR_ALIGNMENT;
+        goto unlock;
     }
 
     /* Get PML4 */
@@ -420,7 +456,8 @@ page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, b
     page_table_entry_t* pml4e = &pml4->entries[PML4_INDEX(vaddr)];
 
     if (!pml4e->bits.present) {
-        return PAGE_ERR_NOT_MAPPED;
+        ret = PAGE_ERR_NOT_MAPPED;
+        goto unlock;
     }
 
     /* Get PDPT */
@@ -428,7 +465,8 @@ page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, b
     page_table_entry_t* pdpte = &pdpt->entries[PDPT_INDEX(vaddr)];
 
     if (!pdpte->bits.present) {
-        return PAGE_ERR_NOT_MAPPED;
+        ret = PAGE_ERR_NOT_MAPPED;
+        goto unlock;
     }
 
     /* Get PD */
@@ -436,7 +474,8 @@ page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, b
     page_table_entry_t* pde = &pd->entries[PD_INDEX(vaddr)];
 
     if (!pde->bits.present) {
-        return PAGE_ERR_NOT_MAPPED;
+        ret = PAGE_ERR_NOT_MAPPED;
+        goto unlock;
     }
 
     /* Get PT */
@@ -444,7 +483,8 @@ page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, b
     page_table_entry_t* pte = &pt->entries[PT_INDEX(vaddr)];
 
     if (!pte->bits.present) {
-        return PAGE_ERR_NOT_MAPPED;
+        ret = PAGE_ERR_NOT_MAPPED;
+        goto unlock;
     }
 
     /* Clear the PTE */
@@ -455,7 +495,9 @@ page_result_t page_unmap_page(physical_addr_t pml4_phys, virtual_addr_t vaddr, b
 
     /* TODO: Free empty page tables if free_table is true */
 
-    return PAGE_OK;
+unlock:
+    PAGE_UNLOCK(lock_flags);
+    return ret;
 }
 
 page_result_t page_query(physical_addr_t pml4_phys, virtual_addr_t vaddr,

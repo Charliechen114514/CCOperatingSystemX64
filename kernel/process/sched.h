@@ -11,6 +11,7 @@
 
 #include "defines/types.h"
 #include "list/list.h"
+#include "sync/spinlock.h"
 
 /* ==============================================================================
  * Forward Declarations
@@ -200,6 +201,21 @@ void sched_enqueue_task(struct pcb* pcb, bool head);
 void sched_dequeue_task(struct pcb* pcb);
 
 /**
+ * @brief Enqueue a task on its class's run queue (caller must hold lock)
+ * @param pcb The task to enqueue
+ * @param head If true, add to head; otherwise add to tail
+ * NOTE: Caller must already hold g_scheduler_lock
+ */
+void sched_enqueue_task_locked(struct pcb* pcb, bool head);
+
+/**
+ * @brief Dequeue a task from its class's run queue (caller must hold lock)
+ * @param pcb The task to dequeue
+ * NOTE: Caller must already hold g_scheduler_lock
+ */
+void sched_dequeue_task_locked(struct pcb* pcb);
+
+/**
  * @brief Pick the next task to run
  * @return The next task to run, or NULL if no tasks
  */
@@ -221,6 +237,12 @@ bool sched_needs_reschedule(void);
  * @brief Set the need_resched flag
  */
 void sched_set_resched(void);
+
+/**
+ * @brief Set the need_resched flag (internal - caller must hold g_scheduler_lock)
+ * NOTE: This is for use by scheduling classes that already hold the lock
+ */
+void sched_set_resched_locked(void);
 
 /**
  * @brief Clear the need_resched flag
@@ -264,3 +286,15 @@ int sched_set_policy(struct pcb* pcb, sched_policy_t policy, int priority);
  * @return The task's scheduling policy
  */
 sched_policy_t sched_get_policy(const struct pcb* pcb);
+
+/* ==============================================================================
+ * Global Scheduler Lock
+ * ==============================================================================
+ */
+
+/**
+ * @brief Global scheduler lock
+ * This lock protects all scheduler data structures including run queues,
+ * scheduler.current, scheduler.nr_running, and per-task scheduling entities.
+ */
+extern spinlock_t g_scheduler_lock;

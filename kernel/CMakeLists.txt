@@ -113,6 +113,9 @@ add_subdirectory(bitmap)
 # 添加 list 嵌入式链表模块
 add_subdirectory(list)
 
+# 添加 sync 同步原语模块
+add_subdirectory(sync)
+
 # 添加驱动子目录
 add_subdirectory(driver)
 
@@ -142,10 +145,12 @@ option(ENABLE_PROCESS_DEMO "Enable Process Management demo" OFF)
 option(ENABLE_SCHED_DEMO "Enable Scheduling Class demo" OFF)
 option(ENABLE_USER_DEMO "Enable User Mode support demo" OFF)
 option(ENABLE_ATA_DEMO "Enable ATA/IDE disk driver demo" OFF)
-option(ENABLE_VFS_DEMO "Enable VFS demo" ON)
+option(ENABLE_VFS_DEMO "Enable VFS demo" OFF)
+option(ENABLE_SYNC_DEMO "Enable Synchronization Primitives demo" OFF)
+option(ENABLE_THREAD_DEMO "Enable Thread Creation demo" OFF)
 
 # 自动启用 CCOS_ENABLE_DEMO 如果任何子 demo 被启用
-if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO OR ENABLE_USER_DEMO OR ENABLE_ATA_DEMO OR ENABLE_VFS_DEMO)
+if(ENABLE_RTC_DEMO OR ENABLE_VMM_DEMO OR ENABLE_HEAP_DEMO OR ENABLE_COW_DEMO OR ENABLE_MOCK_SYSCALL_DEMO OR ENABLE_PROCESS_DEMO OR ENABLE_SCHED_DEMO OR ENABLE_USER_DEMO OR ENABLE_ATA_DEMO OR ENABLE_VFS_DEMO OR ENABLE_SYNC_DEMO OR ENABLE_THREAD_DEMO)
     set(CCOS_ENABLE_DEMO ON CACHE BOOL "Enable kernel demo programs" FORCE)
 elseif(NOT DEFINED CCOS_ENABLE_DEMO OR "${CCOS_ENABLE_DEMO}" STREQUAL "ON")
     # 只有在没有显式设置为 ON 的情况下才设置为 OFF
@@ -215,6 +220,14 @@ if(TARGET demo_vfs)
     list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_vfs>)
     list(APPEND KERNEL_DEMO_DEPENDS demo_vfs)
 endif()
+if(TARGET demo_sync)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_sync>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_sync)
+endif()
+if(TARGET demo_thread)
+    list(APPEND KERNEL_DEMO_LIBS $<TARGET_FILE:demo_thread>)
+    list(APPEND KERNEL_DEMO_DEPENDS demo_thread)
+endif()
 
 # 链接内核ELF
 # Note: Library order matters for traditional linkers - libraries must come AFTER
@@ -260,11 +273,20 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/syscall/CMakeFiles/syscall.dir/syscall_table.c.o
         # process object files
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/process.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/thread.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_rr.c.o
         ${CMAKE_CURRENT_BINARY_DIR}/process/CMakeFiles/process.dir/sched_prio.c.o
         # user mode object files
         ${CMAKE_CURRENT_BINARY_DIR}/user/CMakeFiles/user.dir/user.c.o
+        # sync object files
+        ${CMAKE_CURRENT_BINARY_DIR}/sync/CMakeFiles/sync.dir/atomic.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/sync/CMakeFiles/sync.dir/spinlock.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/sync/CMakeFiles/sync.dir/rwlock.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/sync/CMakeFiles/sync.dir/mutex.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/sync/CMakeFiles/sync.dir/semaphore.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/sync/CMakeFiles/sync.dir/condvar.c.o
+        ${CMAKE_CURRENT_BINARY_DIR}/sync/CMakeFiles/sync.dir/waitqueue.c.o
         # user programs (when user demo is enabled)
         ${CMAKE_BINARY_DIR}/uname_test_symbols.o
         # Libraries must come AFTER object files that reference them
@@ -299,6 +321,7 @@ add_custom_command(
         math
         bitmap
         list
+        sync
         driver
         klogs
         welcomes

@@ -5,6 +5,7 @@
 # Process management C code
 add_library(process OBJECT
     process.c
+    thread.c
     sched.c
     sched_rr.c
     sched_prio.c

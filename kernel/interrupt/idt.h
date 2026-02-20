@@ -19,6 +19,9 @@
  *
  * This structure represents the exact layout of data pushed onto the stack
  * by the CPU when an interrupt or exception occurs.
+ *
+ * NOTE: This is the minimal CPU frame. For full context including general
+ * purpose registers, see interrupt_stack_frame_t below.
  */
 typedef struct PACKED {
     uint64_t error_code; // Error code (pushed only for some exceptions)
@@ -28,6 +31,88 @@ typedef struct PACKED {
     uint64_t rsp;        // Stack pointer
     uint64_t ss;         // Stack segment
 } interrupt_frame_t;
+
+/**
+ * @brief Complete interrupt stack frame for iretq return
+ *
+ * This structure matches the exact stack layout in interrupt_common after
+ * all registers are saved. It can be used to directly restore state and
+ * return to user/kernel mode using iretq.
+ *
+ * Stack layout (from lower to higher addresses):
+ *   CPU frame (pushed by CPU):
+ *     [offset 176] error_code / dummy
+ *     [offset 184] vector
+ *     [offset 192] alignment
+ *     [offset 200] RIP
+ *     [offset 208] CS
+ *     [offset 216] RFLAGS
+ *     [offset 224] RSP (only if CPL changed)
+ *     [offset 232] SS (only if CPL changed)
+ *
+ *   Saved by interrupt_common:
+ *     [offset 0]  RAX
+ *     [offset 8]  RBX
+ *     [offset 16] RCX
+ *     [offset 24] RDX
+ *     [offset 32] RSI
+ *     [offset 40] RDI
+ *     [offset 48] RBP
+ *     [offset 56] R8
+ *     [offset 64] R9
+ *     [offset 72] R10
+ *     [offset 80] R11
+ *     [offset 88] R12
+ *     [offset 96] R13
+ *     [offset 104] R14
+ *     [offset 112] R15
+ *     [offset 120] DS
+ *     [offset 128] ES
+ *     [offset 136] FS
+ *     [offset 144] GS
+ *
+ * This structure allows direct manipulation of the interrupt stack for
+ * purposes like modifying return values, changing execution path, or
+ * implementing context switches.
+ */
+typedef struct PACKED {
+    /* General purpose registers (saved by interrupt_common) */
+    uint64_t rax;
+    uint64_t rbx;
+    uint64_t rcx;
+    uint64_t rdx;
+    uint64_t rsi;
+    uint64_t rdi;
+    uint64_t rbp;
+    uint64_t r8;
+    uint64_t r9;
+    uint64_t r10;
+    uint64_t r11;
+    uint64_t r12;
+    uint64_t r13;
+    uint64_t r14;
+    uint64_t r15;
+
+    /* Segment registers (saved by interrupt_common) */
+    uint64_t ds;
+    uint64_t es;
+    uint64_t fs;
+    uint64_t gs;
+
+    /* CPU interrupt frame (pushed by CPU + stub) */
+    uint64_t error_code;  /* Error code or dummy (stub/CPU push) */
+    uint64_t vector;      /* Interrupt vector (stub push) */
+    uint64_t alignment;   /* Alignment dummy (stub push) */
+    uint64_t rip;         /* Instruction pointer (CPU push) */
+    uint64_t cs;          /* Code segment (CPU push) */
+    uint64_t rflags;      /* RFLAGS register (CPU push) */
+    uint64_t rsp;         /* Stack pointer (CPU push, only if CPL changed) */
+    uint64_t ss;          /* Stack segment (CPU push, only if CPL changed) */
+} interrupt_stack_frame_t;
+
+/* Compile-time checks to ensure structure size is correct */
+_Static_assert(sizeof(interrupt_stack_frame_t) == 216UL,
+               "interrupt_stack_frame_t must be exactly 216 bytes (27 * 8)");
 
 /* ============================================================================
  * Exception Handler Function Type
@@ -207,3 +292,61 @@ static inline void interrupt_halt(void) {
  * Common interrupt handler (called from assembly stubs)
  * ============================================================================ */
 void interrupt_handler(uint64_t vector, uint64_t error_code, interrupt_frame_t* frame);
+
+/* ============================================================================
+ * Direct iretq return from interrupt stack frame
+ * ============================================================================ */
+
+/**
+ * @brief Restore interrupt stack frame and return using iretq
+ *
+ * This function is used to directly return from an interrupt by restoring
+ * the complete interrupt stack frame and executing iretq. It's typically
+ * called when:
+ * 1. You want to modify the interrupt return context (e.g., change RIP)
+ * 2. You're implementing custom context switching
+ * 3. You need to return to a specific state
+ *
+ * @param frame Pointer to interrupt_stack_frame_t to restore
+ *
+ * NOTE: This function NEVER returns. It performs an iretq which transfers
+ * control to the location specified in the frame.
+ */
+extern void interrupt_frame_iretq(interrupt_stack_frame_t* frame) __attribute__((noreturn));
+
+/**
+ * @brief Get current interrupt stack frame pointer
+ *
+ * This function returns a pointer to the current interrupt stack frame.
+ * It can only be called from within an interrupt handler (when the
+ * stack has the interrupt frame layout).
+ *
+ * WARNING: This is a low-level function that should only be used in
+ * specific cases like:
+ * - Implementing custom context switching
+ * - Modifying interrupt return behavior
+ * - Debugging interrupt handling
+ *
+ * @return Pointer to the current interrupt_stack_frame_t on the stack
+ */
+static inline interrupt_stack_frame_t* get_current_interrupt_frame(void) {
+    interrupt_stack_frame_t* frame;
+    __asm__ volatile(
+        "mov %%rsp, %0"
+        : "=r"(frame)
+    );
+    return frame;
+}
+
+/**
+ * @brief Return directly from interrupt using iretq
+ *
+ * This function performs an immediate iretq from the current interrupt
+ * context. It modifies the return context before executing iretq.
+ *
+ * @param new_rip If non-NULL, sets the return RIP to this value
+ * @param new_rsp If non-NULL, sets the return RSP to this value
+ *
+ * NOTE: This function NEVER returns. Use with extreme caution!
+ */
+extern void interrupt_return_direct(uint64_t* new_rip, uint64_t* new_rsp) __attribute__((noreturn));

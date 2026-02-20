@@ -10,6 +10,7 @@
 #pragma once
 
 #include "defines/types.h"
+#include "sync/atomic.h"
 #include "mm/vmm/page.h"
 #include "mm/vmm/vmm_constants.h"  /* For COW_FLAG_MASK, COW_MAX_REFCOUNT */
 #include "mm/vmm/vmm_config.h"     /* For COW_HASH_SIZE */
@@ -30,7 +31,7 @@ struct interrupt_frame;
  */
 typedef struct cow_block {
     physical_addr_t    orig_phys;     /* Original physical page address (acts as key) */
-    uint16_t           refcount;      /* Reference count (1-COW_MAX_REFCOUNT) */
+    atomic_t           refcount;      /* Atomic reference count (1-COW_MAX_REFCOUNT) */
 } cow_block_t;
 
 /**

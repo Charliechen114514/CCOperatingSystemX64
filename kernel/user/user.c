@@ -213,8 +213,8 @@ int user_create_process(virtual_addr_t entry, pcb_t* pcb) {
 
     pcb->is_user_mode = true;
 
-    klog_info("[USER] User process created: stack=0x%llX, stack_size=%zu\n",
-              pcb->user_stack, pcb->user_stack_size);
+    klog_info("[USER] User process created: stack=0x%llX, stack_size=%lu\n",
+              pcb->user_stack, (unsigned long)pcb->user_stack_size);
 
     return 0;
 }

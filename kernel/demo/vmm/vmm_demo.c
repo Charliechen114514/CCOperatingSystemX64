@@ -86,7 +86,7 @@ static void demo_address_translation(void) {
 
     /* Test some known kernel addresses */
     virtual_addr_t test_addrs[] = {
-        0xFFFFFFFF80000000ULL,           /* Kernel code base */
+        KERNEL_TEXT_BASE,                /* Kernel code base */
         (virtual_addr_t)demo_statistics, /* Current function */
     };
 

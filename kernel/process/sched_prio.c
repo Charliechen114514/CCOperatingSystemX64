@@ -4,12 +4,12 @@
  */
 
 #include "process/sched_prio.h"
-#include "process/process.h"
-#include "process/sched.h"
-#include "mm/heap/heap.h"
-#include "klogs/kprintf.h"
 #include "assert/assert.h"
 #include "base/memory.h"
+#include "klogs/kprintf.h"
+#include "mm/heap/heap.h"
+#include "process/process.h"
+#include "process/sched.h"
 
 /* ==============================================================================
  * Forward Declarations
@@ -67,15 +67,15 @@ static uint32_t prio_get_time_slice(const struct pcb* pcb);
  */
 
 static sched_class_t prio_sched_class = {
-    .name            = "PRIO",
-    .policy          = SCHED_PRIORITY,
-    .enqueue_task    = prio_enqueue_task,
-    .dequeue_task    = prio_dequeue_task,
-    .pick_next_task  = prio_pick_next_task,
-    .should_preempt  = prio_should_preempt,
-    .task_tick       = prio_task_tick,
-    .task_fork       = prio_task_fork,
-    .get_time_slice  = prio_get_time_slice,
+    .name = "PRIO",
+    .policy = SCHED_PRIORITY,
+    .enqueue_task = prio_enqueue_task,
+    .dequeue_task = prio_dequeue_task,
+    .pick_next_task = prio_pick_next_task,
+    .should_preempt = prio_should_preempt,
+    .task_tick = prio_task_tick,
+    .task_fork = prio_task_fork,
+    .get_time_slice = prio_get_time_slice,
 };
 
 /* ==============================================================================
@@ -143,19 +143,43 @@ static void prio_enqueue_task(struct sched_rq* rq, struct pcb* pcb, bool head) {
         prio = PRIO_MIN;
     }
 
-    /* Enqueue to active queue */
-    if (head) {
-        list_add(&pcb->sched_entity.run_list, &data->active[prio]);
+    /* If time slice is exhausted, enqueue to expired queue instead of active.
+     * This handles the case where a task's time slice expired while it was running. */
+    bool to_expired = (pcb->sched_entity.time_slice == 0);
+
+    klog_info("[PRIO] Enqueue PID=%d: prio=%d, time_slice=%d/%d, to_expired=%d, head=%d\n",
+              pcb->pid, prio, pcb->sched_entity.time_slice, pcb->sched_entity.time_slice_total,
+              to_expired, head);
+
+    if (to_expired) {
+        /* Enqueue to expired queue */
+        if (head) {
+            list_add(&pcb->sched_entity.run_list, &data->expired[prio]);
+        } else {
+            list_add_tail(&pcb->sched_entity.run_list, &data->expired[prio]);
+        }
+        data->nr_expired++;
+        klog_info("[PRIO] Enqueued PID=%d to EXPIRED queue (prio=%d), nr_expired=%d\n", pcb->pid,
+                  prio, data->nr_expired);
     } else {
-        list_add_tail(&pcb->sched_entity.run_list, &data->active[prio]);
+        /* Enqueue to active queue */
+        if (head) {
+            list_add(&pcb->sched_entity.run_list, &data->active[prio]);
+        } else {
+            list_add_tail(&pcb->sched_entity.run_list, &data->active[prio]);
+        }
+        data->nr_active++;
+        klog_info("[PRIO] Enqueued PID=%d to ACTIVE queue (prio=%d), nr_active=%d\n", pcb->pid,
+                  prio, data->nr_active);
+        /* Update highest priority if needed */
+        if (prio < data->highest_prio) {
+            data->highest_prio = prio;
+        }
     }
 
-    data->nr_active++;
-
-    /* Update highest priority if needed */
-    if (prio < data->highest_prio) {
-        data->highest_prio = prio;
-    }
+    rq->nr_running++; /* FIX: Update run queue counter */
+    klog_info("[PRIO] After enqueue: rq->nr_running=%d, nr_active=%d, nr_expired=%d\n",
+              rq->nr_running, data->nr_active, data->nr_expired);
 }
 
 /**
@@ -167,15 +191,17 @@ static void prio_dequeue_task(struct sched_rq* rq, struct pcb* pcb) {
     /* Remove from whichever queue it's on */
     list_del_init(&pcb->sched_entity.run_list);
 
-    /* Check which queue the task was on by checking if list is empty */
-    /* We already removed it, so just decrement the appropriate counter */
-    /* For simplicity, we decrement from active if it was likely there */
-    /* This is a simplified approach - in a full implementation, we'd track better */
-    if (data->nr_active > 0) {
-        data->nr_active--;
-    } else if (data->nr_expired > 0) {
+    /* We need to determine which queue the task was on.
+     * Since we can't tell after removing it, we use a heuristic:
+     * If time_slice is 0, it was likely on expired queue (just finished).
+     * Otherwise, it was likely on active queue. */
+    if (pcb->sched_entity.time_slice == 0 && data->nr_expired > 0) {
         data->nr_expired--;
+    } else if (data->nr_active > 0) {
+        data->nr_active--;
     }
+
+    rq->nr_running--; /* FIX: Update run queue counter */
 
     /* Update highest priority */
     data->highest_prio = find_highest_prio(data);
@@ -185,27 +211,42 @@ static void prio_dequeue_task(struct sched_rq* rq, struct pcb* pcb) {
  * @brief Pick the next task from priority queue
  */
 static struct pcb* prio_pick_next_task(struct sched_rq* rq, struct pcb* prev) {
-    (void)prev;  /* Not used for priority selection */
+    (void)prev; /* Not used for priority selection */
     prio_rq_data_t* data = prio_rq_data(rq);
+
+    klog_info(
+        "[PRIO] pick_next_task: nr_active=%d, nr_expired=%d, highest_prio=%d, rq->nr_running=%d\n",
+        data->nr_active, data->nr_expired, data->highest_prio, rq->nr_running);
 
     /* If no active tasks, try to swap arrays */
     if (data->nr_active == 0) {
         if (data->nr_expired > 0) {
+            klog_info("[PRIO] Swapping active/expired queues (nr_expired=%d)\n", data->nr_expired);
             prio_swap_active_expired(data);
+            klog_info("[PRIO] After swap: nr_active=%d, nr_expired=%d, highest_prio=%d\n",
+                      data->nr_active, data->nr_expired, data->highest_prio);
         } else {
-            return NULL;  /* No tasks at all */
+            klog_info("[PRIO] No tasks available (nr_active=0, nr_expired=0), returning NULL\n");
+            return NULL; /* No tasks at all */
         }
     }
 
     /* Get highest priority queue */
     int highest = find_highest_prio(data);
+    klog_info("[PRIO] Highest priority: %d (PRIO_LEVELS=%d)\n", highest, PRIO_LEVELS);
     if (highest >= PRIO_LEVELS) {
+        klog_info("[PRIO] Invalid highest priority %d >= %d\n", highest, PRIO_LEVELS);
         return NULL;
     }
 
     /* Return first task from highest priority queue */
-    struct pcb* next = list_first_entry(&data->active[highest],
-                                       struct pcb, sched_entity.run_list);
+    struct pcb* next = list_first_entry(&data->active[highest], struct pcb, sched_entity.run_list);
+    klog_info(
+        "[PRIO] Returning task PID=%d (time_slice=%d/%d, time_slice_total=%d, sched_class=%p)\n",
+        next ? next->pid : -1, next ? next->sched_entity.time_slice : 0,
+        next ? next->sched_entity.time_slice_total : 0,
+        next ? next->sched_entity.time_slice_total : 0,
+        next ? (void*)next->sched_entity.sched_class : NULL);
     return next;
 }
 
@@ -231,7 +272,7 @@ static bool prio_should_preempt(struct pcb* p, struct pcb* curr) {
  * @brief Handle timer tick for priority task
  */
 static void prio_task_tick(struct sched_rq* rq, struct pcb* pcb) {
-    prio_rq_data_t* data = prio_rq_data(rq);
+    (void)rq; /* Not used for priority scheduling */
 
     /* Decrement time slice */
     if (pcb->sched_entity.time_slice > 0) {
@@ -239,22 +280,6 @@ static void prio_task_tick(struct sched_rq* rq, struct pcb* pcb) {
     }
 
     /* If time slice expired, move to expired queue */
-    if (pcb->sched_entity.time_slice == 0) {
-        int prio = pcb->sched_entity.priority;
-
-        /* Move from active to expired */
-        list_del_init(&pcb->sched_entity.run_list);
-        list_add_tail(&pcb->sched_entity.run_list, &data->expired[prio]);
-
-        data->nr_active--;
-        data->nr_expired++;
-
-        /* Update highest priority */
-        data->highest_prio = find_highest_prio(data);
-
-        /* Trigger reschedule */
-        sched_set_resched();
-    }
 }
 
 /**
